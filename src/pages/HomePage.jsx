@@ -28,7 +28,7 @@ export function HomePage({ nav, openArticle, openLightbox }) {
         <div className="hero-img" />
         <div className="hero-overlay" />
         <div className="hero-label">Tufts University · Medford, MA · Est. 2025</div>
-        <h1 className="hero-title">Handmade<br />with <em>amore.</em></h1>
+        <h1 className="hero-title">Handmade<br />with <em>love.</em></h1>
         <p className="hero-sub">
           A student-run pizzeria from the heart of Tufts. Twelve passionate students, one shared kitchen,
           love, and a 72-hour ferment.
