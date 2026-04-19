@@ -11,9 +11,9 @@ const MOSAIC_PHOTOS    = [
   '/photos/img_6132.jpeg', '/photos/img_5925.jpeg', '/photos/img_2220.jpeg', '/photos/img_3337.jpeg',
 ];
 const SPECIALS = [
-  { tag: 'Pie of the Week',  name: 'Nduja & Hot Honey',  desc: 'Spicy Calabrian nduja, house hot honey, stracciatella, toasted walnuts', price: '$18' },
-  { tag: 'Slice Special',    name: 'Saturday Slice',      desc: '$2 slices with fresh basil & parm — add burrata, hot honey, or pepperoni', price: 'from $2' },
-  { tag: 'Small Plate',      name: 'Burrata al Forno',    desc: 'Warm burrata, blistered cherry tomatoes, sea salt, good olive oil', price: '$12' },
+  { tag: 'Special',             name: 'Pesto Slice',        desc: 'House-made pesto sauce, cheese', price: '$4' },
+  { tag: 'Slice of the Week',   name: 'Nduja & Hot Honey',  desc: 'Spicy Calabrian nduja, house hot honey, stracciatella', price: '$4' },
+  { tag: 'Special',             name: 'Vodka Slice',        desc: 'House-made vodka sauce, cheese', price: '$4' },
 ];
 
 export function HomePage({ nav, openArticle, openLightbox }) {
@@ -30,8 +30,8 @@ export function HomePage({ nav, openArticle, openLightbox }) {
         <div className="hero-label">Tufts University · Medford, MA · Est. 2025</div>
         <h1 className="hero-title">Handmade<br />with <em>amore.</em></h1>
         <p className="hero-sub">
-          A student-run pizzeria from the heart of Tufts. Twelve passionate cooks, one shared kitchen,
-          an Ooni oven, and a 72-hour ferment.
+          A student-run pizzeria from the heart of Tufts. Twelve passionate students, one shared kitchen,
+          love, and a 72-hour ferment.
         </p>
         <div className="hero-ctas">
           <button className="btn-primary" onClick={() => nav('menu')}>See the Menu</button>
@@ -71,37 +71,17 @@ export function HomePage({ nav, openArticle, openLightbox }) {
           <div className="story-text">
             <div className="reveal reveal-delay-2" ref={ref(2)}>
               <p>We started Peter&apos;s Pizzeria junior year — a few friends stayed up until three in the morning one night for an idea to build community.</p>
-              <p>Now there's over a dozen of us, united by the same obsession: making the best pizza in Medford. We ferment our dough 72 hours minimum, and fire it in an Ooni at 900°F for Neapolitan-style pizzas.</p>
+              <p>Now there's over a dozen of us, united by the same obsession: making the best pizza in Somerville. We ferment our dough 72 hours, fire it in an Ooni at 900°F for Neapolitan style pizzas, and Pizza Steels at 550°F for New York style pizzas.</p>
               <p>We sell out every week. We learn something new every time. And we&apos;re just getting started.</p>
               <div className="story-stat">
                 <div><div className="stat-num">12</div><div className="stat-label">Students</div></div>
                 <div><div className="stat-num">72h</div><div className="stat-label">Dough Ferment</div></div>
                 <div><div className="stat-num">900°</div><div className="stat-label">Ooni Temp</div></div>
+                <div><div className="stat-num">550°</div><div className="stat-label">Steel Temp</div></div>
               </div>
             </div>
           </div>
         </div>
-
-        {/* Photo mosaic */}
-        {/* <div
-          ref={ref(12)}
-          className="reveal"
-          style={{ marginTop: 40, display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gridTemplateRows: '180px 180px', gap: 6 }}
-        >
-          {MOSAIC_PHOTOS.map((src, i) => (
-            <img
-              key={i}
-              src={src}
-              alt="Peter's Pizzeria"
-              style={{
-                width: '100%', height: '100%', objectFit: 'cover', display: 'block', cursor: 'pointer',
-                ...(i === 0 ? { gridColumn: 'span 2', gridRow: 'span 2' } : {}),
-              }}
-              onClick={() => openLightbox(MOSAIC_PHOTOS, i)}
-              onError={(e) => { e.target.style.display = 'none'; }}
-            />
-          ))}
-        </div> */}
       </section>
 
       {/* ── PHOTO STRIP ── */}
@@ -189,9 +169,9 @@ export function HomePage({ nav, openArticle, openLightbox }) {
             We make pizza.<br /><em style={{ color: 'var(--gold)' }}>We make community.</em>
           </h2>
           <p style={{ fontFamily: 'var(--serif)', fontSize: 18, fontStyle: 'italic', color: 'rgba(254,245,239,0.7)', lineHeight: 1.75 }}>
-            Every Saturday night is more than a meal. It&apos;s the whole crew, flour-dusted aprons, terrible jokes, and genuinely great pizza.
+            Every Saturday night is more than a meal. It&apos;s our passion. The people yearn for community at Tufts, and we provide it.
             We pride ourselves on affordable pizza, great community, and some of the best slices you&apos;ll ever have.
-            Come find us — follow @peterspizzeria_ for more information.
+            Come find us — follow @peterspizzeria_ on Instagram to keep up with the latest!
           </p>
           <button
             className="btn-primary"

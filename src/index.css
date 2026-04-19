@@ -233,10 +233,10 @@ nav.scrolled {
 }
 .menu-section-title {
   font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 3px;
-  text-transform: uppercase; color: var(--red); margin-bottom: 18px; margin-top: 88px;
-  padding-top: 48px; border-top: 2px solid var(--green);
+  text-transform: uppercase; color: var(--red); margin-bottom: 18px; margin-top: 0;
+  padding-top: 25px; border-top: 2px solid var(--green);
 }
-.menu-section-title:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+.menu-body > div:first-child .menu-section-title { padding-top: 0; border-top: none; }
 .menu-items { border-top: 1px solid var(--cream2); }
 .menu-item { display: flex; align-items: baseline; padding: 13px 0; border-bottom: 1px solid var(--cream2); }
 .menu-item-name { font-family: var(--serif); font-size: 18px; font-weight: 700; font-style: italic; color: var(--ink); min-width: 200px; flex-shrink: 0; }

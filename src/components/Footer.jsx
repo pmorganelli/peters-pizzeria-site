@@ -34,15 +34,15 @@ export function Footer({ nav }) {
 
         <div>
           <div className="footer-col-title">Hours</div>
-          <div className="footer-link" style={{ cursor: 'default' }}>Saturday service</div>
-          <div className="footer-link" style={{ cursor: 'default', fontSize: 13 }}>Orders announced Fri morning</div>
+          <div className="footer-link" style={{ cursor: 'default' }}>Saturday Slices</div>
+          <div className="footer-link" style={{ cursor: 'default', fontSize: 13 }}>Saturdays, 7pm-sellout (~1 hour)</div>
         </div>
 
         <div>
           <div className="footer-col-title">Find Us</div>
           <div className="footer-link" style={{ cursor: 'default' }}>Tufts University</div>
-          <div className="footer-link" style={{ cursor: 'default' }}>Medford, MA</div>
-          <div className="footer-link" style={{ cursor: 'default', fontSize: 13 }}>@peterspizzeria for location</div>
+          <div className="footer-link" style={{ cursor: 'default' }}>Somerville, MA</div>
+          <div className="footer-link" style={{ cursor: 'default', fontSize: 13 }}>@peterspizzeria_ for location</div>
         </div>
       </div>
 
