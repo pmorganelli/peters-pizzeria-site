@@ -3,7 +3,7 @@ export const BLOG_POSTS = [
     id: 1,
     tag: 'Inspiration',
     date: 'April 19, 2026',
-    title: 'How Bambino and their Vito Slice Inspired Me in Dublin, Ireland',
+    title: 'How Bambino and their Vito Slice Inspired Me from Dublin, Ireland',
     excerpt: 'Think Ireland doesn\'t have have what it takes for good pizza? Think again.',
     author: 'Peter C.',
     readTime: '5 min read',
@@ -12,12 +12,57 @@ export const BLOG_POSTS = [
       intro: 'Think Ireland does not have have what it takes for good pizza? Think again.',
       sections: [
         {
-          heading: 'The Prep',
-          body: '75 dough balls three days out. Sauce in a 12-quart stockpot. 12 pounds of shredded mozzarella the night before. Staggered teams in 3-hour bake windows. Everything was going perfectly.',
+          heading: 'Intro',
+          body: 'When I first tried Bambino in March 2025, it was only a few months before I started making pizza over the summer. Bambino was a TikTok trend, believe it or not, with some calling it “the best pizza they ever had”. At that time, they had both New York style pizza and one Detriot-style special. Many do not consider Dublin to be one of the “pizza capitals”, and the Irish generally haven\'t been known for their cuisine, especially pizza. However, when I tell you the hype was absolutely worth it — I\'m not lying. To this day, this pizza is the second-best pizza I have ever had (behind Pizza in Trevi in Rome, Italy). The slices were absolutely enormous, which was the first thing that stood out to me, especially compared to how we do things at Saturday Slices. One of the biggest complaints I\'ve gotten, and that I have myself, is that our slices are too small. Bambino took this to the next level, and it shows in both their prices and the size of their full pie. Their best slice, The Vito, just got bumped up to €7 (~$8.22 USD).',
+          images: [
+            { src: '/photos/bambinoPictures/firstBambinoTime.jpeg', caption: 'My first time at Bambino, March 2025.' },
+          ],
         },
         {
-          heading: 'What Went Wrong',
-          body: 'We forgot to account for oven recovery time. Back-to-back pies mean a cooling stone, longer bakes, a 20-minute delay by pie 30. We pivoted to two ovens in parallel and recovered. The pies were good. The people were happy. We learned everything.',
+          heading: 'Reheating Slices??',
+          body: 'Another thing I learned from Bambino is the way they deliver and make their slices. First of all, their slices are not necessarily made fresh to order. In the back, they have racks of several fully-cooked pizzas of all types in the back, ready to be cut and reheated at a moment\'s notice. In doing so, they significantly reduce the time it takes from order→ready slice. Due to the online popularity, there is always a line running out the door. Interestingly, not many people notice that their slices are reheated. This is because, it doesn\'t taste like it. Since the way they reheat their slices doesn\'t reduce the quality of the pizza, this is a genius move for their business. ',
+          images: [
+            { src: '/photos/bambinoPictures/vitoSlice.jpeg', caption: 'The Vito Slice — €7 and worth it imo.' },
+            { src: '/photos/bambinoPictures/fullVitoPie.jpeg', caption: 'A full Vito pie -- €40' },
+          ],
+        },
+        {
+          heading: 'Branding',
+          body: 'Possibly my favorite thing about Bambino, besides their pizza, is the way they brand. It\'s minimalistic on both their website and in both of their locations. Their logo is simple, yet ethereal and satisfying. Their entire theming is red and white, Bambino header, their angel pizza logo, and their slogan, “A slice worth eating”! They don\'t overdo it, because they don\'t need to. Their product, popularity, and lines with consistently dozens of people speaks for itself.  They also have T-shirts, stickers, socks, hats, etc. all with their simplistic branding, which I absolutely love. They also have a hidden secret: their punchcards. If you ask the cashier to give you a punchcard, they\'ll hand you a small, business-card sized card with 10 holes, each of which to be stamped for every slice you buy. Once all 10 are filled out, you can cash it in for a free slice and a free drink.',
+          images: [
+            { src: '/photos/bambinoPictures/bambinoFront.png', caption: 'The Bambino storefront in Dublin. Stephen St. location.' },
+            { src: '/photos/bambinoPictures/bambinoShirt.png', caption: 'Bambino T-shirt with their iconic logo.' },
+          ],
+        },
+        {
+          heading: 'Their Vodka Slice',
+          body: 'One of the most popular slices behind their Vito Slice is the Vodka Slice. Bambino uses a genius method for their Vodka Slice: they take a cheese slice, dress it with the Vodka sauce from a squeeze bottle, and then reheat it. This allows them to use the cheese pizzas that were made from before and simply use the Vodka sauce as an easy topping that reduces the friction for making the slice.',
+          images: [
+            { src: '/photos/bambinoPictures/vodkaSlice.jpeg', caption: 'The Vodka Slice (right)' },
+          ],
+        },
+        {
+          heading: 'Their Burrata',
+          body: 'Bambino has arguably some of the best burrata I have tried in a pizza. Burrata, commonly confused with stracciatella (the inside filling), is a milky cheese that is made from stretching fresh mozzerella, filling it with shredded bits of mozzerella, and sometimes heavy cream. What I noticed about Bambino is that they have their burrata filling at their finishing station with the rest of the toppings, easily accessible with a piping bag. The only slice that gets this is the Vito, which contributes significantly to the price tag.',
+        },
+        {
+          heading: 'Grana Padano',
+          body: 'Instead of Parmigiano-Reggiano, Bambino uses Grana Padano, a slightly less intense version of Parmigiano-Reggiano. In doing so, I\'m guessing they save an enormous amount of money without sacrificing quality. They grate the Grana Padano fresh, exactly as we would do, and it tastes fantastic. In my opinion, freshly grated cheese like this one is one of the easiest ways to elevate absolutely any pizza to the next level.',
+        },
+        {
+          heading: 'Basil',
+          body: 'One potentially controversial aspect about bambino\'s pizza is how they do their basil: in full, uncut, unripped pieces. This is certainly the most convenient way to put basil on a pizza, but is it the best? Personally, I disagree with this method. I stand by the chiffonade method, which cuts the basil into long, thin strips. I\'ve even had friends that take off the basil leaves entirely, throwing away a huge chunk of the flavor simply because the whole leaf was overwhelming to the slice. The unfortunate thing about chiffonading basil is that it oxidizes faster, which turns the bright green basil into a dark, sometimes black leaf within minutes. At Saturday Slices, we do our best to chiffonade as soon as the slice is ready, which solves this problem, but also increases friction and time to prepare a slice.',
+          images: [
+            { src: '/photos/bambinoPictures/chiffonadedBasil.png', caption: 'Example of chiffonaded basil — better for a pizza in my opinion' },
+          ],
+        },
+        {
+          heading: 'Dough and Crust',
+          body: 'One of the things I try and chase when making pizza is the airy, chewy crust that shows off the gluten development that occurs over the 72 hour fermentation process. I like looking at the slice from a size view and seeing the gluten networks, but Bambino shows this isn\'t always ideal, especially in a New York style slice. Bambino keeps their crust thin and crispy, which I personally found to be more enjoyable than the slices I have been making. ',
+        },
+        {
+          heading: 'Closing',
+          body: 'Bambino has singlehandedly been the most influential pizzeria on my pizza-making journey. They taught me the simplicity of branding, the efficiency of serving slices, how to keep up with demand, and many lessons about serving and making their slices. Despite the hefty price tag on their products, it continues to keep people coming back, day after day, for more. If only the owners of Bambino knew how much it has taught me about pizza and influenced me to this day. If you are ever in the Dublin area for 24 hours or more, this would be the first place I take you (and I did, with all my friends that visited during my semester abroad). Interested in hearing more about this experience? Feel free to reach out or ask me at the next Saturday Slices!',
         },
       ],
     },

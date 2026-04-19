@@ -53,6 +53,35 @@ export function ArticlePage({ article, nav }) {
           <div key={i}>
             <h2>{s.heading}</h2>
             {s.body && <p>{s.body}</p>}
+            {s.images && s.images.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 20, margin: '16px 0 28px' }}>
+                {s.images.map((img, j) => {
+                  const src = typeof img === 'string' ? img : img.src;
+                  const caption = typeof img === 'string' ? null : img.caption;
+                  return (
+                    <figure key={j} style={{ margin: 0 }}>
+                      <img
+                        src={src}
+                        alt={caption || `${s.heading} photo ${j + 1}`}
+                        style={{ width: '100%', maxHeight: 480, objectFit: 'cover', display: 'block' }}
+                      />
+                      {caption && (
+                        <figcaption style={{
+                          fontFamily: 'var(--serif)',
+                          fontSize: 14,
+                          fontStyle: 'italic',
+                          color: 'var(--ink2)',
+                          marginTop: 8,
+                          lineHeight: 1.5,
+                        }}>
+                          {caption}
+                        </figcaption>
+                      )}
+                    </figure>
+                  );
+                })}
+              </div>
+            )}
             {s.recipe && (
               <div className="recipe-box">
                 <h3>{s.recipe.title}</h3>
