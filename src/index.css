@@ -73,7 +73,9 @@ nav.scrolled {
   display: none; flex-direction: column; justify-content: center; gap: 5px;
   cursor: pointer; padding: 8px; background: none; border: none;
 }
-.nav-hamburger span { display: block; width: 22px; height: 1.5px; background: var(--ink); transition: transform 0.25s, opacity 0.25s; }
+.nav-hamburger span { display: block; width: 22px; height: 1.5px; background: var(--ink); transition: transform 0.25s, opacity 0.25s, background 0.3s; }
+nav.nav-dark .nav-hamburger span { background: var(--cream); }
+nav.nav-dark.scrolled .nav-hamburger span { background: var(--ink); }
 .nav-hamburger.open span:nth-child(1) { transform: translateY(6.5px) rotate(45deg); }
 .nav-hamburger.open span:nth-child(2) { opacity: 0; }
 .nav-hamburger.open span:nth-child(3) { transform: translateY(-6.5px) rotate(-45deg); }
@@ -183,10 +185,13 @@ nav.scrolled {
 .specials-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 48px; }
 .specials-header .section-label { color: var(--gold); }
 .specials-header .section-label::before { background: var(--gold); }
+.menu-hero .section-label::before { background: var(--gold); }
+.gallery-hero .section-label::before { background: var(--gold); }
+.blog-hero .section-label::before { background: var(--gold); }
 .specials-see-all {
   font-family: var(--mono); font-size: 11px; letter-spacing: 1px; text-transform: uppercase;
   color: rgba(254,245,239,0.5); cursor: pointer; border-bottom: 1px solid rgba(254,245,239,0.2);
-  padding-bottom: 2px; transition: color 0.2s, border-color 0.2s;
+  padding-bottom: 2px; transition: color 0.2s, border-color 0.2s; white-space: nowrap;
 }
 .specials-see-all:hover { color: var(--cream); border-color: var(--cream); }
 .specials-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; }
@@ -209,8 +214,8 @@ nav.scrolled {
 .special-price { font-family: var(--mono); font-size: 22px; font-weight: 500; color: var(--red); }
 
 /* ── MENU PAGE ─────────────────────────────────────────────────────── */
-.menu-page { background: var(--cream); min-height: 100vh; padding-top: 72px; }
-.menu-hero { background: var(--ink); color: var(--cream); padding: 80px 60px 64px; position: relative; overflow: hidden; }
+.menu-page { background: var(--cream); min-height: 100vh; }
+.menu-hero { background: var(--ink); color: var(--cream); padding: 152px 60px 64px; position: relative; overflow: hidden; }
 .menu-hero-bg {
   position: absolute; inset: 0;
   background: url('/photos/menu-board.jpg') center center / cover no-repeat;
@@ -262,8 +267,8 @@ nav.scrolled {
 }
 
 /* ── BLOG PAGE ─────────────────────────────────────────────────────── */
-.blog-page { background: var(--cream); min-height: 100vh; padding-top: 72px; }
-.blog-hero { background: var(--green); color: var(--cream); padding: 80px 60px 64px; position: relative; overflow: hidden; }
+.blog-page { background: var(--cream); min-height: 100vh; }
+.blog-hero { background: var(--ink); color: var(--cream); padding: 152px 60px 64px; position: relative; overflow: hidden; }
 .blog-hero-bg {
   position: absolute; inset: 0;
   background: url('/photos/house-sign.jpg') center center / cover no-repeat;
@@ -396,6 +401,7 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 64px 60p
   .nav-order-btn { display: none; }
   .hero { padding: 0 24px 60px; }
   .hero-title { font-size: clamp(52px, 13vw, 90px); }
+  .hero-scroll { display: none; }
   .story-section { padding: 64px 24px; }
   .story-grid { grid-template-columns: 1fr; gap: 32px; }
   .story-photo-inset { display: none; }
@@ -406,9 +412,9 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 64px 60p
   .blog-body { padding: 40px 20px; }
   .blog-grid { grid-template-columns: 1fr; }
   .menu-body { padding: 40px 20px; }
-  .menu-hero { padding: 60px 24px 48px; }
+  .menu-hero { padding: 132px 24px 48px; }
   .menu-hero-title { font-size: clamp(36px, 10vw, 60px); }
-  .blog-hero, .gallery-hero { padding: 60px 24px 48px; }
+  .blog-hero, .gallery-hero { padding: 132px 24px 48px; }
   .blog-hero-title, .gallery-hero-title { font-size: clamp(36px, 10vw, 60px); }
   .article-back, .article-hero, .article-divider, .article-body { padding-left: 20px; padding-right: 20px; }
   .article-title { font-size: clamp(28px, 8vw, 44px); }

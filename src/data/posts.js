@@ -5,7 +5,7 @@ export const BLOG_POSTS = [
     date: 'April 19, 2026',
     title: 'How Bambino and their Vito Slice Inspired Me from Dublin, Ireland',
     excerpt: 'Think Ireland doesn\'t have have what it takes for good pizza? Think again.',
-    author: 'Peter C.',
+    author: 'Peter M.',
     readTime: '5 min read',
     img: '/photos/bambinoVitoSlice.png',
     content: {

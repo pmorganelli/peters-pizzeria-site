@@ -9,9 +9,10 @@ export function Nav({ page, nav }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   const doNav = (p) => { setMenuOpen(false); nav(p); };
+  const isDark = ['home', 'gallery', 'blog', 'menu'].includes(page);
 
   return (
-    <nav className={scrolled ? 'scrolled' : ''}>
+    <nav className={[scrolled ? 'scrolled' : '', isDark ? 'nav-dark' : ''].filter(Boolean).join(' ')}>
       <div className="nav-logo-wrap" onClick={() => doNav('home')}>
         <LogoBadge size={44} />
         <div className="nav-logo-text">Peter&apos;s Pizzeria</div>
