@@ -12,14 +12,14 @@ function BackArrow() {
 export function ArticlePage({ article, nav }) {
   useEffect(() => { window.scrollTo(0, 0); }, [article]);
 
-  if (!article) return null;
+  if (!article || !article.content) return null;
 
   return (
     <div className="article-page">
-      <span className="article-back" onClick={() => nav('blog')}>
+      <button className="article-back" onClick={() => nav('blog')}>
         <BackArrow />
         Back to Blog
-      </span>
+      </button>
 
       <div className="article-hero">
         <div className="article-tag">{article.tag}</div>
@@ -46,10 +46,12 @@ export function ArticlePage({ article, nav }) {
       <div className="article-divider" />
 
       <div className="article-body">
-        <p style={{ fontSize: 20, color: 'var(--ink)', fontStyle: 'italic', marginBottom: 28 }}>
-          {article.content.intro}
-        </p>
-        {article.content.sections.map((s, i) => (
+        {article.content.intro && (
+          <p style={{ fontSize: 20, color: 'var(--ink)', fontStyle: 'italic', marginBottom: 28 }}>
+            {article.content.intro}
+          </p>
+        )}
+        {(article.content.sections ?? []).map((s, i) => (
           <div key={i}>
             <h2>{s.heading}</h2>
             {s.body && <p>{s.body}</p>}

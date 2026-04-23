@@ -26,7 +26,7 @@ export function Lightbox({ photos, index, onClose, onPrev, onNext }) {
         touchX.current = null;
       }}
     >
-      <div className="lb-close">✕ close</div>
+      <button className="lb-close" aria-label="Close lightbox">✕ close</button>
       <img
         className="lb-img"
         src={photos[index]}
@@ -35,8 +35,8 @@ export function Lightbox({ photos, index, onClose, onPrev, onNext }) {
       />
       {photos.length > 1 && (
         <>
-          <div className="lb-arrow lb-prev" onClick={(e) => { e.stopPropagation(); onPrev(); }}>&#8592;</div>
-          <div className="lb-arrow lb-next" onClick={(e) => { e.stopPropagation(); onNext(); }}>&#8594;</div>
+          <button className="lb-arrow lb-prev" aria-label="Previous photo" onClick={(e) => { e.stopPropagation(); onPrev(); }}>&#8592;</button>
+          <button className="lb-arrow lb-next" aria-label="Next photo" onClick={(e) => { e.stopPropagation(); onNext(); }}>&#8594;</button>
           <div className="lb-counter">{index + 1} / {photos.length}</div>
         </>
       )}

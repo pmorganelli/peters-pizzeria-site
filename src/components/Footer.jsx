@@ -21,14 +21,14 @@ export function Footer({ nav }) {
         <div>
           <div className="footer-col-title">Navigate</div>
           {PAGES.map((p) => (
-            <span
+            <button
               key={p}
               className="footer-link"
               onClick={() => nav(p)}
               style={{ textTransform: 'capitalize' }}
             >
               {p}
-            </span>
+            </button>
           ))}
         </div>
 

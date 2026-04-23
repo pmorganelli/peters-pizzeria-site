@@ -23,11 +23,12 @@ export function BlogPage({ nav, openArticle }) {
       <div className="blog-body">
         <div className="blog-grid">
           {BLOG_POSTS.map((post, i) => (
-            <div
+            <button
               key={post.id}
               ref={ref(i)}
               className={`blog-card reveal reveal-delay-${(i % 3) + 1}`}
               onClick={() => openArticle(post)}
+              aria-label={`Read: ${post.title}`}
             >
               <div className="blog-card-img">
                 <img src={post.img} alt={post.title} />
@@ -42,7 +43,7 @@ export function BlogPage({ nav, openArticle }) {
                 <span className="blog-card-author">{post.author}</span>
                 <span className="blog-card-read">{post.readTime}</span>
               </div>
-            </div>
+            </button>
           ))}
         </div>
       </div>

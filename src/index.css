@@ -19,6 +19,7 @@
 
 /* ── BASE ────────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+button { background: none; border: none; padding: 0; font: inherit; color: inherit; cursor: pointer; }
 html { scroll-behavior: smooth; }
 body {
   font-family: var(--serif);
@@ -193,9 +194,8 @@ nav.nav-dark.scrolled .nav-hamburger span { background: var(--ink); }
 .story-photo-stack { position: relative; }
 .story-photo-main { width: 100%; aspect-ratio: 4/5; object-fit: cover; display: block; }
 .story-photo-inset {
-  position: absolute; bottom: -24px; right: -24px;
-  width: 55%; aspect-ratio: 1; object-fit: cover;
-  border: 4px solid var(--cream);
+  width: 100%; aspect-ratio: 1; object-fit: cover;
+  border: 4px solid var(--cream); display: block;
 }
 .story-text p { font-family: var(--serif); font-size: 18px; line-height: 1.8; color: var(--ink2); margin-bottom: 18px; }
 .story-text p:first-of-type { font-size: 21px; color: var(--ink); font-style: italic; }
@@ -203,9 +203,15 @@ nav.nav-dark.scrolled .nav-hamburger span { background: var(--ink); }
 .stat-num { font-family: var(--serif); font-size: 52px; font-weight: 800; font-style: italic; color: var(--red); line-height: 1; }
 .stat-label { font-family: var(--mono); font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--ink2); margin-top: 4px; }
 
+/* ── COMMUNITY ─────────────────────────────────────────────────────── */
+.community-section {
+  background: var(--green); padding: 80px 60px;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center;
+}
+
 /* ── PHOTO STRIP ───────────────────────────────────────────────────── */
 .photo-strip { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; height: 340px; overflow: hidden; }
-.photo-strip-item { overflow: hidden; position: relative; cursor: pointer; }
+.photo-strip-item { overflow: hidden; position: relative; cursor: pointer; display: block; width: 100%; height: 100%; }
 .photo-strip-item img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.6s cubic-bezier(.22,1,.36,1); display: block; }
 .photo-strip-item:hover img { transform: scale(1.06); }
 .photo-strip-item::after {
@@ -229,6 +235,7 @@ nav.nav-dark.scrolled .nav-hamburger span { background: var(--ink); }
 .specials-see-all:hover { color: var(--cream); border-color: var(--cream); }
 .specials-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; }
 .special-card {
+  display: block; width: 100%; text-align: left;
   background: rgba(255,255,255,0.04); border: none;
   padding: 36px 32px; cursor: pointer;
   transition: background 0.2s, transform 0.3s cubic-bezier(.22,1,.36,1);
@@ -274,7 +281,7 @@ nav.nav-dark.scrolled .nav-hamburger span { background: var(--ink); }
   text-transform: uppercase; color: var(--red); margin-bottom: 18px; margin-top: 0;
   padding-top: 25px; border-top: 2px solid var(--green);
 }
-.menu-body > div:first-child .menu-section-title { padding-top: 0; border-top: none; }
+.menu-body > div:first-of-type .menu-section-title { padding-top: 0; border-top: none; }
 .menu-items { border-top: 1px solid var(--cream2); }
 .menu-item { display: flex; align-items: baseline; padding: 13px 0; border-bottom: 1px solid var(--cream2); }
 .menu-item-name { font-family: var(--serif); font-size: 18px; font-weight: 700; font-style: italic; color: var(--ink); min-width: 200px; flex-shrink: 0; }
@@ -319,6 +326,7 @@ nav.nav-dark.scrolled .nav-hamburger span { background: var(--ink); }
 .blog-body { padding: 72px 60px; }
 .blog-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 32px; }
 .blog-card {
+  display: block; width: 100%; text-align: left;
   background: white; cursor: pointer; overflow: hidden;
   transition: transform 0.35s cubic-bezier(.22,1,.36,1), box-shadow 0.35s;
   border-bottom: 2px solid transparent;
@@ -394,9 +402,14 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 64px 60p
   color: rgba(254,245,239,0.4); margin-top: 18px;
 }
 .gallery-grid { padding: 48px 60px 80px; columns: 4; column-gap: 10px; }
-.gallery-item { break-inside: avoid; margin-bottom: 10px; overflow: hidden; position: relative; cursor: pointer; display: block; }
+.gallery-item { break-inside: avoid; margin-bottom: 10px; overflow: hidden; position: relative; cursor: pointer; display: block; width: 100%; }
 .gallery-item img { width: 100%; display: block; transition: transform 0.5s cubic-bezier(.22,1,.36,1); filter: brightness(0.92); }
 .gallery-item:hover img { transform: scale(1.04); filter: brightness(1); }
+.photo-btn { display: block; padding: 0; line-height: 0; }
+.story-photo-btn { display: block; padding: 0; line-height: 0; width: 100%; }
+.story-photo-inset-btn { position: absolute; bottom: -24px; right: -24px; width: 55%; }
+.text-link-btn { font-family: var(--mono); font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--red); border-bottom: 1px solid var(--red); padding-bottom: 2px; transition: opacity 0.2s; white-space: nowrap; }
+.text-link-btn:hover { opacity: 0.7; }
 
 /* ── LIGHTBOX ───────────────────────────────────────────────────────── */
 .lb-overlay { position: fixed; inset: 0; z-index: 600; background: rgba(15,8,2,0.96); display: flex; align-items: center; justify-content: center; }
@@ -437,11 +450,15 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 64px 60p
   .hero-scroll { display: none; }
   .story-section { padding: 64px 24px; }
   .story-grid { grid-template-columns: 1fr; gap: 32px; }
-  .story-photo-inset { display: none; }
+  .story-photo-inset-btn { display: none; }
   .story-photo-main { aspect-ratio: 3/2; }
+  .community-section { grid-template-columns: 1fr; padding: 60px 24px; gap: 32px; }
   .specials-strip { padding: 60px 24px; }
+  .specials-header { flex-direction: column; align-items: flex-start; gap: 16px; }
   .specials-grid { grid-template-columns: 1fr; }
-  .photo-strip { grid-template-columns: 1fr 1fr; height: 200px; }
+  .menu-board-photo { max-width: 100%; }
+  .photo-strip { grid-template-columns: 1fr 1fr; height: auto; }
+  .photo-strip-item { aspect-ratio: 4/3; height: auto; }
   .blog-body { padding: 40px 20px; }
   .blog-grid { grid-template-columns: 1fr; }
   .menu-body { padding: 40px 20px; }
@@ -467,5 +484,5 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 64px 60p
   .story-stat { gap: 20px; }
   .stat-num { font-size: 40px; }
   .footer-top { grid-template-columns: 1fr; }
-  .photo-strip { height: 160px; }
+  .photo-strip-item { aspect-ratio: 1; }
 }

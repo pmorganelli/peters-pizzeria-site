@@ -1,8 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Footer } from '../components/Footer';
 import { ALL_PHOTOS } from '../data/posts';
 
 export function GalleryPage({ nav, openLightbox }) {
+  const [failed, setFailed] = useState(new Set());
+
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
   return (
@@ -16,18 +18,19 @@ export function GalleryPage({ nav, openLightbox }) {
       </div>
 
       <div className="gallery-grid">
-        {ALL_PHOTOS.map((src, i) => (
-          <div
-            key={i}
+        {ALL_PHOTOS.filter((src) => !failed.has(src)).map((src, i, visible) => (
+          <button
+            key={src}
             className="gallery-item"
-            onClick={() => openLightbox(ALL_PHOTOS, i)}
+            onClick={() => openLightbox(visible, i)}
+            aria-label={`View photo ${i + 1}`}
           >
             <img
               src={src}
               alt={`Peter's Pizzeria photo ${i + 1}`}
-              onError={(e) => { e.target.closest('.gallery-item').style.display = 'none'; }}
+              onError={() => setFailed((prev) => new Set([...prev, src]))}
             />
-          </div>
+          </button>
         ))}
       </div>
 

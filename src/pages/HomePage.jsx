@@ -4,7 +4,13 @@ import { useScrollReveal } from '../hooks/useScrollReveal';
 import { BLOG_POSTS } from '../data/posts';
 
 const STORY_PHOTOS     = ['/photos/team.jpg', '/photos/hug1.jpg', '/photos/img_6084.jpeg', '/photos/img_5976.jpeg', '/photos/img_6831.jpeg'];
-const STRIP_PHOTOS     = ['/photos/img_5984.jpeg', '/photos/img_6664.jpeg', '/photos/img_9315.jpeg', '/photos/img_6123.jpeg'];
+const STRIP_ITEMS      = [
+  { src: '/photos/img_6831.jpeg', alt: 'Fresh from the oven' },
+  { src: '/photos/img_9383.jpeg', alt: 'Pizza night' },
+  { src: '/photos/img_5963.jpeg', alt: 'Kitchen action' },
+  { src: '/photos/img_0967.jpeg', alt: 'The crew' },
+];
+const STRIP_SRCS       = STRIP_ITEMS.map((p) => p.src);
 const COMMUNITY_PHOTOS = ['/photos/img_1082.jpeg', '/photos/img_6789.jpeg', '/photos/img_1098.jpeg'];
 const MOSAIC_PHOTOS    = [
   '/photos/img_6084.jpeg', '/photos/img_5976.jpeg', '/photos/img_6831.jpeg', '/photos/img_9383.jpeg',
@@ -15,6 +21,10 @@ const SPECIALS = [
   { tag: 'Slice of the Week',   name: 'Nduja & Hot Honey',  desc: 'Spicy Calabrian nduja, house hot honey, stracciatella', price: '$4' },
   { tag: 'Special',             name: 'Vodka Slice',        desc: 'House-made vodka sauce, cheese', price: '$4' },
 ];
+
+const LATEST_POSTS = [...BLOG_POSTS]
+  .sort((a, b) => new Date(b.date) - new Date(a.date))
+  .slice(0, 3);
 
 export function HomePage({ nav, openArticle, openLightbox }) {
   const ref = useScrollReveal();
@@ -37,7 +47,7 @@ export function HomePage({ nav, openArticle, openLightbox }) {
           <button className="btn-primary" onClick={() => nav('menu')}>See the Menu</button>
           <button className="btn-ghost"   onClick={() => nav('blog')}>Read the Blog</button>
         </div>
-        <div className="hero-scroll">
+        <div className="hero-scroll" aria-hidden="true">
           <div className="scroll-line" />
           scroll
         </div>
@@ -52,20 +62,12 @@ export function HomePage({ nav, openArticle, openLightbox }) {
 
         <div className="story-grid">
           <div ref={ref(1)} className="reveal reveal-delay-1 story-photo-stack">
-            <img
-              className="story-photo-main"
-              src="/photos/team.jpg"
-              alt="The team"
-              style={{ cursor: 'pointer' }}
-              onClick={() => openLightbox(STORY_PHOTOS, 0)}
-            />
-            <img
-              className="story-photo-inset"
-              src="/photos/hug1.jpg"
-              alt="The crew"
-              style={{ cursor: 'pointer' }}
-              onClick={() => openLightbox(STORY_PHOTOS, 1)}
-            />
+            <button className="story-photo-btn" onClick={() => openLightbox(STORY_PHOTOS, 0)} aria-label="View team photo">
+              <img className="story-photo-main" src="/photos/team.jpg" alt="The team" />
+            </button>
+            <button className="story-photo-btn story-photo-inset-btn" onClick={() => openLightbox(STORY_PHOTOS, 1)} aria-label="View crew photo">
+              <img className="story-photo-inset" src="/photos/hug1.jpg" alt="The crew" />
+            </button>
           </div>
 
           <div className="story-text">
@@ -86,15 +88,10 @@ export function HomePage({ nav, openArticle, openLightbox }) {
 
       {/* ── PHOTO STRIP ── */}
       <div className="photo-strip">
-        {[
-          { src: '/photos/img_6831.jpeg', alt: 'Fresh from the oven' },
-          { src: '/photos/img_9383.jpeg', alt: 'Pizza night' },
-          { src: '/photos/img_5963.jpeg', alt: 'Kitchen action' },
-          { src: '/photos/img_0967.jpeg', alt: 'The crew' },
-        ].map((p, i) => (
-          <div key={i} className="photo-strip-item" onClick={() => openLightbox(STRIP_PHOTOS, i)}>
+        {STRIP_ITEMS.map((p, i) => (
+          <button key={p.src} className="photo-strip-item" onClick={() => openLightbox(STRIP_SRCS, i)} aria-label={p.alt}>
             <img src={p.src} alt={p.alt} />
-          </div>
+          </button>
         ))}
       </div>
 
@@ -107,16 +104,16 @@ export function HomePage({ nav, openArticle, openLightbox }) {
               This week&apos;s <em style={{ color: 'var(--red)' }}>specials.</em>
             </h2>
           </div>
-          <span className="specials-see-all" onClick={() => nav('menu')}>Full Menu →</span>
+          <button className="specials-see-all" onClick={() => nav('menu')}>Full Menu →</button>
         </div>
         <div className="specials-grid">
           {SPECIALS.map((s, i) => (
-            <div key={i} className={`special-card reveal reveal-delay-${i + 1}`} ref={ref(3 + i)}>
+            <button key={s.name} className={`special-card reveal reveal-delay-${i + 1}`} ref={ref(3 + i)} onClick={() => nav('menu')} aria-label={`${s.tag}: ${s.name} — ${s.price}`}>
               <div className="special-tag">{s.tag}</div>
               <div className="special-name">{s.name}</div>
               <div className="special-desc">{s.desc}</div>
               <div className="special-price">{s.price}</div>
-            </div>
+            </button>
           ))}
         </div>
       </section>
@@ -128,20 +125,21 @@ export function HomePage({ nav, openArticle, openLightbox }) {
             <div className="section-label">From the Blog</div>
             <h2 className="section-title">Latest from<br /><em>the kitchen.</em></h2>
           </div>
-          <span
-            style={{ fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--red)', cursor: 'pointer', borderBottom: '1px solid var(--red)', paddingBottom: 2 }}
+          <button
+            className="text-link-btn"
             onClick={() => nav('blog')}
           >
             All Posts →
-          </span>
+          </button>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 28 }}>
-          {BLOG_POSTS.slice(0, 3).map((post, i) => (
-            <div
+          {LATEST_POSTS.map((post, i) => (
+            <button
               key={post.id}
               ref={ref(7 + i)}
               className={`blog-card reveal reveal-delay-${i + 1}`}
               onClick={() => openArticle(post)}
+              aria-label={`Read: ${post.title}`}
             >
               <div className="blog-card-img">
                 <img src={post.img} alt={post.title} />
@@ -156,13 +154,13 @@ export function HomePage({ nav, openArticle, openLightbox }) {
                 <span className="blog-card-author">{post.author}</span>
                 <span className="blog-card-read">{post.readTime}</span>
               </div>
-            </div>
+            </button>
           ))}
         </div>
       </section>
 
       {/* ── COMMUNITY ── */}
-      <section style={{ background: 'var(--green)', padding: '80px 60px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 60, alignItems: 'center' }}>
+      <section className="community-section">
         <div>
           <div className="section-label" style={{ color: 'var(--gold)' }}>Community</div>
           <h2 className="section-title" style={{ color: 'var(--cream)', marginBottom: 20 }}>
@@ -182,9 +180,15 @@ export function HomePage({ nav, openArticle, openLightbox }) {
           </button>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-          <img src="/photos/img_1082.jpeg" alt="Kitchen" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', cursor: 'pointer' }} onClick={() => openLightbox(COMMUNITY_PHOTOS, 0)} />
-          <img src="/photos/img_6789.jpeg" alt="Team"    style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', cursor: 'pointer' }} onClick={() => openLightbox(COMMUNITY_PHOTOS, 1)} />
-          <img src="/photos/img_1098.jpeg" alt="Pizza"   style={{ width: '100%', aspectRatio: '3/2', objectFit: 'cover', gridColumn: '1/-1', cursor: 'pointer' }} onClick={() => openLightbox(COMMUNITY_PHOTOS, 2)} />
+          <button className="photo-btn" onClick={() => openLightbox(COMMUNITY_PHOTOS, 0)} aria-label="View kitchen photo">
+            <img src="/photos/img_1082.jpeg" alt="Kitchen" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block' }} />
+          </button>
+          <button className="photo-btn" onClick={() => openLightbox(COMMUNITY_PHOTOS, 1)} aria-label="View team photo">
+            <img src="/photos/img_6789.jpeg" alt="Team" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block' }} />
+          </button>
+          <button className="photo-btn" onClick={() => openLightbox(COMMUNITY_PHOTOS, 2)} aria-label="View pizza photo" style={{ gridColumn: '1/-1' }}>
+            <img src="/photos/img_1098.jpeg" alt="Pizza" style={{ width: '100%', aspectRatio: '3/2', objectFit: 'cover', display: 'block' }} />
+          </button>
         </div>
       </section>
 

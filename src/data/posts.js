@@ -4,16 +4,16 @@ export const BLOG_POSTS = [
     tag: 'Inspiration',
     date: 'April 19, 2026',
     title: 'How Bambino and their Vito Slice Inspired Me from Dublin, Ireland',
-    excerpt: 'Think Ireland doesn\'t have have what it takes for good pizza? Think again.',
+    excerpt: 'Think Ireland doesn\'t have what it takes for good pizza? Think again.',
     author: 'Peter M.',
     readTime: '5 min read',
     img: '/photos/bambinoVitoSlice.png',
     content: {
-      intro: 'Think Ireland does not have have what it takes for good pizza? Think again.',
+      intro: 'Think Ireland does not have what it takes for good pizza? Think again.',
       sections: [
         {
           heading: 'Intro',
-          body: 'When I first tried Bambino in March 2025, it was only a few months before I started making pizza over the summer. Bambino was a TikTok trend, believe it or not, with some calling it “the best pizza they ever had”. At that time, they had both New York style pizza and one Detriot-style special. Many do not consider Dublin to be one of the “pizza capitals”, and the Irish generally haven\'t been known for their cuisine, especially pizza. However, when I tell you the hype was absolutely worth it — I\'m not lying. To this day, this pizza is the second-best pizza I have ever had (behind Pizza in Trevi in Rome, Italy). The slices were absolutely enormous, which was the first thing that stood out to me, especially compared to how we do things at Saturday Slices. One of the biggest complaints I\'ve gotten, and that I have myself, is that our slices are too small. Bambino took this to the next level, and it shows in both their prices and the size of their full pie. Their best slice, The Vito, just got bumped up to €7 (~$8.22 USD).',
+          body: 'When I first tried Bambino in March 2025, it was only a few months before I started making pizza over the summer. Bambino was a TikTok trend, believe it or not, with some calling it “the best pizza they ever had”. At that time, they had both New York style pizza and one Detroit-style special. Many do not consider Dublin to be one of the “pizza capitals”, and the Irish generally haven\'t been known for their cuisine, especially pizza. However, when I tell you the hype was absolutely worth it — I\'m not lying. To this day, this pizza is the second-best pizza I have ever had (behind Pizza in Trevi in Rome, Italy). The slices were absolutely enormous, which was the first thing that stood out to me, especially compared to how we do things at Saturday Slices. One of the biggest complaints I\'ve gotten, and that I have myself, is that our slices are too small. Bambino took this to the next level, and it shows in both their prices and the size of their full pie. Their best slice, The Vito, just got bumped up to €7 (~$8.22 USD).',
           images: [
             { src: '/photos/bambinoPictures/firstBambinoTime.jpeg', caption: 'My first time at Bambino, March 2025.' },
             { src: '/photos/bambinoPictures/vitoSlice.jpeg', caption: 'The Vito Slice — €7 and worth it imo.' },
@@ -21,7 +21,7 @@ export const BLOG_POSTS = [
         },
         {
           heading: 'Reheating Slices??',
-          body: 'Another thing I learned from Bambino is the way they deliver and make their slices. First of all, their slices are not necessarily made fresh to order. In the back, they have racks of several fully-cooked pizzas of all types in the back, ready to be cut and reheated at a moment\'s notice. In doing so, they significantly reduce the time it takes from order→ready slice. Due to the online popularity, there is always a line running out the door. Interestingly, not many people notice that their slices are reheated. This is simply because it doesn\'t taste like reheated pizza. In doing so, they argubalby get a crispier slice that can be prepared and topped independently. Since the way they do this process doesn\'t reduce the quality of the pizza, this is a genius move for the efficiency of their business.',
+          body: 'Another thing I learned from Bambino is the way they deliver and make their slices. First of all, their slices are not necessarily made fresh to order. In the back, they have racks of several fully-cooked pizzas of all types in the back, ready to be cut and reheated at a moment\'s notice. In doing so, they significantly reduce the time it takes from order→ready slice. Due to the online popularity, there is always a line running out the door. Interestingly, not many people notice that their slices are reheated. This is simply because it doesn\'t taste like reheated pizza. In doing so, they arguably get a crispier slice that can be prepared and topped independently. Since the way they do this process doesn\'t reduce the quality of the pizza, this is a genius move for the efficiency of their business.',
           images: [
             { src: '/photos/bambinoPictures/bambinoBack.jpeg', caption: 'The back of Bambino\'s storefront, where they keep racks of cooked pizza.' },
             { src: '/photos/bambinoPictures/fullVitoPie.jpeg', caption: 'A full Vito pie -- €40' },
@@ -44,7 +44,7 @@ export const BLOG_POSTS = [
         },
         {
           heading: 'Their Burrata',
-          body: 'Bambino has arguably some of the best burrata I have tried in a pizza. Burrata, commonly confused with stracciatella (the inside filling), is a milky cheese that is made from stretching fresh mozzerella, filling it with shredded bits of mozzerella, and sometimes heavy cream and salt. What I noticed about Bambino is that they have their burrata filling at their finishing station with the rest of the toppings, easily accessible with a piping bag. The only slice that gets this is the Vito, which contributes significantly to the price tag.',
+          body: 'Bambino has arguably some of the best burrata I have tried in a pizza. Burrata, commonly confused with stracciatella (the inside filling), is a milky cheese that is made from stretching fresh mozzarella, filling it with shredded bits of mozzarella, and sometimes heavy cream and salt. What I noticed about Bambino is that they have their burrata filling at their finishing station with the rest of the toppings, easily accessible with a piping bag. The only slice that gets this is the Vito, which contributes significantly to the price tag.',
         },
         {
           heading: 'Grana Padano',

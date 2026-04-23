@@ -10,23 +10,29 @@ import { GalleryPage } from './pages/GalleryPage';
 const TRANSITION_MS = 260;
 
 export default function App() {
-  const [page,    setPage]    = useState(() => localStorage.getItem('pp_page2') || 'home');
+  const [page,    setPage]    = useState(() => {
+    const saved = localStorage.getItem('pp_page2') || 'home';
+    return saved === 'article' ? 'blog' : saved;
+  });
   const [article, setArticle] = useState(null);
   const [visible, setVisible] = useState(true);
   const [lbPhotos, setLbPhotos] = useState([]);
   const [lbIndex,  setLbIndex]  = useState(0);
   const [lbOpen,   setLbOpen]   = useState(false);
   const pending = useRef({});
+  const navTimer = useRef(null);
 
   useEffect(() => { localStorage.setItem('pp_page2', page); }, [page]);
 
   const nav = useCallback((newPage, newArticle = null) => {
+    if (navTimer.current) clearTimeout(navTimer.current);
     setVisible(false);
     pending.current = { page: newPage, article: newArticle };
-    setTimeout(() => {
+    navTimer.current = setTimeout(() => {
       if (pending.current.article) setArticle(pending.current.article);
       setPage(pending.current.page);
       setVisible(true);
+      navTimer.current = null;
     }, TRANSITION_MS);
   }, []);
 

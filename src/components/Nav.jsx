@@ -13,20 +13,20 @@ export function Nav({ page, nav }) {
 
   return (
     <nav className={[scrolled ? 'scrolled' : '', isDark ? 'nav-dark' : ''].filter(Boolean).join(' ')}>
-      <div className="nav-logo-wrap" onClick={() => doNav('home')}>
+      <button className="nav-logo-wrap" onClick={() => doNav('home')} aria-label="Go to home page">
         <LogoBadge size={44} />
         <div className="nav-logo-text">Peter&apos;s Pizzeria</div>
-      </div>
+      </button>
 
       <div className={`nav-links${menuOpen ? ' mobile-open' : ''}`}>
         {PAGES.map((p) => (
-          <span
+          <button
             key={p}
             className={`nav-link ${page === p ? 'active' : ''}`}
             onClick={() => doNav(p)}
           >
             {p}
-          </span>
+          </button>
         ))}
       </div>
 
