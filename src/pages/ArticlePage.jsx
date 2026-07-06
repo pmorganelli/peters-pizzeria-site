@@ -65,6 +65,8 @@ export function ArticlePage({ article, nav }) {
                       <img
                         src={src}
                         alt={caption || `${s.heading} photo ${j + 1}`}
+                        loading="lazy"
+                        decoding="async"
                         style={{ width: '100%', maxHeight: 480, objectFit: 'cover', display: 'block' }}
                       />
                       {caption && (

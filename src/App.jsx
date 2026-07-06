@@ -8,11 +8,13 @@ import { ArticlePage } from './pages/ArticlePage';
 import { GalleryPage } from './pages/GalleryPage';
 
 const TRANSITION_MS = 260;
+const VALID_PAGES = ['home', 'menu', 'blog', 'gallery'];
 
 export default function App() {
   const [page,    setPage]    = useState(() => {
-    const saved = localStorage.getItem('pp_page2') || 'home';
-    return saved === 'article' ? 'blog' : saved;
+    const saved = localStorage.getItem('pp_page2');
+    if (saved === 'article') return 'blog';
+    return VALID_PAGES.includes(saved) ? saved : 'home';
   });
   const [article, setArticle] = useState(null);
   const [visible, setVisible] = useState(true);

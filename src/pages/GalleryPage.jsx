@@ -28,6 +28,8 @@ export function GalleryPage({ nav, openLightbox }) {
             <img
               src={src}
               alt={`Peter's Pizzeria photo ${i + 1}`}
+              loading="lazy"
+              decoding="async"
               onError={() => setFailed((prev) => new Set([...prev, src]))}
             />
           </button>

@@ -3,6 +3,8 @@ import { Footer } from '../components/Footer';
 import { useScrollReveal } from '../hooks/useScrollReveal';
 import { BLOG_POSTS } from '../data/posts';
 
+const SORTED_POSTS = [...BLOG_POSTS].sort((a, b) => new Date(b.date) - new Date(a.date));
+
 export function BlogPage({ nav, openArticle }) {
   const ref = useScrollReveal();
 
@@ -22,7 +24,7 @@ export function BlogPage({ nav, openArticle }) {
 
       <div className="blog-body">
         <div className="blog-grid">
-          {BLOG_POSTS.map((post, i) => (
+          {SORTED_POSTS.map((post, i) => (
             <button
               key={post.id}
               ref={ref(i)}
@@ -31,7 +33,7 @@ export function BlogPage({ nav, openArticle }) {
               aria-label={`Read: ${post.title}`}
             >
               <div className="blog-card-img">
-                <img src={post.img} alt={post.title} />
+                <img src={post.img} alt={post.title} loading="lazy" decoding="async" />
                 <div className="blog-card-tag">{post.tag}</div>
               </div>
               <div className="blog-card-body">

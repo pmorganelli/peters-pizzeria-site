@@ -6,12 +6,19 @@ export function Lightbox({ photos, index, onClose, onPrev, onNext }) {
   useEffect(() => {
     const onKey = (e) => {
       if (e.key === 'Escape')     onClose();
-      if (e.key === 'ArrowLeft')  onPrev();
-      if (e.key === 'ArrowRight') onNext();
+      if (e.key === 'ArrowLeft')  { e.preventDefault(); onPrev(); }
+      if (e.key === 'ArrowRight') { e.preventDefault(); onNext(); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose, onPrev, onNext]);
+
+  // Lock the page behind the overlay while the lightbox is open
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
 
   return (
     <div

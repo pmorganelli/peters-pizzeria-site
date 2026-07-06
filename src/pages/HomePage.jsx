@@ -12,10 +12,6 @@ const STRIP_ITEMS      = [
 ];
 const STRIP_SRCS       = STRIP_ITEMS.map((p) => p.src);
 const COMMUNITY_PHOTOS = ['/photos/img_1082.jpeg', '/photos/img_6789.jpeg', '/photos/img_1098.jpeg'];
-const MOSAIC_PHOTOS    = [
-  '/photos/img_6084.jpeg', '/photos/img_5976.jpeg', '/photos/img_6831.jpeg', '/photos/img_9383.jpeg',
-  '/photos/img_6132.jpeg', '/photos/img_5925.jpeg', '/photos/img_2220.jpeg', '/photos/img_3337.jpeg',
-];
 const SPECIALS = [
   { tag: 'Special',             name: 'Pesto Slice',        desc: 'House-made pesto sauce, cheese', price: '$4' },
   { tag: 'Slice of the Week',   name: 'Nduja & Hot Honey',  desc: 'Spicy Calabrian nduja, house hot honey, stracciatella', price: '$4' },
@@ -90,7 +86,7 @@ export function HomePage({ nav, openArticle, openLightbox }) {
       <div className="photo-strip">
         {STRIP_ITEMS.map((p, i) => (
           <button key={p.src} className="photo-strip-item" onClick={() => openLightbox(STRIP_SRCS, i)} aria-label={p.alt}>
-            <img src={p.src} alt={p.alt} />
+            <img src={p.src} alt={p.alt} loading="lazy" decoding="async" />
           </button>
         ))}
       </div>
@@ -142,7 +138,7 @@ export function HomePage({ nav, openArticle, openLightbox }) {
               aria-label={`Read: ${post.title}`}
             >
               <div className="blog-card-img">
-                <img src={post.img} alt={post.title} />
+                <img src={post.img} alt={post.title} loading="lazy" decoding="async" />
                 <div className="blog-card-tag">{post.tag}</div>
               </div>
               <div className="blog-card-body">
@@ -181,13 +177,13 @@ export function HomePage({ nav, openArticle, openLightbox }) {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           <button className="photo-btn" onClick={() => openLightbox(COMMUNITY_PHOTOS, 0)} aria-label="View kitchen photo">
-            <img src="/photos/img_1082.jpeg" alt="Kitchen" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block' }} />
+            <img src="/photos/img_1082.jpeg" alt="Kitchen" loading="lazy" decoding="async" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block' }} />
           </button>
           <button className="photo-btn" onClick={() => openLightbox(COMMUNITY_PHOTOS, 1)} aria-label="View team photo">
-            <img src="/photos/img_6789.jpeg" alt="Team" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block' }} />
+            <img src="/photos/img_6789.jpeg" alt="Team" loading="lazy" decoding="async" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block' }} />
           </button>
           <button className="photo-btn" onClick={() => openLightbox(COMMUNITY_PHOTOS, 2)} aria-label="View pizza photo" style={{ gridColumn: '1/-1' }}>
-            <img src="/photos/img_1098.jpeg" alt="Pizza" style={{ width: '100%', aspectRatio: '3/2', objectFit: 'cover', display: 'block' }} />
+            <img src="/photos/img_1098.jpeg" alt="Pizza" loading="lazy" decoding="async" style={{ width: '100%', aspectRatio: '3/2', objectFit: 'cover', display: 'block' }} />
           </button>
         </div>
       </section>
