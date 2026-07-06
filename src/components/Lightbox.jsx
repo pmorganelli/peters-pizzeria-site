@@ -35,6 +35,7 @@ export function Lightbox({ photos, index, onClose, onPrev, onNext }) {
     >
       <button className="lb-close" aria-label="Close lightbox">✕ close</button>
       <img
+        key={photos[index]}
         className="lb-img"
         src={photos[index]}
         alt="Photo"

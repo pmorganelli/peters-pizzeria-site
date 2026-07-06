@@ -42,13 +42,21 @@ export function Footer({ nav }) {
           <div className="footer-col-title">Find Us</div>
           <div className="footer-link" style={{ cursor: 'default' }}>Tufts University</div>
           <div className="footer-link" style={{ cursor: 'default' }}>Somerville, MA</div>
-          <div className="footer-link" style={{ cursor: 'default', fontSize: 13 }}>@peterspizzeria_ for location</div>
+          <a
+            className="footer-link"
+            style={{ fontSize: 13, textDecoration: 'none' }}
+            href="https://instagram.com/peterspizzeria_"
+            target="_blank"
+            rel="noreferrer"
+          >
+            @peterspizzeria_ for location
+          </a>
         </div>
       </div>
 
       <div className="footer-bottom">
         <span>© 2026 Peter&apos;s Pizzeria · Tufts University</span>
-        <span>Venmo: @Peter-Morganelli24</span>
+        <a href="https://venmo.com/u/Peter-Morganelli24" target="_blank" rel="noreferrer">Venmo: @Peter-Morganelli24</a>
       </div>
     </footer>
   );

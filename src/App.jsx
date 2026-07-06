@@ -17,23 +17,29 @@ export default function App() {
     return VALID_PAGES.includes(saved) ? saved : 'home';
   });
   const [article, setArticle] = useState(null);
-  const [visible, setVisible] = useState(true);
+  // 'out' slides the old page up, 'enter' parks the new page below (no transition), 'in' rests
+  const [phase, setPhase] = useState('in');
   const [lbPhotos, setLbPhotos] = useState([]);
   const [lbIndex,  setLbIndex]  = useState(0);
   const [lbOpen,   setLbOpen]   = useState(false);
   const pending = useRef({});
   const navTimer = useRef(null);
+  const navRaf = useRef(null);
 
   useEffect(() => { localStorage.setItem('pp_page2', page); }, [page]);
 
   const nav = useCallback((newPage, newArticle = null) => {
     if (navTimer.current) clearTimeout(navTimer.current);
-    setVisible(false);
+    if (navRaf.current) cancelAnimationFrame(navRaf.current);
+    setPhase('out');
     pending.current = { page: newPage, article: newArticle };
     navTimer.current = setTimeout(() => {
       if (pending.current.article) setArticle(pending.current.article);
       setPage(pending.current.page);
-      setVisible(true);
+      setPhase('enter');
+      navRaf.current = requestAnimationFrame(() => {
+        navRaf.current = requestAnimationFrame(() => { setPhase('in'); navRaf.current = null; });
+      });
       navTimer.current = null;
     }, TRANSITION_MS);
   }, []);
@@ -51,9 +57,9 @@ export default function App() {
 
       <div
         style={{
-          opacity:    visible ? 1 : 0,
-          transform:  visible ? 'none' : 'translateY(18px)',
-          transition: `opacity ${TRANSITION_MS}ms ease, transform ${TRANSITION_MS}ms ease`,
+          opacity:    phase === 'in' ? 1 : 0,
+          transform:  phase === 'in' ? 'none' : phase === 'out' ? 'translateY(-14px)' : 'translateY(18px)',
+          transition: phase === 'enter' ? 'none' : `opacity ${TRANSITION_MS}ms ease, transform ${TRANSITION_MS}ms ease`,
         }}
       >
         {page === 'home'    && <HomePage    {...pageProps} />}

@@ -39,7 +39,9 @@ export function MenuPage({ nav }) {
         <div className="menu-venmo-box">
           <div>
             <div className="menu-venmo-title">Pay via Venmo or Zelle</div>
-            <div className="menu-venmo-handle">@Peter-Morganelli24</div>
+            <div className="menu-venmo-handle">
+              <a href="https://venmo.com/u/Peter-Morganelli24" target="_blank" rel="noreferrer">@Peter-Morganelli24</a>
+            </div>
           </div>
           <div className="menu-quote">
             &ldquo;Can you save me a slice?&rdquo; — Jonah Pflaster<br />

@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import { Footer } from '../components/Footer';
+import { LogoBadge } from '../components/LogoBadge';
 import { useScrollReveal } from '../hooks/useScrollReveal';
-import { BLOG_POSTS } from '../data/posts';
+import { POSTS_BY_DATE } from '../data/posts';
 
 const STORY_PHOTOS     = ['/photos/team.jpg', '/photos/hug1.jpg', '/photos/img_6084.jpeg', '/photos/img_5976.jpeg', '/photos/img_6831.jpeg'];
 const STRIP_ITEMS      = [
@@ -18,9 +19,9 @@ const SPECIALS = [
   { tag: 'Special',             name: 'Vodka Slice',        desc: 'House-made vodka sauce, cheese', price: '$4' },
 ];
 
-const LATEST_POSTS = [...BLOG_POSTS]
-  .sort((a, b) => new Date(b.date) - new Date(a.date))
-  .slice(0, 3);
+const LATEST_POSTS = POSTS_BY_DATE.slice(0, 3);
+
+const TICKER_TEXT = 'Saturday Slices · 7pm til sellout · 72-hour dough · Fired at 900°F · Tufts University · ';
 
 export function HomePage({ nav, openArticle, openLightbox }) {
   const ref = useScrollReveal();
@@ -33,11 +34,13 @@ export function HomePage({ nav, openArticle, openLightbox }) {
       <section className="hero">
         <div className="hero-img" />
         <div className="hero-overlay" />
+        <div className="hero-badge" aria-hidden="true"><LogoBadge size={128} /></div>
+        <div className="hero-pill"><span className="pulse-dot" aria-hidden="true" />Next bake: Saturday 7pm</div>
         <div className="hero-label">Tufts University · Medford, MA · Est. 2025</div>
         <h1 className="hero-title">Handmade<br />with <em>love.</em></h1>
         <p className="hero-sub">
-          A student-run pizzeria from the heart of Tufts. Twelve passionate students, one shared kitchen,
-          love, and a 72-hour ferment.
+          A student-run pizzeria from the heart of Tufts. Twelve passionate students,
+          one shared kitchen, and a 72-hour ferment.
         </p>
         <div className="hero-ctas">
           <button className="btn-primary" onClick={() => nav('menu')}>See the Menu</button>
@@ -48,6 +51,14 @@ export function HomePage({ nav, openArticle, openLightbox }) {
           scroll
         </div>
       </section>
+
+      {/* ── TICKER ── */}
+      <div className="ticker" aria-hidden="true">
+        <div className="ticker-track">
+          <span>{TICKER_TEXT.repeat(3)}</span>
+          <span>{TICKER_TEXT.repeat(3)}</span>
+        </div>
+      </div>
 
       {/* ── STORY ── */}
       <section className="story-section">
@@ -68,8 +79,8 @@ export function HomePage({ nav, openArticle, openLightbox }) {
 
           <div className="story-text">
             <div className="reveal reveal-delay-2" ref={ref(2)}>
-              <p>We started Peter&apos;s Pizzeria junior year — a few friends stayed up until three in the morning one night for an idea to build community.</p>
-              <p>Now there's over a dozen of us, united by the same obsession: making the best pizza in Somerville. We ferment our dough 72 hours, fire it in an Ooni at 900°F for Neapolitan style pizzas, and Pizza Steels at 550°F for New York style pizzas.</p>
+              <p>We started Peter&apos;s Pizzeria junior year — a few friends stayed up until three in the morning with an idea: build community.</p>
+              <p>Now there are over a dozen of us, united by the same obsession: making the best pizza in Somerville. We ferment our dough 72 hours, fire it in an Ooni at 900°F for Neapolitan style pizzas, and Pizza Steels at 550°F for New York style pizzas.</p>
               <p>We sell out every week. We learn something new every time. And we&apos;re just getting started.</p>
               <div className="story-stat">
                 <div><div className="stat-num">12</div><div className="stat-label">Students</div></div>
@@ -115,7 +126,7 @@ export function HomePage({ nav, openArticle, openLightbox }) {
       </section>
 
       {/* ── LATEST BLOG POSTS ── */}
-      <section style={{ background: 'var(--cream)', padding: '100px 60px' }}>
+      <section className="home-latest">
         <div ref={ref(6)} className="reveal" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 48 }}>
           <div>
             <div className="section-label">From the Blog</div>
@@ -165,7 +176,16 @@ export function HomePage({ nav, openArticle, openLightbox }) {
           <p style={{ fontFamily: 'var(--serif)', fontSize: 18, fontStyle: 'italic', color: 'rgba(254,245,239,0.7)', lineHeight: 1.75 }}>
             Every Saturday night is more than a meal. It&apos;s our passion. The people yearn for community at Tufts, and we provide it.
             We pride ourselves on affordable pizza, great community, and some of the best slices you&apos;ll ever have.
-            Come find us — follow @peterspizzeria_ on Instagram to keep up with the latest!
+            Come find us — follow{' '}
+            <a
+              href="https://instagram.com/peterspizzeria_"
+              target="_blank"
+              rel="noreferrer"
+              style={{ color: 'var(--gold)', textDecoration: 'none', borderBottom: '1px solid rgba(200,147,58,0.5)' }}
+            >
+              @peterspizzeria_
+            </a>{' '}
+            on Instagram to keep up with the latest!
           </p>
           <button
             className="btn-primary"

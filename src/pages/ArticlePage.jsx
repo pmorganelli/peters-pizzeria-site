@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { Footer } from '../components/Footer';
+import { POSTS_BY_DATE } from '../data/posts';
 
 function BackArrow() {
   return (
@@ -13,6 +14,9 @@ export function ArticlePage({ article, nav }) {
   useEffect(() => { window.scrollTo(0, 0); }, [article]);
 
   if (!article || !article.content) return null;
+
+  const idx = POSTS_BY_DATE.findIndex((p) => p.id === article.id);
+  const next = POSTS_BY_DATE.length > 1 ? POSTS_BY_DATE[(idx + 1) % POSTS_BY_DATE.length] : null;
 
   return (
     <div className="article-page">
@@ -34,7 +38,7 @@ export function ArticlePage({ article, nav }) {
       </div>
 
       {article.img && (
-        <div style={{ margin: '0 60px 40px', maxWidth: 720 }}>
+        <div className="article-hero-img">
           <img
             src={article.img}
             alt={article.title}
@@ -97,6 +101,20 @@ export function ArticlePage({ article, nav }) {
           </div>
         ))}
       </div>
+
+      {next && (
+        <div className="article-next">
+          <div className="article-next-label">Read next</div>
+          <button className="article-next-card" onClick={() => nav('article', next)} aria-label={`Read next: ${next.title}`}>
+            <img src={next.img} alt="" loading="lazy" decoding="async" />
+            <div>
+              <div className="article-next-meta">{next.tag} · {next.date}</div>
+              <div className="article-next-title">{next.title}</div>
+              <div className="article-next-cta">Read article →</div>
+            </div>
+          </button>
+        </div>
+      )}
 
       <Footer nav={nav} />
     </div>

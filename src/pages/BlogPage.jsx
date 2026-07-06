@@ -1,9 +1,7 @@
 import { useEffect } from 'react';
 import { Footer } from '../components/Footer';
 import { useScrollReveal } from '../hooks/useScrollReveal';
-import { BLOG_POSTS } from '../data/posts';
-
-const SORTED_POSTS = [...BLOG_POSTS].sort((a, b) => new Date(b.date) - new Date(a.date));
+import { POSTS_BY_DATE } from '../data/posts';
 
 export function BlogPage({ nav, openArticle }) {
   const ref = useScrollReveal();
@@ -24,7 +22,7 @@ export function BlogPage({ nav, openArticle }) {
 
       <div className="blog-body">
         <div className="blog-grid">
-          {SORTED_POSTS.map((post, i) => (
+          {POSTS_BY_DATE.map((post, i) => (
             <button
               key={post.id}
               ref={ref(i)}
