@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import { Footer } from '../components/Footer';
 import { useScrollReveal } from '../hooks/useScrollReveal';
 import { POSTS_BY_DATE } from '../data/posts';
+import { thumbSrc } from '../utils/photos';
+import { LineReveal } from '../components/LineReveal';
 
 export function BlogPage({ nav, openArticle }) {
   const ref = useScrollReveal();
@@ -17,7 +19,11 @@ export function BlogPage({ nav, openArticle }) {
           Journal
         </div>
         <h1 className="blog-hero-title">Recipes, stories,<br /><em>&amp; inspirations.</em></h1>
-        <p className="blog-hero-sub">New posts every week — what we&apos;re making, learning, and eating.</p>
+        <LineReveal
+          as="p"
+          className="blog-hero-sub"
+          text="New posts every week — what we're making, learning, and eating."
+        />
       </div>
 
       <div className="blog-body">
@@ -31,7 +37,7 @@ export function BlogPage({ nav, openArticle }) {
               aria-label={`Read: ${post.title}`}
             >
               <div className="blog-card-img">
-                <img src={post.img} alt={post.title} loading="lazy" decoding="async" />
+                <img src={thumbSrc(post.img)} alt={post.title} loading="lazy" decoding="async" />
                 <div className="blog-card-tag">{post.tag}</div>
               </div>
               <div className="blog-card-body">

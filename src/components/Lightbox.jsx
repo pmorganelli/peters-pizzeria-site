@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { webSrc } from '../utils/photos';
 
 export function Lightbox({ photos, index, onClose, onPrev, onNext }) {
   const touchX = useRef(null);
@@ -33,11 +34,13 @@ export function Lightbox({ photos, index, onClose, onPrev, onNext }) {
         touchX.current = null;
       }}
     >
-      <button className="lb-close" aria-label="Close lightbox">✕ close</button>
+      <button className="lb-close" aria-label="Close lightbox" onClick={(e) => { e.stopPropagation(); onClose(); }}>✕ close</button>
       <img
         key={photos[index]}
         className="lb-img"
-        src={photos[index]}
+        src={webSrc(photos[index])}
+        srcSet={`${webSrc(photos[index])} 1600w, ${photos[index]} 3600w`}
+        sizes="88vw"
         alt="Photo"
         onClick={(e) => e.stopPropagation()}
       />

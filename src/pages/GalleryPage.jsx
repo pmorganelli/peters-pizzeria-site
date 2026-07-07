@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Footer } from '../components/Footer';
 import { ALL_PHOTOS } from '../data/posts';
+import { thumbSrc } from '../utils/photos';
 
 export function GalleryPage({ nav, openLightbox }) {
   const [failed, setFailed] = useState(new Set());
@@ -13,7 +14,7 @@ export function GalleryPage({ nav, openLightbox }) {
         <div className="section-label" style={{ color: 'var(--gold)' }}>Gallery</div>
         <h1 className="gallery-hero-title">From the<br /><em>kitchen &amp; beyond.</em></h1>
         <p className="gallery-hero-sub">
-          {ALL_PHOTOS.length} photos · Tap to enlarge · Use Arrow keys to browse
+          {ALL_PHOTOS.length} photos · Tap to enlarge · Swipe to browse
         </p>
       </div>
 
@@ -26,7 +27,7 @@ export function GalleryPage({ nav, openLightbox }) {
             aria-label={`View photo ${i + 1}`}
           >
             <img
-              src={src}
+              src={thumbSrc(src)}
               alt={`Peter's Pizzeria photo ${i + 1}`}
               loading="lazy"
               decoding="async"

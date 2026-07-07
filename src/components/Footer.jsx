@@ -56,6 +56,7 @@ export function Footer({ nav }) {
 
       <div className="footer-bottom">
         <span>© 2026 Peter&apos;s Pizzeria · Tufts University</span>
+        <button onClick={() => nav('studio')}>Studio</button>
         <a href="https://venmo.com/u/Peter-Morganelli24" target="_blank" rel="noreferrer">Venmo: @Peter-Morganelli24</a>
       </div>
     </footer>

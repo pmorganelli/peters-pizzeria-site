@@ -1,6 +1,36 @@
 import { useEffect } from 'react';
 import { Footer } from '../components/Footer';
 import { POSTS_BY_DATE } from '../data/posts';
+import { thumbSrc, webSrc } from '../utils/photos';
+import { LineReveal } from '../components/LineReveal';
+
+function ArticleFigure({ img, heading, index, ratio = '4/3' }) {
+  const src = typeof img === 'string' ? img : img.src;
+  const caption = typeof img === 'string' ? null : img.caption;
+  return (
+    <figure style={{ margin: 0 }}>
+      <img
+        src={webSrc(src)}
+        alt={caption || `${heading} photo ${index + 1}`}
+        loading="lazy"
+        decoding="async"
+        style={{ width: '100%', aspectRatio: ratio, objectFit: 'cover', display: 'block' }}
+      />
+      {caption && (
+        <figcaption style={{
+          fontFamily: 'var(--serif)',
+          fontSize: 14,
+          fontStyle: 'italic',
+          color: 'var(--ink2)',
+          marginTop: 8,
+          lineHeight: 1.5,
+        }}>
+          {caption}
+        </figcaption>
+      )}
+    </figure>
+  );
+}
 
 function BackArrow() {
   return (
@@ -27,7 +57,7 @@ export function ArticlePage({ article, nav }) {
 
       <div className="article-hero">
         <div className="article-tag">{article.tag}</div>
-        <h1 className="article-title">{article.title}</h1>
+        <LineReveal as="h1" className="article-title" text={article.title} />
         <div className="article-meta">
           <span>{article.date}</span>
           <span>·</span>
@@ -40,9 +70,9 @@ export function ArticlePage({ article, nav }) {
       {article.img && (
         <div className="article-hero-img">
           <img
-            src={article.img}
+            src={webSrc(article.img)}
             alt={article.title}
-            style={{ width: '100%', maxHeight: 400, objectFit: 'cover', display: 'block' }}
+            style={{ width: '100%', aspectRatio: '16/9', maxHeight: 400, objectFit: 'cover', display: 'block' }}
           />
         </div>
       )}
@@ -51,43 +81,25 @@ export function ArticlePage({ article, nav }) {
 
       <div className="article-body">
         {article.content.intro && (
-          <p style={{ fontSize: 20, color: 'var(--ink)', fontStyle: 'italic', marginBottom: 28 }}>
+          <p className="article-intro" style={{ fontSize: 20, color: 'var(--ink)', fontStyle: 'italic', marginBottom: 28 }}>
             {article.content.intro}
           </p>
         )}
         {(article.content.sections ?? []).map((s, i) => (
           <div key={i}>
             <h2>{s.heading}</h2>
+            {/* Magazine treatment: a lone figure floats right and the text wraps around it */}
+            {s.images && s.images.length === 1 && (
+              <div className="article-fig-float">
+                <ArticleFigure img={s.images[0]} heading={s.heading} index={0} ratio="4/5" />
+              </div>
+            )}
             {s.body && <p>{s.body}</p>}
-            {s.images && s.images.length > 0 && (
+            {s.images && s.images.length > 1 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 20, margin: '16px 0 28px' }}>
-                {s.images.map((img, j) => {
-                  const src = typeof img === 'string' ? img : img.src;
-                  const caption = typeof img === 'string' ? null : img.caption;
-                  return (
-                    <figure key={j} style={{ margin: 0 }}>
-                      <img
-                        src={src}
-                        alt={caption || `${s.heading} photo ${j + 1}`}
-                        loading="lazy"
-                        decoding="async"
-                        style={{ width: '100%', maxHeight: 480, objectFit: 'cover', display: 'block' }}
-                      />
-                      {caption && (
-                        <figcaption style={{
-                          fontFamily: 'var(--serif)',
-                          fontSize: 14,
-                          fontStyle: 'italic',
-                          color: 'var(--ink2)',
-                          marginTop: 8,
-                          lineHeight: 1.5,
-                        }}>
-                          {caption}
-                        </figcaption>
-                      )}
-                    </figure>
-                  );
-                })}
+                {s.images.map((img, j) => (
+                  <ArticleFigure key={j} img={img} heading={s.heading} index={j} />
+                ))}
               </div>
             )}
             {s.recipe && (
@@ -106,7 +118,7 @@ export function ArticlePage({ article, nav }) {
         <div className="article-next">
           <div className="article-next-label">Read next</div>
           <button className="article-next-card" onClick={() => nav('article', next)} aria-label={`Read next: ${next.title}`}>
-            <img src={next.img} alt="" loading="lazy" decoding="async" />
+            <img src={thumbSrc(next.img)} alt="" loading="lazy" decoding="async" />
             <div>
               <div className="article-next-meta">{next.tag} · {next.date}</div>
               <div className="article-next-title">{next.title}</div>

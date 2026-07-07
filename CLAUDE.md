@@ -19,7 +19,7 @@ Client-side-only SPA with manual routing (no React Router). Page state lives in 
 
 ### Routing
 
-`App.jsx` holds `page` state (`'home' | 'menu' | 'blog' | 'article' | 'gallery'`). The `nav(page, article?)` callback fades out, swaps state, fades back in (260 ms). There is no URL bar routing — all navigation is in-memory.
+`App.jsx` holds `page` state (`'home' | 'menu' | 'blog' | 'article' | 'gallery' | 'studio'`). The `nav(page, article?)` callback runs a directional transition (old page slides up/out, new page rises in, 260 ms). There is no URL bar routing — all navigation is in-memory. `studio` is a hidden page (share-card generator) reachable from the footer-bottom "Studio" button, not the nav.
 
 ### Lightbox
 
@@ -47,6 +47,14 @@ Both are plain JS arrays — no API calls. To add a post, append to `BLOG_POSTS`
 Photos are served from `public/photos/` which is a symlink to `../photos/` (the repo-root `photos/` folder). On Windows or if the symlink is broken, copy `photos/` into `public/`.
 
 All image paths in code use the `/photos/filename` convention (Vite resolves `public/` as root).
+
+### Derivatives
+
+`photos/thumbs/` (max 640px) and `photos/web/` (max 1600px) are generated from the originals by `scripts/gen-photo-derivatives.sh` (macOS `sips`, no deps; skips files that already exist). After adding new photos, re-run the script. Code never hardcodes derivative paths — use `thumbSrc(src)` / `webSrc(src)` from `src/utils/photos.js`. Grids/cards use thumbs, article bodies and the lightbox use web (lightbox `srcset` upgrades to the original on large screens).
+
+## Text layout (Pretext)
+
+`@chenglou/pretext` measures text without DOM reflow. Used in two places: `src/components/LineReveal.jsx` (staggered per-line title reveals — article titles, blog hero sub) and `src/pages/StudioPage.jsx` (wraps the headline for the 1080×1350 canvas share card). Both fall back to plain text if measurement fails.
 
 ## Known bugs fixed
 

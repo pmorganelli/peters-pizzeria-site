@@ -1,4 +1,10 @@
+import { useId } from 'react';
+
 export function LogoBadge({ size = 52 }) {
+  // The badge renders several times per page; arc ids must be unique per instance
+  const uid = useId();
+  const topArcId = `${uid}topArc`;
+  const botArcId = `${uid}botArc`;
   const sliceAngles = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
     const a = (i * 45 - 90) * (Math.PI / 180);
     return { x: 60 + 27 * Math.cos(a), y: 60 + 27 * Math.sin(a) };
@@ -25,14 +31,14 @@ export function LogoBadge({ size = 52 }) {
       <path d="M60 23 Q58 19 60 16 Q62 13 60 10" stroke="#c8933a" strokeWidth="1.2" fill="none" strokeLinecap="round" />
       <path d="M66 24 Q64 20 66 17 Q68 14 66 11" stroke="#c8933a" strokeWidth="1.2" fill="none" strokeLinecap="round" />
       <defs>
-        <path id="topArc" d="M 18,60 A 42,42 0 0,1 102,60" />
-        <path id="botArc" d="M 20,68 A 42,42 0 0,0 100,68" />
+        <path id={topArcId} d="M 18,60 A 42,42 0 0,1 102,60" />
+        <path id={botArcId} d="M 20,68 A 42,42 0 0,0 100,68" />
       </defs>
       <text fill="#fef5ef" fontSize="8.5" fontFamily="'EB Garamond', serif" fontWeight="700" letterSpacing="2">
-        <textPath href="#topArc" startOffset="8%">PETER&apos;S PIZZERIA</textPath>
+        <textPath href={`#${topArcId}`} startOffset="8%">PETER&apos;S PIZZERIA</textPath>
       </text>
       <text fill="#c8933a" fontSize="7" fontFamily="'EB Garamond', serif" fontStyle="italic" letterSpacing="1.5">
-        <textPath href="#botArc" startOffset="12%">Homemade Goodness</textPath>
+        <textPath href={`#${botArcId}`} startOffset="12%">Homemade Goodness</textPath>
       </text>
     </svg>
   );

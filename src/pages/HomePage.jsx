@@ -3,6 +3,7 @@ import { Footer } from '../components/Footer';
 import { LogoBadge } from '../components/LogoBadge';
 import { useScrollReveal } from '../hooks/useScrollReveal';
 import { POSTS_BY_DATE } from '../data/posts';
+import { thumbSrc, webSrc } from '../utils/photos';
 
 const STORY_PHOTOS     = ['/photos/team.jpg', '/photos/hug1.jpg', '/photos/img_6084.jpeg', '/photos/img_5976.jpeg', '/photos/img_6831.jpeg'];
 const STRIP_ITEMS      = [
@@ -70,10 +71,10 @@ export function HomePage({ nav, openArticle, openLightbox }) {
         <div className="story-grid">
           <div ref={ref(1)} className="reveal reveal-delay-1 story-photo-stack">
             <button className="story-photo-btn" onClick={() => openLightbox(STORY_PHOTOS, 0)} aria-label="View team photo">
-              <img className="story-photo-main" src="/photos/team.jpg" alt="The team" />
+              <img className="story-photo-main" src={webSrc('/photos/team.jpg')} alt="The team" />
             </button>
             <button className="story-photo-btn story-photo-inset-btn" onClick={() => openLightbox(STORY_PHOTOS, 1)} aria-label="View crew photo">
-              <img className="story-photo-inset" src="/photos/hug1.jpg" alt="The crew" />
+              <img className="story-photo-inset" src={thumbSrc('/photos/hug1.jpg')} alt="The crew" />
             </button>
           </div>
 
@@ -97,7 +98,7 @@ export function HomePage({ nav, openArticle, openLightbox }) {
       <div className="photo-strip">
         {STRIP_ITEMS.map((p, i) => (
           <button key={p.src} className="photo-strip-item" onClick={() => openLightbox(STRIP_SRCS, i)} aria-label={p.alt}>
-            <img src={p.src} alt={p.alt} loading="lazy" decoding="async" />
+            <img src={thumbSrc(p.src)} alt={p.alt} loading="lazy" decoding="async" />
           </button>
         ))}
       </div>
@@ -139,7 +140,7 @@ export function HomePage({ nav, openArticle, openLightbox }) {
             All Posts →
           </button>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 28 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(320px, 100%), 1fr))', gap: 28 }}>
           {LATEST_POSTS.map((post, i) => (
             <button
               key={post.id}
@@ -149,7 +150,7 @@ export function HomePage({ nav, openArticle, openLightbox }) {
               aria-label={`Read: ${post.title}`}
             >
               <div className="blog-card-img">
-                <img src={post.img} alt={post.title} loading="lazy" decoding="async" />
+                <img src={thumbSrc(post.img)} alt={post.title} loading="lazy" decoding="async" />
                 <div className="blog-card-tag">{post.tag}</div>
               </div>
               <div className="blog-card-body">
@@ -197,13 +198,13 @@ export function HomePage({ nav, openArticle, openLightbox }) {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           <button className="photo-btn" onClick={() => openLightbox(COMMUNITY_PHOTOS, 0)} aria-label="View kitchen photo">
-            <img src="/photos/img_1082.jpeg" alt="Kitchen" loading="lazy" decoding="async" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block' }} />
+            <img src={thumbSrc('/photos/img_1082.jpeg')} alt="Kitchen" loading="lazy" decoding="async" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block' }} />
           </button>
           <button className="photo-btn" onClick={() => openLightbox(COMMUNITY_PHOTOS, 1)} aria-label="View team photo">
-            <img src="/photos/img_6789.jpeg" alt="Team" loading="lazy" decoding="async" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block' }} />
+            <img src={thumbSrc('/photos/img_6789.jpeg')} alt="Team" loading="lazy" decoding="async" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block' }} />
           </button>
           <button className="photo-btn" onClick={() => openLightbox(COMMUNITY_PHOTOS, 2)} aria-label="View pizza photo" style={{ gridColumn: '1/-1' }}>
-            <img src="/photos/img_1098.jpeg" alt="Pizza" loading="lazy" decoding="async" style={{ width: '100%', aspectRatio: '3/2', objectFit: 'cover', display: 'block' }} />
+            <img src={webSrc('/photos/img_1098.jpeg')} alt="Pizza" loading="lazy" decoding="async" style={{ width: '100%', aspectRatio: '3/2', objectFit: 'cover', display: 'block' }} />
           </button>
         </div>
       </section>

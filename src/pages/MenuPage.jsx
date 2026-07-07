@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Footer } from '../components/Footer';
 import { useScrollReveal } from '../hooks/useScrollReveal';
 import { MENU_DATA } from '../data/menu';
+import { webSrc } from '../utils/photos';
 
 export function MenuPage({ nav }) {
   const ref = useScrollReveal();
@@ -18,7 +19,7 @@ export function MenuPage({ nav }) {
       </div>
 
       <div className="menu-body">
-        <img src="/photos/menu-board.jpg" alt="Saturday Slices board" className="menu-board-photo" />
+        <img src={webSrc('/photos/menu-board.jpg')} alt="Saturday Slices board" className="menu-board-photo" />
 
         {MENU_DATA.map((section, si) => (
           <div key={section.category} ref={ref(si)} className="reveal">

@@ -6,9 +6,10 @@ import { MenuPage }    from './pages/MenuPage';
 import { BlogPage }    from './pages/BlogPage';
 import { ArticlePage } from './pages/ArticlePage';
 import { GalleryPage } from './pages/GalleryPage';
+import { StudioPage }  from './pages/StudioPage';
 
 const TRANSITION_MS = 260;
-const VALID_PAGES = ['home', 'menu', 'blog', 'gallery'];
+const VALID_PAGES = ['home', 'menu', 'blog', 'gallery', 'studio'];
 
 export default function App() {
   const [page,    setPage]    = useState(() => {
@@ -67,6 +68,7 @@ export default function App() {
         {page === 'blog'    && <BlogPage    nav={nav} openArticle={openArticle} />}
         {page === 'article' && <ArticlePage article={article} nav={nav} />}
         {page === 'gallery' && <GalleryPage nav={nav} openLightbox={openLightbox} />}
+        {page === 'studio'  && <StudioPage  nav={nav} />}
       </div>
 
       {lbOpen && (
