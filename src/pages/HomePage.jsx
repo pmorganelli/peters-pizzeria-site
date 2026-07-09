@@ -1,9 +1,15 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
+import { gsap } from 'gsap';
+import { useGSAP } from '@gsap/react';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import { ArrowRight } from 'lucide-react';
 import { Footer } from '../components/Footer';
 import { LogoBadge } from '../components/LogoBadge';
 import { useScrollReveal } from '../hooks/useScrollReveal';
 import { POSTS_BY_DATE } from '../data/posts';
 import { thumbSrc, webSrc } from '../utils/photos';
+
+gsap.registerPlugin(useGSAP, ScrollTrigger);
 
 const STORY_PHOTOS     = ['/photos/team.jpg', '/photos/hug1.jpg', '/photos/img_6084.jpeg', '/photos/img_5976.jpeg', '/photos/img_6831.jpeg'];
 const STRIP_ITEMS      = [
@@ -26,11 +32,22 @@ const TICKER_TEXT = 'Saturday Slices · 7pm til sellout · 72-hour dough · Fire
 
 export function HomePage({ nav, openArticle, openLightbox }) {
   const ref = useScrollReveal();
+  const pageRef = useRef(null);
 
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
+  // Hero photo drifts slower than the page scroll (parallax)
+  useGSAP(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    gsap.to('.hero-img', {
+      yPercent: 10,
+      ease: 'none',
+      scrollTrigger: { trigger: '.hero', start: 'top top', end: 'bottom top', scrub: true },
+    });
+  }, { scope: pageRef });
+
   return (
-    <div>
+    <div ref={pageRef}>
       {/* ── HERO ── */}
       <section className="hero">
         <div className="hero-img" />
@@ -112,7 +129,7 @@ export function HomePage({ nav, openArticle, openLightbox }) {
               This week&apos;s <em style={{ color: 'var(--red)' }}>specials.</em>
             </h2>
           </div>
-          <button className="specials-see-all" onClick={() => nav('menu')}>Full Menu →</button>
+          <button className="specials-see-all" onClick={() => nav('menu')}>Full Menu <ArrowRight size={13} /></button>
         </div>
         <div className="specials-grid">
           {SPECIALS.map((s, i) => (
@@ -137,7 +154,7 @@ export function HomePage({ nav, openArticle, openLightbox }) {
             className="text-link-btn"
             onClick={() => nav('blog')}
           >
-            All Posts →
+            All Posts <ArrowRight size={12} />
           </button>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(320px, 100%), 1fr))', gap: 28 }}>
@@ -190,10 +207,10 @@ export function HomePage({ nav, openArticle, openLightbox }) {
           </p>
           <button
             className="btn-primary"
-            style={{ marginTop: 28, background: 'var(--gold)', color: 'var(--ink)' }}
+            style={{ marginTop: 28, background: 'var(--gold)', color: 'var(--ink)', display: 'inline-flex', alignItems: 'center', gap: 8 }}
             onClick={() => nav('gallery')}
           >
-            See Our Photos →
+            See Our Photos <ArrowRight size={14} />
           </button>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>

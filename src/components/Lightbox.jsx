@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { X, ArrowLeft, ArrowRight } from 'lucide-react';
 import { webSrc } from '../utils/photos';
 
 export function Lightbox({ photos, index, onClose, onPrev, onNext }) {
@@ -34,7 +35,7 @@ export function Lightbox({ photos, index, onClose, onPrev, onNext }) {
         touchX.current = null;
       }}
     >
-      <button className="lb-close" aria-label="Close lightbox" onClick={(e) => { e.stopPropagation(); onClose(); }}>✕ close</button>
+      <button className="lb-close" aria-label="Close lightbox" onClick={(e) => { e.stopPropagation(); onClose(); }}><X size={13} /> close</button>
       <img
         key={photos[index]}
         className="lb-img"
@@ -46,8 +47,8 @@ export function Lightbox({ photos, index, onClose, onPrev, onNext }) {
       />
       {photos.length > 1 && (
         <>
-          <button className="lb-arrow lb-prev" aria-label="Previous photo" onClick={(e) => { e.stopPropagation(); onPrev(); }}>&#8592;</button>
-          <button className="lb-arrow lb-next" aria-label="Next photo" onClick={(e) => { e.stopPropagation(); onNext(); }}>&#8594;</button>
+          <button className="lb-arrow lb-prev" aria-label="Previous photo" onClick={(e) => { e.stopPropagation(); onPrev(); }}><ArrowLeft size={20} strokeWidth={1.5} /></button>
+          <button className="lb-arrow lb-next" aria-label="Next photo" onClick={(e) => { e.stopPropagation(); onNext(); }}><ArrowRight size={20} strokeWidth={1.5} /></button>
           <div className="lb-counter">{index + 1} / {photos.length}</div>
         </>
       )}

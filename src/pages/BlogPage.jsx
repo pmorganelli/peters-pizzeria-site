@@ -1,17 +1,33 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
+import { gsap } from 'gsap';
+import { useGSAP } from '@gsap/react';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { Footer } from '../components/Footer';
 import { useScrollReveal } from '../hooks/useScrollReveal';
 import { POSTS_BY_DATE } from '../data/posts';
 import { thumbSrc } from '../utils/photos';
 import { LineReveal } from '../components/LineReveal';
 
+gsap.registerPlugin(useGSAP, ScrollTrigger);
+
 export function BlogPage({ nav, openArticle }) {
   const ref = useScrollReveal();
+  const pageRef = useRef(null);
 
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
+  // Hero background drifts slower than the page scroll (parallax)
+  useGSAP(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    gsap.to('.blog-hero-bg', {
+      yPercent: 14,
+      ease: 'none',
+      scrollTrigger: { trigger: '.blog-hero', start: 'top top', end: 'bottom top', scrub: true },
+    });
+  }, { scope: pageRef });
+
   return (
-    <div className="blog-page">
+    <div className="blog-page" ref={pageRef}>
       <div className="blog-hero">
         <div className="blog-hero-bg" />
         {/* Bug fix: original had garbled "JournlAlign:'middle'}}/>Journal" text */}

@@ -25,9 +25,20 @@ Client-side-only SPA with manual routing (no React Router). Page state lives in 
 
 Global lightbox state (`lbPhotos`, `lbIndex`, `lbOpen`) lives in `App.jsx`. Any page can call `openLightbox(photosArray, startIndex)`. Keyboard (←/→/Esc) and touch swipe are handled inside `Lightbox.jsx`.
 
-### Scroll reveal
+### Animation (GSAP)
 
-`useScrollReveal` stamps `reveal` class on elements at render time and adds `revealed` via `IntersectionObserver`. The CSS transition then fires. Each page uses a fresh instance of the hook (component unmounts on page change).
+Animations run on GSAP (`gsap` + `@gsap/react`, all plugins free since the Webflow acquisition):
+
+- `useScrollReveal` stamps the `reveal` class and drives the rise-in with a ScrollTrigger tween per element (`once: true`); on complete it adds `revealed` and clears inline styles so CSS hover transforms still work. `reveal-delay-N` classes are stagger markers read by the hook — they carry no CSS. Each page uses a fresh instance of the hook (component unmounts on page change).
+- `LineReveal.jsx` uses the SplitText plugin (`type: 'lines'`, masked, `autoSplit`) for staggered per-line title reveals — article titles, blog hero sub.
+- Home and blog hero backgrounds have a scrubbed ScrollTrigger parallax (`HomePage.jsx` / `BlogPage.jsx`); their CSS `inset` extends past the top so the drift never exposes an edge.
+- Every GSAP effect is skipped under `prefers-reduced-motion` (the CSS reduced-motion block makes `.reveal` content visible).
+
+The home hero entrance and the nav hamburger remain plain CSS animations — don't port them to GSAP.
+
+### Icons
+
+UI icons (arrows, chevrons, close, at-sign) come from `lucide-react`. Note: Lucide has removed brand icons (Instagram etc.), so social links use generic glyphs. The nav hamburger and the logo badge are not Lucide.
 
 ## Styling
 
@@ -54,7 +65,7 @@ All image paths in code use the `/photos/filename` convention (Vite resolves `pu
 
 ## Text layout (Pretext)
 
-`@chenglou/pretext` measures text without DOM reflow. Used in two places: `src/components/LineReveal.jsx` (staggered per-line title reveals — article titles, blog hero sub) and `src/pages/StudioPage.jsx` (wraps the headline for the 1080×1350 canvas share card). Both fall back to plain text if measurement fails.
+`@chenglou/pretext` measures text without DOM reflow. Used in one place: `src/pages/StudioPage.jsx` (wraps the headline for the 1080×1350 canvas share card), falling back to plain text if measurement fails. (`LineReveal.jsx` previously used it too but now splits lines with GSAP SplitText.)
 
 ## Known bugs fixed
 

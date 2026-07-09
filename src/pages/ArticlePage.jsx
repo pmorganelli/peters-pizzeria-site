@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { ChevronLeft, ArrowRight } from 'lucide-react';
 import { Footer } from '../components/Footer';
 import { POSTS_BY_DATE } from '../data/posts';
 import { thumbSrc, webSrc } from '../utils/photos';
@@ -32,14 +33,6 @@ function ArticleFigure({ img, heading, index, ratio = '4/3' }) {
   );
 }
 
-function BackArrow() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-      <path d="M9 2L4 7l5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
 export function ArticlePage({ article, nav }) {
   useEffect(() => { window.scrollTo(0, 0); }, [article]);
 
@@ -50,10 +43,12 @@ export function ArticlePage({ article, nav }) {
 
   return (
     <div className="article-page">
-      <button className="article-back" onClick={() => nav('blog')}>
-        <BackArrow />
-        Back to Blog
-      </button>
+      <div className="article-back-row">
+        <button className="article-back" onClick={() => nav('blog')}>
+          <ChevronLeft size={14} strokeWidth={1.5} />
+          Back to Blog
+        </button>
+      </div>
 
       <div className="article-hero">
         <div className="article-tag">{article.tag}</div>
@@ -122,7 +117,7 @@ export function ArticlePage({ article, nav }) {
             <div>
               <div className="article-next-meta">{next.tag} · {next.date}</div>
               <div className="article-next-title">{next.title}</div>
-              <div className="article-next-cta">Read article →</div>
+              <div className="article-next-cta">Read article <ArrowRight size={12} /></div>
             </div>
           </button>
         </div>

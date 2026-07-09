@@ -1,3 +1,4 @@
+import { AtSign } from 'lucide-react';
 import { LogoBadge } from './LogoBadge';
 
 const PAGES = ['home', 'menu', 'blog', 'gallery'];
@@ -44,12 +45,12 @@ export function Footer({ nav }) {
           <div className="footer-link" style={{ cursor: 'default' }}>Somerville, MA</div>
           <a
             className="footer-link"
-            style={{ fontSize: 13, textDecoration: 'none' }}
+            style={{ fontSize: 13, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}
             href="https://instagram.com/peterspizzeria_"
             target="_blank"
             rel="noreferrer"
           >
-            @peterspizzeria_ for location
+            <AtSign size={13} /> peterspizzeria_ for location
           </a>
         </div>
       </div>
