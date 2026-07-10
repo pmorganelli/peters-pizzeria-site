@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { gsap } from 'gsap';
 import { useGSAP } from '@gsap/react';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import { ArrowRight } from 'lucide-react';
 import { Footer } from '../components/Footer';
 import { useScrollReveal } from '../hooks/useScrollReveal';
 import { MENU_DATA } from '../data/menu';
@@ -64,6 +65,13 @@ export function MenuPage({ nav }) {
             &ldquo;Can you save me a slice?&rdquo; — Jonah Pflaster<br />
             <span style={{ opacity: 0.6, fontSize: 14 }}>&ldquo;really f*cking good&rdquo; — Harrison Tun</span>
           </div>
+          <button
+            className="btn-primary"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
+            onClick={() => nav('order')}
+          >
+            Order ahead <ArrowRight size={13} />
+          </button>
         </div>
       </div>
 

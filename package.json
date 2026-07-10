@@ -6,15 +6,18 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "dev:api": "node scripts/dev-api.mjs"
   },
   "dependencies": {
     "@chenglou/pretext": "^0.0.8",
     "@gsap/react": "^2.1.2",
+    "@upstash/redis": "^1.38.0",
     "gsap": "^3.15.0",
     "lucide-react": "^1.24.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "vercel": "^55.0.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",

@@ -2,13 +2,14 @@
 
 ## What this project is
 
-A single-page React app for Peter's Pizzeria, a student-run pizza operation at Tufts University (Medford, MA). It is a public-facing marketing and ordering website — no backend, no auth, no database. Everything is static.
+A single-page React app for Peter's Pizzeria, a student-run pizza operation at Tufts University (Medford, MA). Mostly a static marketing site, plus a small ordering system: customers place orders from the menu, staff manage them on a live admin board. The only backend is the `api/` folder of Vercel serverless functions.
 
 ## How to run
 
 ```bash
 npm install
 npm run dev       # dev server at http://localhost:5173
+npm run dev:api   # order API on :3010 (run in a second terminal; Vite proxies /api)
 npm run build     # production build → dist/
 npm run preview   # serve dist/ locally
 ```
@@ -19,7 +20,16 @@ Client-side-only SPA with manual routing (no React Router). Page state lives in 
 
 ### Routing
 
-`App.jsx` holds `page` state (`'home' | 'menu' | 'blog' | 'article' | 'gallery' | 'studio'`). The `nav(page, article?)` callback runs a directional transition (old page slides up/out, new page rises in, 260 ms). There is no URL bar routing — all navigation is in-memory. `studio` is a hidden page (share-card generator) reachable from the footer-bottom "Studio" button, not the nav.
+`App.jsx` holds `page` state (`'home' | 'menu' | 'blog' | 'article' | 'gallery' | 'studio' | 'order' | 'admin'`). The `nav(page, article?)` callback runs a directional transition (old page slides up/out, new page rises in, 260 ms). There is no URL bar routing — all navigation is in-memory. `studio` (share-card generator) and `admin` (order board) are hidden pages reachable from footer-bottom buttons, not the nav. The nav's "Order Now" button goes to `order`.
+
+### Ordering system
+
+- **Customer** (`OrderPage.jsx`): cart built from `MENU_DATA` (qty steppers), persisted to localStorage (`pp_cart`, `pp_who`, `pp_order_id`); on submit → POST `/api/orders`; confirmation screen shows a pickup code and polls order status every 8s. Payment stays Venmo/Zelle at pickup — no payment processing.
+- **Admin** (`AdminPage.jsx`): password login (POST `/api/login` → HMAC token in localStorage `pp_admin_token`); board polls `/api/orders` every 5s; columns New → In the oven → Ready with advance buttons (PATCH); "Fire next" panel aggregates pizza counts (add-ons dimmed) across `new` orders; tab title shows waiting count.
+- **API** (`api/`): Vercel Node serverless functions. `api/_lib/` holds shared code (underscore = not routed). Prices are recomputed server-side from `src/data/menu.js` via `api/_lib/catalog.js` — clients never set prices. Storage (`api/_lib/store.js`): Upstash Redis when `UPSTASH_REDIS_REST_URL/TOKEN` (or `KV_REST_API_*`) env vars exist, else an in-memory Map (local dev). Orders expire after 3 days.
+- **Auth**: `ADMIN_PASSWORD` env var; without it, login only works in dev mode (no Redis configured) with password `admin`, and refuses in production.
+- **Local dev**: `scripts/dev-api.mjs` mounts the same handlers on :3010; `vite.config.js` proxies `/api` there. Handlers must stay runtime-agnostic (use `readBody`/`readQuery` from `api/_lib/util.js`, not Vercel's `req.body`/`req.query`).
+- **Deploy**: `vercel integration add upstash` + set `ADMIN_PASSWORD` in Vercel env vars.
 
 ### Lightbox
 

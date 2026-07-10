@@ -1,0 +1,282 @@
+import { useEffect, useState } from 'react';
+import { ArrowDown, ArrowRight, Check, Clock, Flame, Minus, Plus, X } from 'lucide-react';
+import { Footer } from '../components/Footer';
+import { LineReveal } from '../components/LineReveal';
+import { MENU_DATA } from '../data/menu';
+import { api } from '../utils/api';
+import { displayName, fmtMoney, parsePriceCents, STATUS_LABELS } from '../utils/orders';
+
+const SAVED_KEY = 'pp_order_id';
+const CART_KEY = 'pp_cart';
+const WHO_KEY = 'pp_who';
+
+const readJSON = (key, fallback) => {
+  try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
+};
+const POLL_MS = 8000;
+const VENMO_URL = 'https://venmo.com/u/Peter-Morganelli24';
+
+const TIMELINE = [
+  { status: 'new', label: 'Received', Icon: Clock },
+  { status: 'firing', label: 'In the oven', Icon: Flame },
+  { status: 'ready', label: 'Ready for pickup', Icon: Check },
+];
+
+function Stepper({ qty, onChange }) {
+  if (!qty) {
+    return (
+      <button className="order-add-btn" onClick={() => onChange(1)}>
+        <Plus size={12} /> Add
+      </button>
+    );
+  }
+  return (
+    <div className="order-stepper">
+      <button aria-label="Remove one" onClick={() => onChange(qty - 1)}><Minus size={13} /></button>
+      <span>{qty}</span>
+      <button aria-label="Add one" onClick={() => onChange(Math.min(30, qty + 1))}><Plus size={13} /></button>
+    </div>
+  );
+}
+
+function Confirmation({ order, onNewOrder }) {
+  const doneIdx = TIMELINE.findIndex((s) => s.status === order.status);
+  // 'done' means every step is complete; -1 only happens for 'cancelled'
+  const activeIdx = order.status === 'done' ? TIMELINE.length : doneIdx;
+
+  return (
+    <div className="confirm-wrap">
+      <div className="confirm-card">
+        <div className="section-label">Order placed</div>
+        <h2 className="confirm-title">
+          Thanks, {order.name.split(' ')[0]} — <em>you&apos;re in the queue.</em>
+        </h2>
+        <div className="confirm-code-row">
+          <div>
+            <div className="confirm-code-label">Pickup code</div>
+            <div className="confirm-code">#{order.code}</div>
+          </div>
+          <div className="confirm-hint">Show this screen when you pick up. This page updates as we cook.</div>
+        </div>
+
+        {order.status === 'cancelled' ? (
+          <div className="confirm-cancelled">
+            This order was cancelled. If that&apos;s a surprise, find us at the window or on Instagram.
+          </div>
+        ) : (
+          <div className="confirm-timeline">
+            {TIMELINE.map(({ status, label, Icon }, i) => {
+              const state = i < activeIdx ? 'past' : i === activeIdx ? 'active' : 'todo';
+              return (
+                <div key={status} className={`tl-step tl-${state}`}>
+                  <div className="tl-dot"><Icon size={13} /></div>
+                  <div className="tl-label">{label}</div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="confirm-items">
+          {order.items.map((it) => (
+            <div key={it.name} className="order-line">
+              <span className="order-line-name">{it.qty} × {displayName(it.name)}</span>
+              <span>{fmtMoney(it.priceCents * it.qty)}</span>
+            </div>
+          ))}
+          <div className="order-line order-total">
+            <span>Total</span>
+            <span>{fmtMoney(order.totalCents)}</span>
+          </div>
+        </div>
+
+        <div className="confirm-actions">
+          <a className="btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }} href={VENMO_URL} target="_blank" rel="noreferrer">
+            Pay {fmtMoney(order.totalCents)} on Venmo <ArrowRight size={13} />
+          </a>
+          <button className="text-link-btn" onClick={onNewOrder}>Start another order</button>
+        </div>
+        <div className="confirm-fineprint">
+          Venmo @Peter-Morganelli24 or Zelle — pay now or at the window. Current status: {STATUS_LABELS[order.status]}.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function OrderPage({ nav }) {
+  // Cart and pickup identity survive navigation and refreshes
+  const [cart, setCart] = useState(() => readJSON(CART_KEY, {}));
+  const [name, setName] = useState(() => readJSON(WHO_KEY, {}).name || '');
+  const [contact, setContact] = useState(() => readJSON(WHO_KEY, {}).contact || '');
+  const [notes, setNotes] = useState('');
+  const [placing, setPlacing] = useState(false);
+  const [error, setError] = useState('');
+  const [order, setOrder] = useState(null);
+  const [loadingSaved, setLoadingSaved] = useState(() => Boolean(localStorage.getItem(SAVED_KEY)));
+
+  useEffect(() => { window.scrollTo(0, 0); }, [order?.id]);
+  useEffect(() => { localStorage.setItem(CART_KEY, JSON.stringify(cart)); }, [cart]);
+
+  // Restore an in-flight order across refreshes
+  useEffect(() => {
+    const saved = localStorage.getItem(SAVED_KEY);
+    if (!saved) return;
+    let cancelled = false;
+    api(`/api/orders?id=${encodeURIComponent(saved)}`)
+      .then((d) => { if (!cancelled) setOrder(d.order); })
+      .catch(() => { if (!cancelled) localStorage.removeItem(SAVED_KEY); })
+      .finally(() => { if (!cancelled) setLoadingSaved(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Live status while the order is open
+  useEffect(() => {
+    if (!order || order.status === 'done' || order.status === 'cancelled') return undefined;
+    const t = setInterval(() => {
+      api(`/api/orders?id=${encodeURIComponent(order.id)}`)
+        .then((d) => setOrder(d.order))
+        .catch(() => {});
+    }, POLL_MS);
+    return () => clearInterval(t);
+  }, [order]);
+
+  const setQty = (itemName, qty) =>
+    setCart((c) => {
+      const next = { ...c };
+      if (qty > 0) next[itemName] = qty; else delete next[itemName];
+      return next;
+    });
+
+  const cartLines = MENU_DATA.flatMap((section) =>
+    section.items
+      .filter((it) => cart[it.name])
+      .map((it) => ({ name: it.name, qty: cart[it.name], priceCents: parsePriceCents(it.price) }))
+  );
+  const totalCents = cartLines.reduce((sum, l) => sum + l.priceCents * l.qty, 0);
+  const canPlace = cartLines.length > 0 && name.trim().length >= 2 && !placing;
+
+  const place = async () => {
+    setPlacing(true);
+    setError('');
+    try {
+      const { order: created } = await api('/api/orders', {
+        method: 'POST',
+        body: { name, contact, notes, items: cartLines.map(({ name: n, qty }) => ({ name: n, qty })) },
+      });
+      localStorage.setItem(SAVED_KEY, created.id);
+      localStorage.setItem(WHO_KEY, JSON.stringify({ name, contact }));
+      setOrder(created);
+      setCart({});
+      setNotes('');
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setPlacing(false);
+    }
+  };
+
+  const newOrder = () => {
+    localStorage.removeItem(SAVED_KEY);
+    setOrder(null);
+  };
+
+  return (
+    <div className="order-page">
+      <div className="order-head">
+        <div className="section-label">Order</div>
+        <LineReveal as="h1" className="order-title" text="Order ahead. Skip the line." />
+        <p className="order-sub">Saturdays 7pm til sellout · Pay via Venmo or Zelle at pickup</p>
+      </div>
+
+      {loadingSaved ? null : order ? (
+        <Confirmation order={order} onNewOrder={newOrder} />
+      ) : (
+        <div className="order-grid">
+          <div className="order-menu">
+            {MENU_DATA.map((section) => (
+              <div key={section.category}>
+                <div className="order-cat">{section.category}</div>
+                {section.items.map((item) => (
+                  <div key={item.name} className="order-row">
+                    <div className="order-row-text">
+                      <div className="order-row-name">{item.name}</div>
+                      <div className="order-row-desc">{item.desc}</div>
+                    </div>
+                    <div className="order-row-price">{item.price}</div>
+                    <Stepper qty={cart[item.name] || 0} onChange={(q) => setQty(item.name, q)} />
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+
+          <div className="order-summary">
+            <div className="order-summary-label">Your order</div>
+            {cartLines.length === 0 ? (
+              <div className="order-empty">Nothing here yet — add something from the menu.</div>
+            ) : (
+              <div>
+                {cartLines.map((l) => (
+                  <div key={l.name} className="order-line">
+                    <button className="order-line-x" aria-label={`Remove ${l.name}`} onClick={() => setQty(l.name, 0)}>
+                      <X size={11} />
+                    </button>
+                    <span className="order-line-name">{l.qty} × {displayName(l.name)}</span>
+                    <span>{fmtMoney(l.priceCents * l.qty)}</span>
+                  </div>
+                ))}
+                <div className="order-line order-total">
+                  <span>Total</span>
+                  <span>{fmtMoney(totalCents)}</span>
+                </div>
+              </div>
+            )}
+
+            <label className="order-field">
+              <span>Name *</span>
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Who's picking up?" maxLength={60} />
+            </label>
+            <label className="order-field">
+              <span>Phone or Instagram (optional)</span>
+              <input value={contact} onChange={(e) => setContact(e.target.value)} placeholder="So we can reach you" maxLength={80} />
+            </label>
+            <label className="order-field">
+              <span>Notes (optional)</span>
+              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Allergies, requests…" maxLength={280} />
+            </label>
+
+            {error && <div className="order-error">{error}</div>}
+
+            <button
+              className="btn-primary order-place"
+              disabled={!canPlace}
+              onClick={place}
+            >
+              {placing ? 'Placing…'
+                : cartLines.length === 0 ? 'Add something first'
+                : name.trim().length < 2 ? 'Add your name above'
+                : `Place order · ${fmtMoney(totalCents)}`}
+              {canPlace && <ArrowRight size={14} />}
+            </button>
+            <div className="order-fineprint">
+              No payment needed now — Venmo or Zelle at pickup. We&apos;ll fire your slices in order.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!order && !loadingSaved && cartLines.length > 0 && (
+        <button
+          className="order-mobilebar"
+          onClick={() => document.querySelector('.order-summary')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+        >
+          <span>{cartLines.reduce((s, l) => s + l.qty, 0)} item{cartLines.reduce((s, l) => s + l.qty, 0) === 1 ? '' : 's'}</span>
+          <span className="order-mobilebar-cta">Review order · {fmtMoney(totalCents)} <ArrowDown size={13} /></span>
+        </button>
+      )}
+
+      <Footer nav={nav} />
+    </div>
+  );
+}

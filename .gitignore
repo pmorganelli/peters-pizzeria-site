@@ -20,3 +20,11 @@ dist/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+.vercel
+.env*
+.env.local
+
+# agent skills installed by the Upstash CLI (kept locally, not committed)
+.agents/
+.claude/skills/upstash-*
+skills-lock.json

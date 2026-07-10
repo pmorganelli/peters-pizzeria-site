@@ -1,0 +1,31 @@
+// Shared between the client pages and the api/ functions (the API imports
+// parsePriceCents so prices are computed from one implementation).
+
+export function parsePriceCents(label) {
+  const s = String(label).replace('+', '').trim();
+  if (s.endsWith('¢')) return Math.round(Number(s.slice(0, -1)));
+  if (s.startsWith('$')) return Math.round(Number(s.slice(1)) * 100);
+  return NaN;
+}
+
+export const fmtMoney = (cents) =>
+  cents % 100 === 0 ? `$${cents / 100}` : `$${(cents / 100).toFixed(2)}`;
+
+export const STATUS_LABELS = {
+  new: 'Received',
+  firing: 'In the oven',
+  ready: 'Ready for pickup',
+  done: 'Picked up',
+  cancelled: 'Cancelled',
+};
+
+// Menu add-ons are named "+ Burrata" etc.; strip the prefix when the name
+// appears after a quantity ("2 × + Burrata" reads badly).
+export const displayName = (name) => String(name).replace(/^\+\s*/, '');
+
+export function ageLabel(ts) {
+  const mins = Math.max(0, Math.round((Date.now() - ts) / 60000));
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m`;
+  return `${Math.floor(mins / 60)}h ${mins % 60}m`;
+}

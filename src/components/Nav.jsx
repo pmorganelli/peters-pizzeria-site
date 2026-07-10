@@ -9,7 +9,7 @@ export function Nav({ page, nav }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   const doNav = (p) => { setMenuOpen(false); nav(p); };
-  const isDark = ['home', 'gallery', 'blog', 'menu', 'studio'].includes(page);
+  const isDark = ['home', 'gallery', 'blog', 'menu', 'studio', 'admin'].includes(page);
 
   return (
     <nav className={[scrolled ? 'scrolled' : '', isDark ? 'nav-dark' : ''].filter(Boolean).join(' ')}>
@@ -30,7 +30,7 @@ export function Nav({ page, nav }) {
         ))}
       </div>
 
-      <button className="nav-order-btn" onClick={() => doNav('menu')}>Order Now</button>
+      <button className="nav-order-btn" onClick={() => doNav('order')}>Order Now</button>
 
       <button
         className={`nav-hamburger${menuOpen ? ' open' : ''}`}

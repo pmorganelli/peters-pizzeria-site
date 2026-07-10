@@ -6,10 +6,12 @@ A student-run pizzeria website for Tufts University. Built with React 18, Vite, 
 
 ```bash
 npm install
-npm run dev
+npm run dev        # site at http://localhost:5173
+npm run dev:api    # order API (separate terminal) — Vite proxies /api to it
 ```
 
-Open `http://localhost:5173` in your browser.
+Open `http://localhost:5173` in your browser. Locally the order API keeps
+orders in memory (restart clears them) and the admin password is `admin`.
 
 ## Building for production
 
@@ -55,6 +57,26 @@ src/
 
 Photos live in `photos/` at the repo root and are served from `public/photos/` via a symlink. If you clone on Windows or the symlink breaks, copy the `photos/` folder into `public/`.
 
-## Ordering
+## Ordering system
 
-Payment via Venmo `@Peter-Morganelli24` or Zelle. Follow **@peterspizzeria** on Instagram for weekly drop location and order open announcements.
+Customers hit **Order Now**, build a cart from the menu, and place an order
+(no online payment — Venmo `@Peter-Morganelli24` or Zelle at pickup). They get
+a pickup code and a live status screen. Staff open **Admin** (footer link),
+log in, and get a live board — New / In the oven / Ready columns plus a
+"Fire next" panel that aggregates which pizzas to fire across waiting orders.
+
+- `api/` — Vercel serverless functions (`orders`, `login`); prices are always
+  recomputed server-side from `src/data/menu.js`
+- Orders are stored in **Upstash Redis** in production and in memory during
+  local dev; they expire after 3 days
+
+### Production setup (Vercel)
+
+1. `vercel integration add upstash` (or dashboard → Storage → Upstash Redis) —
+   injects `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN`
+2. Set `ADMIN_PASSWORD` in the project's environment variables — admin login
+   refuses to work in production until this is set
+3. Redeploy
+
+Follow **@peterspizzeria_** on Instagram for weekly drop location and order
+open announcements.
