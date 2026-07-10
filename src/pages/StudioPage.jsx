@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Download } from 'lucide-react';
 import { Footer } from '../components/Footer';
 import { BLOG_POSTS, ALL_PHOTOS } from '../data/posts';
 import { thumbSrc, webSrc } from '../utils/photos';
@@ -164,7 +165,13 @@ export function StudioPage({ nav }) {
             ))}
           </div>
 
-          <button className="btn-primary" onClick={download}>Download PNG</button>
+          <button
+            className="btn-primary"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
+            onClick={download}
+          >
+            <Download size={14} /> Download PNG
+          </button>
         </div>
 
         <div className="studio-preview">

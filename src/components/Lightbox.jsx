@@ -22,9 +22,21 @@ export function Lightbox({ photos, index, onClose, onPrev, onNext }) {
     return () => { document.body.style.overflow = prev; };
   }, []);
 
+  // Warm the browser cache with the neighbors so arrow/swipe feels instant
+  useEffect(() => {
+    if (photos.length < 2) return;
+    [1, -1].forEach((d) => {
+      const im = new Image();
+      im.src = webSrc(photos[(index + d + photos.length) % photos.length]);
+    });
+  }, [index, photos]);
+
   return (
     <div
       className="lb-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Photo lightbox"
       onClick={onClose}
       onTouchStart={(e) => { touchX.current = e.touches[0].clientX; }}
       onTouchEnd={(e) => {

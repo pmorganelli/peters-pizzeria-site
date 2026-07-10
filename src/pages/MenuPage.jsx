@@ -1,16 +1,32 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
+import { gsap } from 'gsap';
+import { useGSAP } from '@gsap/react';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { Footer } from '../components/Footer';
 import { useScrollReveal } from '../hooks/useScrollReveal';
 import { MENU_DATA } from '../data/menu';
 import { webSrc } from '../utils/photos';
 
+gsap.registerPlugin(useGSAP, ScrollTrigger);
+
 export function MenuPage({ nav }) {
   const ref = useScrollReveal();
+  const pageRef = useRef(null);
 
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
+  // Hero background drifts slower than the page scroll (parallax)
+  useGSAP(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    gsap.to('.menu-hero-bg', {
+      yPercent: 14,
+      ease: 'none',
+      scrollTrigger: { trigger: '.menu-hero', start: 'top top', end: 'bottom top', scrub: true },
+    });
+  }, { scope: pageRef });
+
   return (
-    <div className="menu-page">
+    <div className="menu-page" ref={pageRef}>
       <div className="menu-hero">
         <div className="menu-hero-bg" />
         <div className="section-label" style={{ color: 'var(--gold)', position: 'relative', zIndex: 1 }}>Menu</div>

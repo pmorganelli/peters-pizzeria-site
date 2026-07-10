@@ -28,7 +28,7 @@ const SPECIALS = [
 
 const LATEST_POSTS = POSTS_BY_DATE.slice(0, 3);
 
-const TICKER_TEXT = 'Saturday Slices · 7pm til sellout · 72-hour dough · Fired at 900°F · Tufts University · ';
+const TICKER_TEXT = 'Saturday Slices · 7pm til sellout · Tufts University Off Campus · ';
 
 export function HomePage({ nav, openArticle, openLightbox }) {
   const ref = useScrollReveal();

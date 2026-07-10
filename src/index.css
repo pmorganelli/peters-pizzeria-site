@@ -120,6 +120,11 @@ nav.nav-dark.scrolled .nav-hamburger span { background: var(--ink); }
   animation: spin-slow 60s linear infinite;
   opacity: 0.92; line-height: 0;
 }
+.hero-badge img {
+  border-radius: 50%; display: block;
+  border: 2px solid rgba(200,147,58,0.55);
+  box-shadow: 0 6px 30px rgba(0,0,0,0.35);
+}
 @keyframes spin-slow { to { transform: rotate(360deg); } }
 .hero-pill {
   display: inline-flex; align-items: center; gap: 9px; align-self: flex-start;
@@ -237,7 +242,8 @@ nav.nav-dark.scrolled .nav-hamburger span { background: var(--ink); }
 .story-section { background: var(--cream); padding: 100px 60px; }
 .story-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 72px; align-items: start; margin-top: 56px; }
 .story-photo-stack { position: relative; }
-.story-photo-main { width: 100%; aspect-ratio: 4/5; object-fit: cover; display: block; }
+/* Natural aspect ratio — the full photo is always visible, never cropped */
+.story-photo-main { width: 100%; height: auto; display: block; }
 .story-photo-inset {
   width: 100%; aspect-ratio: 1; object-fit: cover;
   border: 4px solid var(--cream); display: block;
@@ -306,7 +312,8 @@ nav.nav-dark.scrolled .nav-hamburger span { background: var(--ink); }
 .menu-page { background: var(--cream); min-height: 100vh; }
 .menu-hero { background: var(--ink); color: var(--cream); padding: 152px 60px 64px; position: relative; overflow: hidden; }
 .menu-hero-bg {
-  position: absolute; inset: 0;
+  /* top extends past the hero so the GSAP parallax drift never exposes an edge */
+  position: absolute; inset: -16% 0 0;
   background: url('/photos/web/menu-board.jpg') center center / cover no-repeat;
   opacity: 0.12;
 }
@@ -337,11 +344,6 @@ nav.nav-dark.scrolled .nav-hamburger span { background: var(--ink); }
 .menu-item-dots { flex: 1; border-bottom: 1.5px dotted rgba(200,147,58,0.55); margin: 0 14px 4px; min-width: 30px; }
 .menu-item-desc { font-family: var(--serif); font-size: 14px; color: var(--ink2); flex: 2; padding-right: 16px; font-style: italic; }
 .menu-item-price { font-family: var(--mono); font-size: 14px; color: var(--ink); flex-shrink: 0; min-width: 54px; text-align: right; }
-.menu-note {
-  font-family: var(--serif); font-size: 14px; font-style: italic;
-  color: var(--ink2); margin-top: 36px; padding-top: 20px;
-  border-top: 1px solid var(--cream2); line-height: 1.7;
-}
 .menu-venmo-box {
   background: var(--ink); color: var(--cream);
   padding: 28px 32px; margin-top: 40px;
@@ -498,7 +500,8 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 64px 60p
 .gallery-item:hover img { transform: scale(1.04); filter: brightness(1); }
 .photo-btn { display: block; padding: 0; line-height: 0; }
 .story-photo-btn { display: block; padding: 0; line-height: 0; width: 100%; }
-.story-photo-inset-btn { position: absolute; bottom: -24px; right: -24px; width: 55%; }
+/* Small corner accent — overlaps only the bottom-right of the main photo */
+.story-photo-inset-btn { position: absolute; bottom: -24px; right: -24px; width: 34%; }
 .text-link-btn { font-family: var(--mono); font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--red); border-bottom: 1px solid var(--red); padding-bottom: 2px; transition: opacity 0.2s; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
 .text-link-btn:hover { opacity: 0.7; }
 
@@ -587,7 +590,6 @@ body, .story-section, .home-latest, .menu-page, .blog-page, .article-page {
   .story-section { padding: 64px 24px; }
   .story-grid { grid-template-columns: 1fr; gap: 32px; }
   .story-photo-inset-btn { display: none; }
-  .story-photo-main { aspect-ratio: 3/2; }
   .community-section { grid-template-columns: 1fr; padding: 60px 24px; gap: 32px; }
   .specials-strip { padding: 60px 24px; }
   .specials-header { flex-direction: column; align-items: flex-start; gap: 16px; }
