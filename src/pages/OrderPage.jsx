@@ -4,7 +4,7 @@ import { Footer } from '../components/Footer';
 import { LineReveal } from '../components/LineReveal';
 import { MENU_DATA } from '../data/menu';
 import { api } from '../utils/api';
-import { displayName, fmtMoney, parsePriceCents, STATUS_LABELS } from '../utils/orders';
+import { DAY_NAMES, displayName, fmtMoney, fmtTime, parsePriceCents, STATUS_LABELS } from '../utils/orders';
 
 const SAVED_KEY = 'pp_order_id';
 const CART_KEY = 'pp_cart';
@@ -35,6 +35,38 @@ function Stepper({ qty, onChange }) {
       <button aria-label="Remove one" onClick={() => onChange(qty - 1)}><Minus size={13} /></button>
       <span>{qty}</span>
       <button aria-label="Add one" onClick={() => onChange(Math.min(30, qty + 1))}><Plus size={13} /></button>
+    </div>
+  );
+}
+
+function ClosedCard({ store, nav }) {
+  return (
+    <div className="confirm-wrap">
+      <div className="confirm-card order-closed">
+        <div className="order-closed-icon" aria-hidden="true"><Clock size={20} /></div>
+        <h2 className="confirm-title">We&apos;re closed <em>right now.</em></h2>
+        {store.mode === 'auto' ? (
+          <p className="order-closed-sub">
+            Orders open {DAY_NAMES[store.hours.day]}s, {fmtTime(store.hours.start)}–{fmtTime(store.hours.end)} (ET).
+            Come back then — your cart will be waiting.
+          </p>
+        ) : (
+          <p className="order-closed-sub">
+            We&apos;ll be back soon — follow{' '}
+            <a href="https://instagram.com/peterspizzeria_" target="_blank" rel="noreferrer">@peterspizzeria_</a>{' '}
+            for the next drop.
+          </p>
+        )}
+        <div className="confirm-actions">
+          <button
+            className="btn-primary"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
+            onClick={() => nav('menu')}
+          >
+            Browse the menu <ArrowRight size={13} />
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -114,6 +146,17 @@ export function OrderPage({ nav }) {
   const [error, setError] = useState('');
   const [order, setOrder] = useState(null);
   const [loadingSaved, setLoadingSaved] = useState(() => Boolean(localStorage.getItem(SAVED_KEY)));
+  const [store, setStore] = useState(null);
+
+  // Open/closed status. If the check itself fails, fail open — the server
+  // still enforces hours on submission.
+  useEffect(() => {
+    let cancelled = false;
+    api('/api/store')
+      .then((d) => { if (!cancelled) setStore(d); })
+      .catch(() => { if (!cancelled) setStore({ open: true, mode: 'open' }); });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => { window.scrollTo(0, 0); }, [order?.id]);
   useEffect(() => { localStorage.setItem(CART_KEY, JSON.stringify(cart)); }, [cart]);
@@ -148,11 +191,16 @@ export function OrderPage({ nav }) {
       return next;
     });
 
+  const unavailable = new Set(store?.unavailable || []);
   const cartLines = MENU_DATA.flatMap((section) =>
     section.items
-      .filter((it) => cart[it.name])
+      .filter((it) => cart[it.name] && !unavailable.has(it.name))
       .map((it) => ({ name: it.name, qty: cart[it.name], priceCents: parsePriceCents(it.price) }))
   );
+  // Items that were in the cart (possibly from a previous visit) but sold out since
+  const removedFromCart = MENU_DATA.flatMap((s) => s.items)
+    .filter((it) => cart[it.name] && unavailable.has(it.name))
+    .map((it) => it.name);
   const totalCents = cartLines.reduce((sum, l) => sum + l.priceCents * l.qty, 0);
   const canPlace = cartLines.length > 0 && name.trim().length >= 2 && !placing;
 
@@ -171,6 +219,9 @@ export function OrderPage({ nav }) {
       setNotes('');
     } catch (e) {
       setError(e.message);
+      // The store may have closed or an item sold out while the cart was built
+      if (e.status === 403) setStore((s) => ({ ...(s || { mode: 'closed', hours: null }), open: false }));
+      else if (e.status === 400) api('/api/store').then(setStore).catch(() => {});
     } finally {
       setPlacing(false);
     }
@@ -189,24 +240,31 @@ export function OrderPage({ nav }) {
         <p className="order-sub">Saturdays 7pm til sellout · Pay via Venmo or Zelle at pickup</p>
       </div>
 
-      {loadingSaved ? null : order ? (
+      {loadingSaved || store === null ? null : order ? (
         <Confirmation order={order} onNewOrder={newOrder} />
+      ) : !store.open ? (
+        <ClosedCard store={store} nav={nav} />
       ) : (
         <div className="order-grid">
           <div className="order-menu">
             {MENU_DATA.map((section) => (
               <div key={section.category}>
                 <div className="order-cat">{section.category}</div>
-                {section.items.map((item) => (
-                  <div key={item.name} className="order-row">
-                    <div className="order-row-text">
-                      <div className="order-row-name">{item.name}</div>
-                      <div className="order-row-desc">{item.desc}</div>
+                {section.items.map((item) => {
+                  const soldOut = unavailable.has(item.name);
+                  return (
+                    <div key={item.name} className={`order-row${soldOut ? ' order-row-soldout' : ''}`}>
+                      <div className="order-row-text">
+                        <div className="order-row-name">{item.name}</div>
+                        <div className="order-row-desc">{item.desc}</div>
+                      </div>
+                      <div className="order-row-price">{item.price}</div>
+                      {soldOut
+                        ? <span className="order-soldout-chip">Sold out</span>
+                        : <Stepper qty={cart[item.name] || 0} onChange={(q) => setQty(item.name, q)} />}
                     </div>
-                    <div className="order-row-price">{item.price}</div>
-                    <Stepper qty={cart[item.name] || 0} onChange={(q) => setQty(item.name, q)} />
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ))}
           </div>
@@ -230,6 +288,12 @@ export function OrderPage({ nav }) {
                   <span>Total</span>
                   <span>{fmtMoney(totalCents)}</span>
                 </div>
+              </div>
+            )}
+
+            {removedFromCart.length > 0 && (
+              <div className="order-soldout-note">
+                Sold out today: {removedFromCart.map(displayName).join(', ')} — we left {removedFromCart.length === 1 ? 'it' : 'them'} out of your total.
               </div>
             )}
 
@@ -266,7 +330,7 @@ export function OrderPage({ nav }) {
         </div>
       )}
 
-      {!order && !loadingSaved && cartLines.length > 0 && (
+      {!order && !loadingSaved && store?.open && cartLines.length > 0 && (
         <button
           className="order-mobilebar"
           onClick={() => document.querySelector('.order-summary')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}

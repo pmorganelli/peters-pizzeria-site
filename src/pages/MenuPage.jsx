@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { gsap } from 'gsap';
 import { useGSAP } from '@gsap/react';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
@@ -6,6 +6,7 @@ import { ArrowRight } from 'lucide-react';
 import { Footer } from '../components/Footer';
 import { useScrollReveal } from '../hooks/useScrollReveal';
 import { MENU_DATA } from '../data/menu';
+import { api } from '../utils/api';
 import { webSrc } from '../utils/photos';
 
 gsap.registerPlugin(useGSAP, ScrollTrigger);
@@ -13,8 +14,18 @@ gsap.registerPlugin(useGSAP, ScrollTrigger);
 export function MenuPage({ nav }) {
   const ref = useScrollReveal();
   const pageRef = useRef(null);
+  const [unavailable, setUnavailable] = useState(new Set());
 
   useEffect(() => { window.scrollTo(0, 0); }, []);
+
+  // Mark sold-out items; fail silent if the check fails
+  useEffect(() => {
+    let cancelled = false;
+    api('/api/store')
+      .then((d) => { if (!cancelled) setUnavailable(new Set(d.unavailable || [])); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   // Hero background drifts slower than the page scroll (parallax)
   useGSAP(() => {
@@ -42,14 +53,18 @@ export function MenuPage({ nav }) {
           <div key={section.category} ref={ref(si)} className="reveal">
             <div className="menu-section-title">{section.category}</div>
             <div className="menu-items">
-              {section.items.map((item) => (
-                <div key={item.name} className="menu-item">
-                  <span className="menu-item-name">{item.name}</span>
-                  <span className="menu-item-desc">{item.desc}</span>
-                  <span className="menu-item-dots" />
-                  <span className="menu-item-price">{item.price}</span>
-                </div>
-              ))}
+              {section.items.map((item) => {
+                const soldOut = unavailable.has(item.name);
+                return (
+                  <div key={item.name} className={`menu-item${soldOut ? ' menu-item-soldout' : ''}`}>
+                    <span className="menu-item-name">{item.name}</span>
+                    <span className="menu-item-desc">{item.desc}</span>
+                    <span className="menu-item-dots" />
+                    {soldOut && <span className="menu-item-86">Sold out</span>}
+                    <span className="menu-item-price">{item.price}</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         ))}

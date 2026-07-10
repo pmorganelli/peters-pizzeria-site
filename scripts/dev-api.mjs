@@ -4,11 +4,13 @@
 import http from 'node:http';
 import ordersHandler from '../api/orders.js';
 import loginHandler from '../api/login.js';
+import storeHandler from '../api/store.js';
 
 const PORT = process.env.API_PORT || 3010;
 const routes = {
   '/api/orders': ordersHandler,
   '/api/login': loginHandler,
+  '/api/store': storeHandler,
 };
 
 http.createServer(async (req, res) => {

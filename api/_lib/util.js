@@ -17,6 +17,12 @@ export function readQuery(req) {
   return Object.fromEntries(new URL(req.url, 'http://local').searchParams);
 }
 
+// Vercel puts the real client IP first in x-forwarded-for
+export function clientIp(req) {
+  const fwd = req.headers['x-forwarded-for'];
+  return (typeof fwd === 'string' && fwd.split(',')[0].trim()) || req.socket?.remoteAddress || 'unknown';
+}
+
 export function send(res, status, data) {
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');

@@ -28,6 +28,10 @@ Client-side-only SPA with manual routing (no React Router). Page state lives in 
 - **Admin** (`AdminPage.jsx`): password login (POST `/api/login` → HMAC token in localStorage `pp_admin_token`); board polls `/api/orders` every 5s; columns New → In the oven → Ready with advance buttons (PATCH); "Fire next" panel aggregates pizza counts (add-ons dimmed) across `new` orders; tab title shows waiting count.
 - **API** (`api/`): Vercel Node serverless functions. `api/_lib/` holds shared code (underscore = not routed). Prices are recomputed server-side from `src/data/menu.js` via `api/_lib/catalog.js` — clients never set prices. Storage (`api/_lib/store.js`): Upstash Redis when `UPSTASH_REDIS_REST_URL/TOKEN` (or `KV_REST_API_*`) env vars exist, else an in-memory Map (local dev). Orders expire after 3 days.
 - **Auth**: `ADMIN_PASSWORD` env var; without it, login only works in dev mode (no Redis configured) with password `admin`, and refuses in production.
+- **Store hours**: settings at Redis key `pp:settings` (`api/_lib/hours.js`) — `mode: open|closed|auto` plus a weekly window (day/start/end, ET). `GET /api/store` is public (order page shows a closed card); `PATCH` is admin (storefront panel on the board). Order creation is enforced server-side (403 when closed) — never rely on the client check alone.
+- **Availability (86 list)**: `settings.unavailable` is an array of menu item names, toggled from the admin Availability panel (`PATCH /api/store {unavailable}`; names validated against the catalog). Sold-out items grey out on the homepage specials, menu page, and order page, and the API rejects them (400). Homepage specials are derived from menu items with a `special` field in `src/data/menu.js` — don't hardcode specials in `HomePage.jsx`.
+- **Rate limits** (`rateLimit()` in `api/_lib/store.js`, fixed-window on Redis INCR): orders 5/IP/10min + 120 global/10min, login 8/IP/5min. Friendly 429 messages.
+- **Security posture**: secrets never reach the client (no `VITE_` prefixed secrets, verified against `dist/`); order totals are server-computed; order ids are 10 random bytes (they act as the customer's status read-token); security headers in `vercel.json`. No load balancer needed — Vercel's edge handles that.
 - **Local dev**: `scripts/dev-api.mjs` mounts the same handlers on :3010; `vite.config.js` proxies `/api` there. Handlers must stay runtime-agnostic (use `readBody`/`readQuery` from `api/_lib/util.js`, not Vercel's `req.body`/`req.query`).
 - **Deploy**: `vercel integration add upstash` + set `ADMIN_PASSWORD` in Vercel env vars.
 
@@ -58,7 +62,7 @@ UI icons (arrows, chevrons, close, at-sign) come from `lucide-react`. Note: Luci
 
 ## Data
 
-- `src/data/menu.js` — menu categories and items (update prices/items here)
+- `src/data/menu.js` — menu categories and items (update prices/items here); an item's optional `special: '<tag>'` field puts it on the homepage specials strip
 - `src/data/posts.js` — blog posts array + `ALL_PHOTOS` array for the gallery
 
 Both are plain JS arrays — no API calls. To add a post, append to `BLOG_POSTS`. To add gallery photos, append paths to `ALL_PHOTOS`.

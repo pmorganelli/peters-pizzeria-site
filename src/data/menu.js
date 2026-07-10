@@ -7,8 +7,12 @@ export const MENU_DATA = [
       { name: 'Pepperoni',          desc: 'Tomato, our mozzarella blend, pepperoni',            price: '$2.50' },
       { name: 'Margherita',         desc: 'Bianco DiNapoli tomatoes, fior di latte, basil',      price: '$4' },
       { name: 'Bianca',             desc: 'Ricotta, garlic, olive oil, rosemary',                price: '$3' },
-      { name: 'Pesto',              desc: 'House-made pesto sauce, cheese',                      price: '$4' },
-      { name: 'Vodka',              desc: 'House-made vodka sauce, cheese',                      price: '$4' },
+      // `special` puts an item on the homepage "This week's specials" strip.
+      // Toggle availability from the admin board — sold-out items grey out
+      // everywhere (homepage + order page) and can't be ordered.
+      { name: 'Pesto',              desc: 'House-made pesto sauce, cheese',                      price: '$4', special: 'Special' },
+      { name: 'Vodka',              desc: 'House-made vodka sauce, cheese',                      price: '$4', special: 'Special' },
+      { name: 'Nduja & Hot Honey',  desc: 'Spicy Calabrian nduja, house hot honey, stracciatella', price: '$4', special: 'Slice of the Week' },
     ],
   },
   {

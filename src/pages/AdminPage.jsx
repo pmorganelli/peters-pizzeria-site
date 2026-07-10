@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Check, Flame, LogOut, RotateCcw, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Check, Flame, LogOut, RotateCcw, Store, UtensilsCrossed, X } from 'lucide-react';
 import { Footer } from '../components/Footer';
 import { MENU_DATA } from '../data/menu';
 import { api } from '../utils/api';
-import { displayName, fmtMoney, ageLabel } from '../utils/orders';
+import { DAY_NAMES, displayName, fmtMoney, fmtTime, ageLabel } from '../utils/orders';
 
 const TOKEN_KEY = 'pp_admin_token';
 const POLL_MS = 5000;
@@ -99,6 +99,10 @@ export function AdminPage({ nav }) {
   const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY) || '');
   const [orders, setOrders] = useState(null); // null = not loaded yet
   const [notice, setNotice] = useState('');
+  const [storeInfo, setStoreInfo] = useState(null);
+  const [draft, setDraft] = useState({ day: 6, start: '19:00', end: '20:30' });
+  const [savingStore, setSavingStore] = useState(false);
+  const draftSeeded = useRef(false);
 
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
@@ -112,12 +116,46 @@ export function AdminPage({ nav }) {
   const load = useCallback(async () => {
     if (!token) return;
     try {
-      const { orders: list } = await api('/api/orders', { token });
+      const [{ orders: list }, status] = await Promise.all([
+        api('/api/orders', { token }),
+        api('/api/store'),
+      ]);
       setOrders(list);
+      setStoreInfo(status);
+      // Seed the schedule editor once; don't clobber in-progress edits on poll
+      if (!draftSeeded.current && status.hours) {
+        draftSeeded.current = true;
+        setDraft({ day: status.hours.day, start: status.hours.start, end: status.hours.end });
+      }
     } catch (err) {
       if (err.status === 401) logout('Session expired — log in again.');
     }
   }, [token, logout]);
+
+  const saveStore = async (next) => {
+    setSavingStore(true);
+    try {
+      const status = await api('/api/store', { method: 'PATCH', token, body: next });
+      setStoreInfo(status);
+    } catch (err) {
+      if (err.status === 401) logout('Session expired — log in again.');
+    } finally {
+      setSavingStore(false);
+    }
+  };
+
+  const currentHours = () => ({
+    day: Number(draft.day),
+    start: draft.start,
+    end: draft.end,
+    tz: 'America/New_York',
+  });
+
+  const toggleItem = (name) => {
+    const next = new Set(storeInfo?.unavailable || []);
+    if (next.has(name)) next.delete(name); else next.add(name);
+    saveStore({ unavailable: [...next] });
+  };
 
   useEffect(() => {
     if (!token) return undefined;
@@ -193,6 +231,99 @@ export function AdminPage({ nav }) {
       </div>
 
       <div className="admin-body">
+      {storeInfo && (
+        <div className="store-panel">
+          <div className="store-status">
+            <div className="store-panel-label"><Store size={13} /> Storefront</div>
+            <div className="store-status-row">
+              <span className={`store-pill ${storeInfo.open ? 'store-pill-open' : 'store-pill-closed'}`}>
+                {storeInfo.open ? 'Open' : 'Closed'}
+              </span>
+              <span className="store-mode-desc">
+                {storeInfo.mode === 'open' ? 'Manual override — taking orders'
+                  : storeInfo.mode === 'closed' ? 'Manual override — not taking orders'
+                  : `On schedule: ${DAY_NAMES[storeInfo.hours.day]}s, ${fmtTime(storeInfo.hours.start)}–${fmtTime(storeInfo.hours.end)} ET`}
+              </span>
+            </div>
+          </div>
+          <div className="store-controls">
+            <div className="store-modes" role="group" aria-label="Store mode">
+              <button
+                className={storeInfo.mode === 'open' ? 'active' : ''}
+                disabled={savingStore}
+                onClick={() => saveStore({ mode: 'open', hours: currentHours() })}
+              >
+                Open now
+              </button>
+              <button
+                className={storeInfo.mode === 'closed' ? 'active' : ''}
+                disabled={savingStore}
+                onClick={() => saveStore({ mode: 'closed', hours: currentHours() })}
+              >
+                Close
+              </button>
+              <button
+                className={storeInfo.mode === 'auto' ? 'active' : ''}
+                disabled={savingStore}
+                onClick={() => saveStore({ mode: 'auto', hours: currentHours() })}
+              >
+                Use schedule
+              </button>
+            </div>
+            <div className="store-schedule">
+              <select
+                aria-label="Open day"
+                value={draft.day}
+                onChange={(e) => setDraft((d) => ({ ...d, day: e.target.value }))}
+              >
+                {DAY_NAMES.map((d, i) => <option key={d} value={i}>{d}s</option>)}
+              </select>
+              <input aria-label="Opens at" type="time" value={draft.start} onChange={(e) => setDraft((d) => ({ ...d, start: e.target.value }))} />
+              <span className="store-schedule-dash">–</span>
+              <input aria-label="Closes at" type="time" value={draft.end} onChange={(e) => setDraft((d) => ({ ...d, end: e.target.value }))} />
+              <button
+                className="store-save"
+                disabled={savingStore}
+                onClick={() => saveStore({ mode: storeInfo.mode, hours: currentHours() })}
+              >
+                Save times
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {storeInfo && (
+        <div className="avail-panel">
+          <div className="store-panel-label"><UtensilsCrossed size={13} /> Availability — tap to 86 an item</div>
+          <div className="avail-groups">
+            {MENU_DATA.map((section) => (
+              <div key={section.category} className="avail-group">
+                <div className="avail-group-title">{section.category}</div>
+                <div className="avail-chips">
+                  {section.items.map((item) => {
+                    const off = (storeInfo.unavailable || []).includes(item.name);
+                    return (
+                      <button
+                        key={item.name}
+                        className={`avail-chip${off ? ' avail-chip-off' : ''}`}
+                        disabled={savingStore}
+                        onClick={() => toggleItem(item.name)}
+                        aria-pressed={off}
+                        aria-label={`${item.name}: ${off ? 'sold out — tap to restore' : 'available — tap to mark sold out'}`}
+                      >
+                        {displayName(item.name)}
+                        {off && <span className="avail-chip-tag">86&apos;d</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="fire-panel">
         <div className="fire-panel-label"><Flame size={13} /> Fire next</div>
         {fireNext.pizzas.length === 0 && fireNext.addons.length === 0 ? (

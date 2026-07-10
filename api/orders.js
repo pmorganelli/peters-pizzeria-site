@@ -1,13 +1,16 @@
 import crypto from 'node:crypto';
-import { readBody, readQuery, send, isAdmin } from './_lib/util.js';
+import { readBody, readQuery, send, isAdmin, clientIp } from './_lib/util.js';
 import { catalog } from './_lib/catalog.js';
-import { createOrder, getOrder, listOrders, updateOrder } from './_lib/store.js';
+import { createOrder, getOrder, listOrders, updateOrder, getSettings, rateLimit } from './_lib/store.js';
+import { isOpenNow } from './_lib/hours.js';
 
 const STATUSES = ['new', 'firing', 'ready', 'done', 'cancelled'];
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no 0/O/1/I/L
 
 function makeId() {
-  return `o${Date.now().toString(36)}${crypto.randomBytes(3).toString('hex')}`;
+  // 10 random bytes → unguessable; the id doubles as the customer's
+  // read-token for order status, so it must not be enumerable.
+  return `o${crypto.randomBytes(10).toString('hex')}`;
 }
 
 function makeCode() {
@@ -41,8 +44,22 @@ export default async function handler(req, res) {
   }
 }
 
-// POST /api/orders — anyone can place an order
+// POST /api/orders — anyone can place an order (while the store is open)
 async function create(req, res) {
+  const settings = await getSettings();
+  if (!isOpenNow(settings)) {
+    return send(res, 403, { error: 'We are not taking orders right now — check back when we open!', closed: true });
+  }
+
+  // Spam guards: a person places a handful of orders at most, and one
+  // pizza night is bounded — cap per-IP and globally per window.
+  if (!(await rateLimit(`order:${clientIp(req)}`, 5, 600))) {
+    return send(res, 429, { error: 'Too many orders from this device — give it a few minutes.' });
+  }
+  if (!(await rateLimit('order:all', 120, 600))) {
+    return send(res, 429, { error: 'We are getting slammed! Please try again in a couple minutes.' });
+  }
+
   let body;
   try { body = await readBody(req); } catch { return send(res, 400, { error: 'Invalid JSON' }); }
 
@@ -53,6 +70,12 @@ async function create(req, res) {
 
   const items = validateItems(body.items);
   if (!items) return send(res, 400, { error: 'Your cart has an item we did not recognize — please refresh and try again.' });
+
+  const eightySixed = new Set(settings.unavailable ?? []);
+  const soldOut = items.find((it) => eightySixed.has(it.name));
+  if (soldOut) {
+    return send(res, 400, { error: `${soldOut.name} just sold out — please remove it from your cart.`, soldOut: soldOut.name });
+  }
 
   const totalCents = items.reduce((sum, it) => sum + it.priceCents * it.qty, 0);
   const now = Date.now();

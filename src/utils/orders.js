@@ -23,6 +23,15 @@ export const STATUS_LABELS = {
 // appears after a quantity ("2 × + Burrata" reads badly).
 export const displayName = (name) => String(name).replace(/^\+\s*/, '');
 
+export const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+// 'HH:MM' (24h) → '7:30 PM'
+export function fmtTime(hhmm) {
+  const [h, m] = hhmm.split(':').map(Number);
+  const hr = h % 12 || 12;
+  return `${hr}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
+}
+
 export function ageLabel(ts) {
   const mins = Math.max(0, Math.round((Date.now() - ts) / 60000));
   if (mins < 1) return 'just now';

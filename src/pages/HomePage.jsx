@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { gsap } from 'gsap';
 import { useGSAP } from '@gsap/react';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
@@ -7,6 +7,8 @@ import { Footer } from '../components/Footer';
 import { LogoBadge } from '../components/LogoBadge';
 import { useScrollReveal } from '../hooks/useScrollReveal';
 import { POSTS_BY_DATE } from '../data/posts';
+import { MENU_DATA } from '../data/menu';
+import { api } from '../utils/api';
 import { thumbSrc, webSrc } from '../utils/photos';
 
 gsap.registerPlugin(useGSAP, ScrollTrigger);
@@ -20,11 +22,11 @@ const STRIP_ITEMS      = [
 ];
 const STRIP_SRCS       = STRIP_ITEMS.map((p) => p.src);
 const COMMUNITY_PHOTOS = ['/photos/img_1082.jpeg', '/photos/img_6789.jpeg', '/photos/img_1098.jpeg'];
-const SPECIALS = [
-  { tag: 'Special',             name: 'Pesto Slice',        desc: 'House-made pesto sauce, cheese', price: '$4' },
-  { tag: 'Slice of the Week',   name: 'Nduja & Hot Honey',  desc: 'Spicy Calabrian nduja, house hot honey, stracciatella', price: '$4' },
-  { tag: 'Special',             name: 'Vodka Slice',        desc: 'House-made vodka sauce, cheese', price: '$4' },
-];
+// Specials come straight from the menu (items tagged `special`), so the
+// homepage and the order page always agree on what exists and what's sold out.
+const SPECIALS = MENU_DATA.flatMap((section) =>
+  section.items.filter((it) => it.special).map((it) => ({ tag: it.special, ...it }))
+);
 
 const LATEST_POSTS = POSTS_BY_DATE.slice(0, 3);
 
@@ -33,8 +35,18 @@ const TICKER_TEXT = 'Saturday Slices · 7pm til sellout · Tufts University Off 
 export function HomePage({ nav, openArticle, openLightbox }) {
   const ref = useScrollReveal();
   const pageRef = useRef(null);
+  const [unavailable, setUnavailable] = useState(new Set());
 
   useEffect(() => { window.scrollTo(0, 0); }, []);
+
+  // Sold-out items grey out on the specials strip; fail silent if the check fails
+  useEffect(() => {
+    let cancelled = false;
+    api('/api/store')
+      .then((d) => { if (!cancelled) setUnavailable(new Set(d.unavailable || [])); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   // Hero photo drifts slower than the page scroll (parallax)
   useGSAP(() => {
@@ -132,14 +144,23 @@ export function HomePage({ nav, openArticle, openLightbox }) {
           <button className="specials-see-all" onClick={() => nav('menu')}>Full Menu <ArrowRight size={13} /></button>
         </div>
         <div className="specials-grid">
-          {SPECIALS.map((s, i) => (
-            <button key={s.name} className={`special-card reveal reveal-delay-${i + 1}`} ref={ref(3 + i)} onClick={() => nav('menu')} aria-label={`${s.tag}: ${s.name} — ${s.price}`}>
-              <div className="special-tag">{s.tag}</div>
-              <div className="special-name">{s.name}</div>
-              <div className="special-desc">{s.desc}</div>
-              <div className="special-price">{s.price}</div>
-            </button>
-          ))}
+          {SPECIALS.map((s, i) => {
+            const soldOut = unavailable.has(s.name);
+            return (
+              <button
+                key={s.name}
+                className={`special-card reveal reveal-delay-${i + 1}${soldOut ? ' special-sold-out' : ''}`}
+                ref={ref(3 + i)}
+                onClick={() => nav('menu')}
+                aria-label={`${s.tag}: ${s.name} — ${soldOut ? 'sold out' : s.price}`}
+              >
+                <div className="special-tag">{s.tag}{soldOut && <span className="special-soldout-tag"> · Sold out</span>}</div>
+                <div className="special-name">{s.name}</div>
+                <div className="special-desc">{s.desc}</div>
+                <div className="special-price">{s.price}</div>
+              </button>
+            );
+          })}
         </div>
       </section>
 

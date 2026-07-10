@@ -65,10 +65,21 @@ a pickup code and a live status screen. Staff open **Admin** (footer link),
 log in, and get a live board — New / In the oven / Ready columns plus a
 "Fire next" panel that aggregates which pizzas to fire across waiting orders.
 
-- `api/` — Vercel serverless functions (`orders`, `login`); prices are always
-  recomputed server-side from `src/data/menu.js`
+- `api/` — Vercel serverless functions (`orders`, `login`, `store`); prices are
+  always recomputed server-side from `src/data/menu.js`
 - Orders are stored in **Upstash Redis** in production and in memory during
   local dev; they expire after 3 days
+- **Store hours**: the admin board has a Storefront panel — force Open, force
+  Closed, or follow a weekly schedule (default Saturdays 7:00–8:30 PM ET).
+  When closed, the order page shows the next window and the API rejects
+  order attempts
+- **Availability**: tap any item on the admin board's Availability panel to
+  86 it — it greys out on the homepage specials, menu, and order page, and
+  can't be ordered until you tap it back on. Homepage specials come from
+  menu items tagged `special` in `src/data/menu.js`
+- **Safeguards**: per-IP + global rate limits on orders, login brute-force
+  lockout, server-side price/item validation, unguessable order ids,
+  security headers via `vercel.json`
 
 ### Production setup (Vercel)
 
