@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Footer } from '../components/Footer';
 import { ALL_PHOTOS } from '../data/posts';
+import { PHOTO_RATIOS } from '../data/photoDims';
 import { thumbSrc } from '../utils/photos';
 
 export function GalleryPage({ nav, openLightbox }) {
@@ -31,6 +32,8 @@ export function GalleryPage({ nav, openLightbox }) {
               alt={`Peter's Pizzeria photo ${i + 1}`}
               loading="lazy"
               decoding="async"
+              /* Reserving the final box keeps the masonry from reflowing as photos load */
+              style={{ aspectRatio: PHOTO_RATIOS[src] }}
               onError={() => setFailed((prev) => new Set([...prev, src]))}
             />
           </button>

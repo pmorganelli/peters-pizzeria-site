@@ -31,6 +31,8 @@ for f in photos/*.jpg photos/*.jpeg photos/*.png photos/bambinoPictures/*.jpg ph
   process "$f" 1600 web
 done
 
+node scripts/gen-photo-dims.mjs
+
 echo "--- sizes ---"
 du -sh photos photos/thumbs photos/web
 echo "--- counts ---"

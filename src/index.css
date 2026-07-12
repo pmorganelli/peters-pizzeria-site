@@ -509,7 +509,7 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 44px 60p
   color: rgba(254,245,239,0.4); margin-top: 18px;
 }
 .gallery-grid { padding: 48px 60px 80px; columns: 4; column-gap: 10px; }
-.gallery-item { break-inside: avoid; margin-bottom: 10px; overflow: hidden; position: relative; cursor: pointer; display: block; width: 100%; }
+.gallery-item { break-inside: avoid; margin-bottom: 10px; overflow: hidden; position: relative; cursor: pointer; display: block; width: 100%; background: rgba(254,245,239,0.04); }
 .gallery-item img { width: 100%; display: block; transition: transform 0.5s cubic-bezier(.22,1,.36,1); filter: brightness(0.92); }
 .gallery-item:hover img { transform: scale(1.04); filter: brightness(1); }
 .photo-btn { display: block; padding: 0; line-height: 0; }

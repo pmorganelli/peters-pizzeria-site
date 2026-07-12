@@ -75,7 +75,7 @@ All image paths in code use the `/photos/filename` convention (Vite resolves `pu
 
 ### Derivatives
 
-`photos/thumbs/` (max 640px) and `photos/web/` (max 1600px) are generated from the originals by `scripts/gen-photo-derivatives.sh` (macOS `sips`, no deps; skips files that already exist). After adding new photos, re-run the script. Code never hardcodes derivative paths — use `thumbSrc(src)` / `webSrc(src)` from `src/utils/photos.js`. Grids/cards use thumbs, article bodies and the lightbox use web (lightbox `srcset` upgrades to the original on large screens).
+`photos/thumbs/` (max 640px) and `photos/web/` (max 1600px) are generated from the originals by `scripts/gen-photo-derivatives.sh` (macOS `sips`, no deps; skips files that already exist). The script also runs `scripts/gen-photo-dims.mjs`, which regenerates `src/data/photoDims.js` (`PHOTO_RATIOS`: photo path → `w/h`); the gallery uses it to reserve each image's box via `aspect-ratio` so the masonry never reflows while photos load. After adding new photos, re-run the script. Code never hardcodes derivative paths — use `thumbSrc(src)` / `webSrc(src)` from `src/utils/photos.js`. Grids/cards use thumbs, article bodies and the lightbox use web (lightbox `srcset` upgrades to the original on large screens).
 
 ## Text layout (Pretext)
 
