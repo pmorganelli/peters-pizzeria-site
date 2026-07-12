@@ -2,7 +2,13 @@ import { useState } from 'react';
 import { LogoBadge } from './LogoBadge';
 import { useScrolled } from '../hooks/useScrolled';
 
-const PAGES = ['home', 'menu', 'blog', 'gallery'];
+const PAGES = [
+  ['home', 'Home'],
+  ['menu', 'Menu'],
+  ['blog', 'Blog'],
+  ['gallery', 'Gallery'],
+  ['status', 'Slice Status'],
+];
 
 export function Nav({ page, nav }) {
   const scrolled = useScrolled();
@@ -19,13 +25,13 @@ export function Nav({ page, nav }) {
       </button>
 
       <div className={`nav-links${menuOpen ? ' mobile-open' : ''}`}>
-        {PAGES.map((p) => (
+        {PAGES.map(([id, label]) => (
           <button
-            key={p}
-            className={`nav-link ${page === p ? 'active' : ''}`}
-            onClick={() => doNav(p)}
+            key={id}
+            className={`nav-link ${page === id ? 'active' : ''}`}
+            onClick={() => doNav(id)}
           >
-            {p}
+            {label}
           </button>
         ))}
       </div>

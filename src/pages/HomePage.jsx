@@ -65,7 +65,7 @@ export function HomePage({ nav, openArticle, openLightbox }) {
         <div className="hero-img" />
         <div className="hero-overlay" />
         <div className="hero-badge" aria-hidden="true"><LogoBadge size={128} /></div>
-        <div className="hero-pill"><span className="pulse-dot" aria-hidden="true" />Next bake: Saturday 7pm</div>
+        <div className="hero-pill"><span className="pulse-dot" aria-hidden="true" />Re-opening: Fall 2026</div>
         {/* Non-breaking spaces inside each segment: the label may only wrap at the dots */}
         <div className="hero-label">Somerville,&nbsp;MA · Est.&nbsp;2025</div>
         <h1 className="hero-title">Handmade<br />with <em>love.</em></h1>

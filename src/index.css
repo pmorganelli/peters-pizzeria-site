@@ -568,6 +568,16 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 44px 60p
 .order-head { max-width: 1100px; margin: 0 auto; padding: 48px 60px 8px; }
 .order-title { font-family: var(--serif); font-size: clamp(38px, 5.5vw, 64px); font-weight: 800; font-style: italic; color: var(--ink); line-height: 1; }
 .order-sub { font-family: var(--mono); font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--ink2); margin-top: 14px; }
+.status-live { display: flex; align-items: center; gap: 9px; }
+/* Lookup form on the Slice Status page */
+.status-lookup { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-top: 20px; }
+.status-lookup-field { flex: 1; min-width: 210px; margin-top: 0; }
+.status-lookup-btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 24px; }
+.status-lookup-btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: none; }
+.status-lookup-error { flex-basis: 100%; margin-top: 2px; }
+.status-not-you { padding-top: 0; padding-bottom: 56px; margin-top: -56px; text-align: center; }
+.status-order-link { font: inherit; color: var(--red); border-bottom: 1px solid rgba(224,54,22,0.4); transition: opacity 0.2s; }
+.status-order-link:hover { opacity: 0.7; }
 .order-grid { max-width: 1100px; margin: 0 auto; display: grid; grid-template-columns: 1fr 360px; gap: 48px; padding: 40px 60px 90px; align-items: start; }
 .order-cat {
   font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 3px;
@@ -642,16 +652,63 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 44px 60p
 .confirm-code-label { font-family: var(--mono); font-size: 9.5px; letter-spacing: 2px; text-transform: uppercase; color: var(--ink2); }
 .confirm-code { font-family: var(--mono); font-size: 40px; font-weight: 500; color: var(--red); line-height: 1.05; letter-spacing: 2px; }
 .confirm-hint { font-family: var(--serif); font-size: 14px; color: var(--ink2); line-height: 1.5; padding-bottom: 4px; }
+/* Status banner — the one-glance answer to "where's my slice?" */
+.status-banner {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  margin-top: 20px; padding: 13px 16px; border-radius: 6px;
+  border: 1px solid rgba(44,110,73,0.35); background: rgba(44,110,73,0.07);
+  animation: status-rise 0.45s cubic-bezier(.22,1,.36,1), status-glow 3.2s ease-in-out 0.5s infinite;
+}
+.status-banner-pill {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: 2px;
+  text-transform: uppercase; color: var(--green); white-space: nowrap;
+}
+.status-banner-dot {
+  width: 9px; height: 9px; border-radius: 50%; background: var(--green-light);
+  animation: pulse-dot 2.2s ease-out infinite;
+}
+.status-banner-text { font-family: var(--serif); font-size: 15px; color: var(--ink2); }
+.status-banner-ready { border-color: rgba(44,110,73,0.6); background: rgba(44,110,73,0.12); }
+.status-banner-ready .status-banner-text { color: var(--green); font-weight: 600; }
+.status-banner-cancelled { border-color: rgba(224,54,22,0.4); background: rgba(224,54,22,0.06); animation: status-rise 0.45s cubic-bezier(.22,1,.36,1); }
+.status-banner-cancelled .status-banner-pill { color: var(--red); }
+.status-banner-cancelled .status-banner-dot { background: var(--red-light); animation: none; }
+@keyframes status-rise { from { opacity: 0; transform: translateY(10px); } }
+@keyframes status-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(44,110,73,0); }
+  50%      { box-shadow: 0 0 20px 2px rgba(44,110,73,0.16); }
+}
+
+/* Timeline — green means progress; steps pop in and the active one pulses */
 .confirm-timeline { display: flex; margin: 26px 0 8px; }
 .tl-step { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; position: relative; }
 .tl-step::before { content: ''; position: absolute; top: 14px; left: -50%; right: 50%; height: 2px; background: var(--cream2); }
 .tl-step:first-child::before { display: none; }
-.tl-past::before, .tl-active::before { background: var(--red); }
+.tl-past::before, .tl-active::before {
+  background: var(--green);
+  transform-origin: left; animation: tl-fill 0.5s cubic-bezier(.22,1,.36,1);
+}
 .tl-dot { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--cream2); color: var(--ink2); position: relative; z-index: 1; }
-.tl-past .tl-dot { background: var(--red); color: white; }
-.tl-active .tl-dot { background: var(--red); color: white; box-shadow: 0 0 0 5px rgba(224,54,22,0.18); }
+.tl-past .tl-dot { background: var(--green); color: white; animation: tl-pop 0.45s cubic-bezier(.22,1,.36,1); }
+.tl-active .tl-dot {
+  background: var(--green); color: white;
+  animation: tl-pop 0.45s cubic-bezier(.22,1,.36,1), tl-ring 2.2s ease-out 0.45s infinite;
+}
 .tl-label { font-family: var(--mono); font-size: 9.5px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--ink2); text-align: center; }
-.tl-active .tl-label { color: var(--red); }
+.tl-past .tl-label { color: var(--green); }
+.tl-active .tl-label { color: var(--green); font-weight: 700; }
+@keyframes tl-pop {
+  0%   { transform: scale(0.4); opacity: 0; }
+  60%  { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); }
+}
+@keyframes tl-ring {
+  0%   { box-shadow: 0 0 0 0 rgba(44,110,73,0.45); }
+  70%  { box-shadow: 0 0 0 11px rgba(44,110,73,0); }
+  100% { box-shadow: 0 0 0 0 rgba(44,110,73,0); }
+}
+@keyframes tl-fill { from { transform: scaleX(0); } }
 .confirm-items { margin-top: 22px; }
 .confirm-cancelled { font-family: var(--serif); color: var(--red); border-left: 2px solid var(--red); padding-left: 12px; margin: 20px 0; line-height: 1.6; }
 .confirm-actions { display: flex; align-items: center; gap: 20px; margin-top: 24px; flex-wrap: wrap; }

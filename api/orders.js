@@ -95,14 +95,44 @@ async function create(req, res) {
   return send(res, 201, { order });
 }
 
-// GET /api/orders?id=… — public status of a single order (customer polling)
-// GET /api/orders      — full board (admin only)
+// Public responses never include contact/notes — the status UI doesn't show
+// them, and the `find` lookup means typing a name can reach someone else's order.
+const publicOrder = ({ contact, notes, ...rest }) => rest;
+
+const ACTIVE = new Set(['new', 'firing', 'ready']);
+
+// Match a pickup code (exact) or a name (full, first, or prefix) against the
+// recent orders; prefer the newest still-active order when names collide.
+async function findOrder(query) {
+  const q = query.replace(/^#/, '').replace(/\s+/g, ' ').trim().toLowerCase();
+  if (q.length < 2) return null;
+  const orders = await listOrders(); // newest first, bounded by the 3-day TTL
+  const byCode = orders.find((o) => o.code.toLowerCase() === q);
+  if (byCode) return byCode;
+  const byName = orders.filter((o) => {
+    const n = o.name.toLowerCase();
+    return n === q || n.split(' ')[0] === q || n.startsWith(q);
+  });
+  return byName.find((o) => ACTIVE.has(o.status)) ?? byName[0] ?? null;
+}
+
+// GET /api/orders?id=…   — public status of a single order (customer polling)
+// GET /api/orders?find=… — public lookup by pickup code or name (rate-limited)
+// GET /api/orders        — full board (admin only)
 async function read(req, res) {
-  const { id } = readQuery(req);
+  const { id, find } = readQuery(req);
   if (id) {
     const order = await getOrder(id);
     if (!order) return send(res, 404, { error: 'Order not found (orders expire after a few days).' });
-    return send(res, 200, { order });
+    return send(res, 200, { order: publicOrder(order) });
+  }
+  if (find !== undefined) {
+    if (!(await rateLimit(`find:${clientIp(req)}`, 30, 600))) {
+      return send(res, 429, { error: 'Too many lookups — give it a minute and try again.' });
+    }
+    const order = await findOrder(String(find));
+    if (!order) return send(res, 404, { error: 'No order under that code or name — double-check the spelling, or it may have expired.' });
+    return send(res, 200, { order: publicOrder(order) });
   }
   if (!isAdmin(req)) return send(res, 401, { error: 'Admin login required' });
   return send(res, 200, { orders: await listOrders() });

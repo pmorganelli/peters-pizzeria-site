@@ -1,7 +1,13 @@
 import { AtSign } from 'lucide-react';
 import { LogoBadge } from './LogoBadge';
 
-const PAGES = ['home', 'menu', 'blog', 'gallery'];
+const PAGES = [
+  ['home', 'Home'],
+  ['menu', 'Menu'],
+  ['blog', 'Blog'],
+  ['gallery', 'Gallery'],
+  ['status', 'Slice Status'],
+];
 
 export function Footer({ nav }) {
   return (
@@ -19,14 +25,9 @@ export function Footer({ nav }) {
 
         <div>
           <div className="footer-col-title">Navigate</div>
-          {PAGES.map((p) => (
-            <button
-              key={p}
-              className="footer-link"
-              onClick={() => nav(p)}
-              style={{ textTransform: 'capitalize' }}
-            >
-              {p}
+          {PAGES.map(([id, label]) => (
+            <button key={id} className="footer-link" onClick={() => nav(id)}>
+              {label}
             </button>
           ))}
         </div>
