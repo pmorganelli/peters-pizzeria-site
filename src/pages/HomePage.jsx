@@ -212,7 +212,7 @@ export function HomePage({ nav, openArticle, openLightbox }) {
           <h2 className="section-title" style={{ color: 'var(--cream)', marginBottom: 20 }}>
             We make pizza.<br /><em style={{ color: 'var(--gold)' }}>We make community.</em>
           </h2>
-          <p style={{ fontFamily: 'var(--serif)', fontSize: 18, fontStyle: 'italic', color: 'rgba(254,245,239,0.7)', lineHeight: 1.75 }}>
+          <p style={{ fontFamily: 'var(--serif)', fontSize: 18, color: 'rgba(254,245,239,0.7)', lineHeight: 1.75 }}>
             Every Saturday night is more than a meal. It&apos;s our passion. The people yearn for community at Tufts, and we provide it.
             We pride ourselves on affordable pizza, great community, and some of the best slices you&apos;ll ever have.
             Come find us — follow{' '}

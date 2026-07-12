@@ -85,7 +85,7 @@ export function MenuPage({ nav }) {
             style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
             onClick={() => nav('order')}
           >
-            Order ahead <ArrowRight size={13} />
+            Order Now <ArrowRight size={13} />
           </button>
         </div>
       </div>

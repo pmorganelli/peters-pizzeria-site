@@ -76,7 +76,7 @@ export function ArticlePage({ article, nav }) {
 
       <div className="article-body">
         {article.content.intro && (
-          <p className="article-intro" style={{ fontSize: 20, color: 'var(--ink)', fontStyle: 'italic', marginBottom: 28 }}>
+          <p className="article-intro" style={{ fontSize: 20, color: 'var(--ink)', marginBottom: 28 }}>
             {article.content.intro}
           </p>
         )}

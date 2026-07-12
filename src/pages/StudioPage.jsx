@@ -10,7 +10,7 @@ const H = 1350; // 4:5, Instagram portrait
 const PAD_X = 80;
 const TITLE_FONT = 'italic 800 76px "EB Garamond", Georgia, serif';
 const TITLE_LINE_H = 88;
-const MONO_FONT = '500 26px "DM Mono", monospace';
+const MONO_FONT = '600 27px "EB Garamond", Georgia, serif';
 
 async function drawCard(canvas, { photo, title, tag }, isStale) {
   const ctx = canvas.getContext('2d');
