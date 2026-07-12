@@ -20,7 +20,7 @@ Client-side-only SPA with manual routing (no React Router). Page state lives in 
 
 ### Routing
 
-`App.jsx` holds `page` state (`'home' | 'menu' | 'blog' | 'article' | 'gallery' | 'studio' | 'order' | 'admin'`). The `nav(page, article?)` callback runs a directional transition (old page slides up/out, new page rises in, 260 ms). There is no URL bar routing — all navigation is in-memory. `studio` (share-card generator) and `admin` (order board) are hidden pages reachable from footer-bottom buttons, not the nav. The nav's "Order Now" button goes to `order`.
+`App.jsx` holds `page` state (`'home' | 'menu' | 'blog' | 'article' | 'gallery' | 'studio' | 'order' | 'admin'`). The `nav(page, article?)` callback runs a directional transition (old page slides up/out, new page rises in, 260 ms). There is no URL bar routing — all navigation is in-memory. `admin` (order board) is a hidden page reachable from a footer-bottom button, not the nav. `studio` (share-card generator) has no UI entry point — reach it by setting `localStorage.pp_page2 = 'studio'` and refreshing. The nav's "Order Now" button goes to `order`.
 
 ### Ordering system
 

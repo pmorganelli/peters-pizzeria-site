@@ -7,12 +7,10 @@ export function Footer({ nav }) {
   return (
     <footer>
       <div className="footer-top">
-        <div>
+        <div className="footer-brand">
           <div className="footer-logo-wrap">
             <LogoBadge size={40} />
-            <div style={{ fontFamily: 'var(--serif)', fontSize: 18, fontWeight: 700, fontStyle: 'italic', color: 'var(--cream)' }}>
-              Peter&apos;s Pizzeria
-            </div>
+            <div className="footer-wordmark">Peter&apos;s Pizzeria</div>
           </div>
           <div className="footer-tagline">
             A student-run pizzeria at Tufts University. Handmade with care, fired every Saturday.
@@ -35,17 +33,23 @@ export function Footer({ nav }) {
 
         <div>
           <div className="footer-col-title">Hours</div>
-          <div className="footer-link" style={{ cursor: 'default' }}>Saturday Slices</div>
-          <div className="footer-link" style={{ cursor: 'default', fontSize: 13 }}>Saturdays, 7pm-sellout (~1 hour)</div>
+          <div className="footer-link footer-static">Saturdays, 7pm til sellout</div>
+          <div className="footer-col-title footer-col-gap">Pay</div>
+          <a
+            className="footer-link"
+            href="https://venmo.com/u/Peter-Morganelli24"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Venmo @Peter-Morganelli24
+          </a>
         </div>
 
         <div>
           <div className="footer-col-title">Find Us</div>
-          <div className="footer-link" style={{ cursor: 'default' }}>Tufts University</div>
-          <div className="footer-link" style={{ cursor: 'default' }}>Somerville, MA</div>
+          <div className="footer-link footer-static">Tufts University · Somerville, MA</div>
           <a
-            className="footer-link"
-            style={{ fontSize: 13, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            className="footer-link footer-ig"
             href="https://instagram.com/peterspizzeria_"
             target="_blank"
             rel="noreferrer"
@@ -56,10 +60,8 @@ export function Footer({ nav }) {
       </div>
 
       <div className="footer-bottom">
-        <span>© 2026 Peter&apos;s Pizzeria · Tufts University</span>
-        <button onClick={() => nav('studio')}>Studio</button>
+        <span>© 2026 Peter&apos;s Pizzeria · Not affiliated with Tufts University</span>
         <button onClick={() => nav('admin')}>Admin</button>
-        <a href="https://venmo.com/u/Peter-Morganelli24" target="_blank" rel="noreferrer">Venmo: @Peter-Morganelli24</a>
       </div>
     </footer>
   );

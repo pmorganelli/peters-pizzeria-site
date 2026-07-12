@@ -30,9 +30,8 @@ export function BlogPage({ nav, openArticle }) {
     <div className="blog-page" ref={pageRef}>
       <div className="blog-hero">
         <div className="blog-hero-bg" />
-        {/* Bug fix: original had garbled "JournlAlign:'middle'}}/>Journal" text */}
         <div className="section-label" style={{ color: 'var(--gold)', position: 'relative', zIndex: 1 }}>
-          Journal
+          Blog
         </div>
         <h1 className="blog-hero-title">Recipes, stories,<br /><em>&amp; inspirations.</em></h1>
         <LineReveal

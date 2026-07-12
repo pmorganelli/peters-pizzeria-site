@@ -473,20 +473,23 @@ nav.nav-dark.scrolled .nav-hamburger span { background: var(--ink); }
 .article-next-cta { font-family: var(--mono); font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--red); display: inline-flex; align-items: center; gap: 6px; }
 
 /* ── FOOTER ────────────────────────────────────────────────────────── */
-footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 64px 60px 32px; }
-.footer-top { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 48px; margin-bottom: 48px; }
-.footer-logo-wrap { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
+footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 44px 60px 20px; }
+.footer-top { display: grid; grid-template-columns: 2fr 1fr 1fr 1.2fr; gap: 36px; margin-bottom: 32px; }
+.footer-logo-wrap { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+.footer-wordmark { font-family: var(--serif); font-size: 18px; font-weight: 700; font-style: italic; color: var(--cream); }
 .footer-tagline { font-family: var(--serif); font-size: 15px; font-style: italic; color: rgba(254,245,239,0.4); max-width: 260px; line-height: 1.6; }
-.footer-col-title { font-family: var(--mono); font-size: 10px; font-weight: 500; letter-spacing: 2px; text-transform: uppercase; color: var(--cream); margin-bottom: 16px; }
-.footer-link { display: block; font-family: var(--serif); font-size: 15px; color: rgba(254,245,239,0.45); margin-bottom: 8px; cursor: pointer; transition: color 0.2s; }
+.footer-col-title { font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; color: var(--cream); margin-bottom: 10px; }
+.footer-col-gap { margin-top: 18px; }
+.footer-link { display: block; font-family: var(--serif); font-size: 15px; color: rgba(254,245,239,0.45); margin-bottom: 6px; cursor: pointer; text-align: left; text-decoration: none; transition: color 0.2s; }
 .footer-link:hover { color: var(--cream); }
+.footer-static { cursor: default; }
+.footer-static:hover { color: rgba(254,245,239,0.45); }
+.footer-ig { display: inline-flex; align-items: center; gap: 6px; }
 .footer-bottom {
-  border-top: 1px solid rgba(254,245,239,0.08); padding-top: 24px;
-  display: flex; justify-content: space-between;
-  font-family: var(--mono); font-size: 10px; color: rgba(254,245,239,0.28); letter-spacing: 0.5px;
+  border-top: 1px solid rgba(254,245,239,0.08); padding-top: 18px;
+  display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 6px 20px;
+  font-family: var(--mono); font-size: 11px; color: rgba(254,245,239,0.3); letter-spacing: 0.5px;
 }
-.footer-bottom a { color: inherit; text-decoration: none; transition: color 0.2s; }
-.footer-bottom a:hover { color: var(--cream); }
 .footer-bottom button { color: inherit; font: inherit; letter-spacing: inherit; transition: color 0.2s; }
 .footer-bottom button:hover { color: var(--cream); }
 
@@ -856,9 +859,12 @@ body, .story-section, .home-latest, .menu-page, .blog-page, .article-page {
   .article-hero-img, .article-next { padding-left: 20px; padding-right: 20px; }
   .article-next-card { grid-template-columns: 96px 1fr; gap: 14px; padding: 12px; }
   .article-title { font-size: clamp(28px, 8vw, 44px); }
-  footer { padding: 48px 24px 28px; }
-  .footer-top { grid-template-columns: 1fr 1fr; gap: 28px; }
-  .footer-bottom { flex-direction: column; gap: 8px; }
+  footer { padding: 32px 24px 18px; }
+  .footer-top { grid-template-columns: 1fr 1fr; gap: 22px 20px; margin-bottom: 24px; }
+  .footer-brand { grid-column: 1 / -1; }
+  .footer-tagline { max-width: none; }
+  /* Find Us is last — give it the full row so its lines don't wrap */
+  .footer-top > div:last-child { grid-column: 1 / -1; }
   .home-latest-header { flex-direction: column; align-items: flex-start; gap: 16px; margin-bottom: 36px; }
   .menu-venmo-box { flex-direction: column; align-items: flex-start; padding: 22px 20px; gap: 18px; }
   .menu-quote { flex: none; }
@@ -906,7 +912,6 @@ body, .story-section, .home-latest, .menu-page, .blog-page, .article-page {
 @media (max-width: 480px) {
   .section-title { font-size: clamp(30px, 9vw, 52px); }
   .stat-num { font-size: 40px; }
-  .footer-top { grid-template-columns: 1fr; }
   .photo-strip-item { aspect-ratio: 1; }
 }
 
