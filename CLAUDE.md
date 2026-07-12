@@ -2,7 +2,7 @@
 
 ## What this project is
 
-A single-page React app for Peter's Pizzeria, a student-run pizza operation at Tufts University (Medford, MA). Mostly a static marketing site, plus a small ordering system: customers place orders from the menu, staff manage them on a live admin board. The only backend is the `api/` folder of Vercel serverless functions.
+A single-page React app for Peter's Pizzeria, a student-run pizza operation. Mostly a static marketing site, plus a small ordering system: customers place orders from the menu, staff manage them on a live admin board. The only backend is the `api/` folder of Vercel serverless functions.
 
 ## How to run
 

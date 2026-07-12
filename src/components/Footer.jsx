@@ -47,7 +47,7 @@ export function Footer({ nav }) {
 
         <div>
           <div className="footer-col-title">Find Us</div>
-          <div className="footer-link footer-static">Tufts University · Somerville, MA</div>
+          <div className="footer-link footer-static">Somerville, MA</div>
           <a
             className="footer-link footer-ig"
             href="https://instagram.com/peterspizzeria_"

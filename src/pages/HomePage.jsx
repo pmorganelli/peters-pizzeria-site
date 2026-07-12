@@ -30,7 +30,7 @@ const SPECIALS = MENU_DATA.flatMap((section) =>
 
 const LATEST_POSTS = POSTS_BY_DATE.slice(0, 3);
 
-const TICKER_TEXT = 'Saturday Slices · 7pm til sellout · Tufts University Off Campus · ';
+const TICKER_TEXT = 'Saturday Slices · 7pm til sellout · Somerville, MA · ';
 
 export function HomePage({ nav, openArticle, openLightbox }) {
   const ref = useScrollReveal();
@@ -70,7 +70,7 @@ export function HomePage({ nav, openArticle, openLightbox }) {
         <div className="hero-label">Somerville,&nbsp;MA · Est.&nbsp;2025</div>
         <h1 className="hero-title">Handmade<br />with <em>love.</em></h1>
         <p className="hero-sub">
-          A student-run pizzeria from the heart of Tufts. Twelve passionate students,
+          A student-run pizzeria from the heart of Somerville. Twelve passionate students,
           one shared kitchen, and a 72-hour ferment.
         </p>
         <div className="hero-ctas">
