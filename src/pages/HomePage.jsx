@@ -166,7 +166,7 @@ export function HomePage({ nav, openArticle, openLightbox }) {
 
       {/* ── LATEST BLOG POSTS ── */}
       <section className="home-latest">
-        <div ref={ref(6)} className="reveal" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 48 }}>
+        <div ref={ref(6)} className="reveal home-latest-header">
           <div>
             <div className="section-label">From the Blog</div>
             <h2 className="section-title">Latest from<br /><em>the kitchen.</em></h2>

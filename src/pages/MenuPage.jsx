@@ -77,8 +77,8 @@ export function MenuPage({ nav }) {
             </div>
           </div>
           <div className="menu-quote">
-            &ldquo;Can you save me a slice?&rdquo; — Jonah Pflaster<br />
-            <span style={{ opacity: 0.6, fontSize: 14 }}>&ldquo;really f*cking good&rdquo; — Harrison Tun</span>
+            &ldquo;Can you save me a slice?&rdquo; — Jonah Pflaster
+            <span className="menu-quote-alt">&ldquo;really f*cking good&rdquo; — Harrison Tun</span>
           </div>
           <button
             className="btn-primary"
