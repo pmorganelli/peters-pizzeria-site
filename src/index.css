@@ -171,7 +171,7 @@ nav.nav-dark.scrolled .nav-hamburger span { background: var(--ink); }
 .hero-title em { font-style: normal; color: var(--red); }
 .hero-sub {
   margin-top: 24px; max-width: 460px;
-  font-size: 19px; line-height: 1.65; font-style: italic; font-weight: 400;
+  font-size: 19px; line-height: 1.65; font-weight: 400;
   color: rgba(254,245,239,0.75); position: relative; z-index: 2;
 }
 .hero-ctas { margin-top: 36px; display: flex; flex-wrap: wrap; gap: 16px; align-items: center; position: relative; z-index: 2; }
@@ -251,7 +251,6 @@ nav.nav-dark.scrolled .nav-hamburger span { background: var(--ink); }
   border: 4px solid var(--cream); display: block;
 }
 .story-text p { font-family: var(--serif); font-size: 18px; line-height: 1.8; color: var(--ink2); margin-bottom: 18px; }
-.story-text p:first-of-type { font-size: 21px; color: var(--ink); }
 .story-stat { display: flex; gap: 44px; margin-top: 40px; padding-top: 32px; border-top: 2px solid var(--green); }
 .stat-num { font-family: var(--serif); font-size: 52px; font-weight: 800; font-style: italic; color: var(--red); line-height: 1; }
 .stat-label { font-family: var(--mono); font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--ink2); margin-top: 4px; }
@@ -291,7 +290,8 @@ nav.nav-dark.scrolled .nav-hamburger span { background: var(--ink); }
   display: inline-flex; align-items: center; gap: 7px;
 }
 .specials-see-all:hover { color: var(--cream); border-color: var(--cream); }
-.specials-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; }
+/* auto-fit keeps the strip balanced however many items are tagged `special` */
+.specials-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 2px; }
 .special-card {
   display: block; width: 100%; text-align: left;
   background: rgba(255,255,255,0.04); border: none;
@@ -351,6 +351,19 @@ nav.nav-dark.scrolled .nav-hamburger span { background: var(--ink); }
 .menu-item-soldout .menu-item-name { text-decoration: line-through; text-decoration-thickness: 1px; }
 .menu-item-86 { font-family: var(--mono); font-size: 9.5px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--red); margin-right: 12px; flex-shrink: 0; }
 .menu-item-name { font-family: var(--serif); font-size: 18px; font-weight: 700; font-style: italic; color: var(--ink); min-width: 200px; flex-shrink: 0; }
+/* Gold "stamp" beside special dishes — quiet ticket motif, echoes the dashed
+   pickup-code card. Text comes from the item's `special` field in menu.js. */
+.menu-item-special {
+  display: inline-flex; align-items: center; gap: 5px;
+  margin: 0 12px 0 10px; padding: 4px 9px 3px; border-radius: 999px;
+  border: 1px dashed rgba(200,147,58,0.55);
+  background: rgba(200,147,58,0.1);
+  font-family: var(--mono); font-size: 8.5px; font-weight: 600; letter-spacing: 1.8px;
+  text-transform: uppercase; font-style: normal; line-height: 1; white-space: nowrap;
+  color: #8a6428;
+  transform: translateY(-2px);
+}
+.menu-item-special span { font-size: 8px; color: var(--gold); }
 .menu-item-dots { flex: 1; border-bottom: 1.5px dotted rgba(200,147,58,0.55); margin: 0 14px 4px; min-width: 30px; }
 .menu-item-desc { font-family: var(--serif); font-size: 14px; color: var(--ink2); flex: 2; padding-right: 16px; }
 .menu-item-price { font-family: var(--mono); font-size: 14px; color: var(--ink); flex-shrink: 0; min-width: 54px; text-align: right; }

@@ -57,7 +57,12 @@ export function MenuPage({ nav }) {
                 const soldOut = unavailable.has(item.name);
                 return (
                   <div key={item.name} className={`menu-item${soldOut ? ' menu-item-soldout' : ''}`}>
-                    <span className="menu-item-name">{item.name}</span>
+                    <span className="menu-item-name">
+                      {item.name}
+                      {!soldOut && item.special && (
+                        <span className="menu-item-special"><span aria-hidden="true">✦</span>{item.special}</span>
+                      )}
+                    </span>
                     <span className="menu-item-desc">{item.desc}</span>
                     <span className="menu-item-dots" />
                     {soldOut && <span className="menu-item-86">Sold out</span>}

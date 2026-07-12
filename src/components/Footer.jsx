@@ -13,7 +13,7 @@ export function Footer({ nav }) {
             <div className="footer-wordmark">Peter&apos;s Pizzeria</div>
           </div>
           <div className="footer-tagline">
-            A student-run pizzeria at Tufts University. Handmade with care, fired every Saturday.
+            A student-run pizzeria handmade with love and community as its core values. Fired every Saturday.
           </div>
         </div>
 
@@ -34,14 +34,14 @@ export function Footer({ nav }) {
         <div>
           <div className="footer-col-title">Hours</div>
           <div className="footer-link footer-static">Saturdays, 7pm til sellout</div>
-          <div className="footer-col-title footer-col-gap">Pay</div>
+          <div className="footer-col-title footer-col-gap">Venmo</div>
           <a
             className="footer-link"
             href="https://venmo.com/u/Peter-Morganelli24"
             target="_blank"
             rel="noreferrer"
           >
-            Venmo @Peter-Morganelli24
+            @Peter-Morganelli24
           </a>
         </div>
 
@@ -54,7 +54,7 @@ export function Footer({ nav }) {
             target="_blank"
             rel="noreferrer"
           >
-            <AtSign size={13} /> peterspizzeria_ for location
+            @peterspizzeria_ for location
           </a>
         </div>
       </div>
