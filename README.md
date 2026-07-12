@@ -1,6 +1,6 @@
 # Peter's Pizzeria
 
-A student-run pizzeria website for Tufts University. Built with React 18, Vite, and Tailwind CSS.
+A student-run pizzeria website. Built with React 18, Vite, and Tailwind CSS.
 
 ## Running locally
 
