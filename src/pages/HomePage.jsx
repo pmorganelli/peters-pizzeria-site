@@ -25,7 +25,7 @@ const COMMUNITY_PHOTOS = ['/photos/img_1082.jpeg', '/photos/img_6789.jpeg', '/ph
 // Specials come straight from the menu (items tagged `special`), so the
 // homepage and the order page always agree on what exists and what's sold out.
 const SPECIALS = MENU_DATA.flatMap((section) =>
-  section.items.filter((it) => it.special).map((it) => ({ tag: it.special, ...it }))
+  section.items.flatMap((it) => (it.special ? [{ tag: it.special, ...it }] : []))
 );
 
 const LATEST_POSTS = POSTS_BY_DATE.slice(0, 3);

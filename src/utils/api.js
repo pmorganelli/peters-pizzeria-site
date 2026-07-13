@@ -1,11 +1,10 @@
 // Tiny fetch wrapper: JSON in/out, throws Error with .status on non-2xx.
-export async function api(path, { method = 'GET', body, token } = {}) {
+// credentials: 'same-origin' so the HttpOnly admin cookie rides along on admin calls.
+export async function api(path, { method = 'GET', body } = {}) {
   const res = await fetch(path, {
     method,
-    headers: {
-      ...(body ? { 'Content-Type': 'application/json' } : {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
+    credentials: 'same-origin',
+    headers: body ? { 'Content-Type': 'application/json' } : {},
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await res.json().catch(() => ({}));

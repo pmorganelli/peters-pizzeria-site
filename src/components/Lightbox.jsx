@@ -4,16 +4,20 @@ import { webSrc } from '../utils/photos';
 
 export function Lightbox({ photos, index, onClose, onPrev, onNext }) {
   const touchX = useRef(null);
+  const dialogRef = useRef(null);
+
+  // Native <dialog> gives us the focus trap and backdrop for free, but it has
+  // to be opened imperatively via showModal() — there's no declarative "open as modal" prop.
+  useEffect(() => { dialogRef.current?.showModal(); }, []);
 
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key === 'Escape')     onClose();
       if (e.key === 'ArrowLeft')  { e.preventDefault(); onPrev(); }
       if (e.key === 'ArrowRight') { e.preventDefault(); onNext(); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, onPrev, onNext]);
+  }, [onPrev, onNext]);
 
   // Lock the page behind the overlay while the lightbox is open
   useEffect(() => {
@@ -32,12 +36,12 @@ export function Lightbox({ photos, index, onClose, onPrev, onNext }) {
   }, [index, photos]);
 
   return (
-    <div
+    <dialog
+      ref={dialogRef}
       className="lb-overlay"
-      role="dialog"
-      aria-modal="true"
       aria-label="Photo lightbox"
       onClick={onClose}
+      onCancel={(e) => { e.preventDefault(); onClose(); }}
       onTouchStart={(e) => { touchX.current = e.touches[0].clientX; }}
       onTouchEnd={(e) => {
         if (touchX.current === null) return;
@@ -64,6 +68,6 @@ export function Lightbox({ photos, index, onClose, onPrev, onNext }) {
           <div className="lb-counter">{index + 1} / {photos.length}</div>
         </>
       )}
-    </div>
+    </dialog>
   );
 }

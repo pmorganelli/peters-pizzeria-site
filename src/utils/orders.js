@@ -30,6 +30,12 @@ export const displayName = (name) => String(name).replace(/^\+\s*/, '');
 export const itemTotalCents = (it) =>
   (it.priceCents + (it.addons ?? []).reduce((sum, a) => sum + a.priceCents, 0)) * it.qty;
 
+// A stable React key for one order line. Cart-building already merges any
+// units sharing both name and add-ons into a single line, so name+addons
+// uniquely identifies a line within an order — no index needed.
+export const orderLineKey = (it) =>
+  `${it.name}::${(it.addons ?? []).map((a) => a.name).join(',')}`;
+
 export const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 // 'HH:MM' (24h) → '7:30 PM'

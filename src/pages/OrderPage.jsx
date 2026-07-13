@@ -8,7 +8,8 @@ import { api } from '../utils/api';
 import { DAY_NAMES, displayName, fmtMoney, fmtTime, parsePriceCents } from '../utils/orders';
 
 const SAVED_KEY = 'pp_order_id';
-const CART_KEY = 'pp_cart2';
+const CART_KEY = 'pp_cart:v2';
+const CART_KEY_UNVERSIONED = 'pp_cart2'; // pre-versioning name for the same shape
 const LEGACY_CART_KEY = 'pp_cart';
 const WHO_KEY = 'pp_who:v1';
 
@@ -25,7 +26,7 @@ const ADDON_ITEMS = MENU_DATA[1].items;
 // add-on names — so "one cheese slice with burrata, one plain" is two units.
 // Migrates the old { name: qty } shape from before add-ons were per-slice.
 function readCart() {
-  const v2 = readJSON(CART_KEY, null);
+  const v2 = readJSON(CART_KEY, null) ?? readJSON(CART_KEY_UNVERSIONED, null);
   if (v2 && typeof v2 === 'object') return v2;
   const legacy = readJSON(LEGACY_CART_KEY, null);
   if (!legacy || typeof legacy !== 'object') return {};
@@ -49,6 +50,141 @@ function Stepper({ qty, onChange }) {
       <button type="button" aria-label="Remove one" onClick={() => onChange(qty - 1)}><Minus size={13} /></button>
       <span>{qty}</span>
       <button type="button" aria-label="Add one" onClick={() => onChange(Math.min(30, qty + 1))}><Plus size={13} /></button>
+    </div>
+  );
+}
+
+function MenuList({ cart, unavailable, setQty, toggleAddon }) {
+  return (
+    <div className="order-menu">
+      {/* Add-ons aren't standalone rows — they attach to slices below */}
+      {MENU_DATA.filter((s) => s.category !== ADDON_CATEGORY).map((section) => (
+        <div key={section.category}>
+          <div className="order-cat">{section.category}</div>
+          {section.items.map((item) => {
+            const soldOut = unavailable.has(item.name);
+            const units = cart[item.name] ?? [];
+            const showAddons = section.category === PIZZA_CATEGORY && !soldOut && units.length > 0;
+            return (
+              <div key={item.name}>
+                <div className={`order-row${soldOut ? ' order-row-soldout' : ''}${showAddons ? ' order-row-open' : ''}`}>
+                  <div className="order-row-text">
+                    <div className="order-row-name">{item.name}</div>
+                    <div className="order-row-desc">{item.desc}</div>
+                  </div>
+                  <div className="order-row-price">{item.price}</div>
+                  {soldOut
+                    ? <span className="order-soldout-chip">Sold out</span>
+                    : <Stepper qty={units.length} onChange={(q) => setQty(item.name, q)} />}
+                </div>
+                {showAddons && (
+                  <div className="addon-units">
+                    {units.map((u, i) => (
+                      // eslint-disable-next-line react/no-array-index-key
+                      <div key={i} className="addon-unit">
+                        <span className="addon-unit-label">{units.length > 1 ? `Slice ${i + 1}` : 'Add-ons'}</span>
+                        {ADDON_ITEMS.map((a) => {
+                          const off = unavailable.has(a.name);
+                          const on = u.includes(a.name);
+                          return (
+                            <button
+                              key={a.name}
+                              type="button"
+                              disabled={off}
+                              className={`addon-chip${on ? ' addon-chip-on' : ''}${off ? ' addon-chip-86' : ''}`}
+                              aria-pressed={on}
+                              aria-label={`${displayName(a.name)} for ${item.name} ${units.length > 1 ? `slice ${i + 1}` : ''}`}
+                              onClick={() => toggleAddon(item.name, i, a.name)}
+                            >
+                              {displayName(a.name)} · {off ? 'sold out' : a.price}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function OrderSummaryPanel({
+  cartLines, removedFromCart, totalCents, removeLine,
+  name, setName, contact, setContact, notes, setNotes,
+  error, canPlace, placing, place,
+}) {
+  return (
+    <div className="order-summary">
+      <div className="order-summary-label">Your order</div>
+      {cartLines.length === 0 ? (
+        <div className="order-empty">Nothing here yet — add something from the menu.</div>
+      ) : (
+        <div>
+          {cartLines.map((l) => (
+            <div key={l.key}>
+              <div className="order-line">
+                <button type="button"
+                  className="order-line-x"
+                  aria-label={`Remove ${l.name}${l.addons.length ? ` with ${l.addons.map(displayName).join(', ')}` : ''}`}
+                  onClick={() => removeLine(l)}
+                >
+                  <X size={11} />
+                </button>
+                <span className="order-line-name">{l.qty} × {displayName(l.name)}</span>
+                <span>{fmtMoney(l.unitCents * l.qty)}</span>
+              </div>
+              {l.addons.length > 0 && (
+                <div className="order-line-addons">{l.addons.map((a) => `+ ${displayName(a)}`).join('  ·  ')}</div>
+              )}
+            </div>
+          ))}
+          <div className="order-line order-total">
+            <span>Total</span>
+            <span>{fmtMoney(totalCents)}</span>
+          </div>
+        </div>
+      )}
+
+      {removedFromCart.length > 0 && (
+        <div className="order-soldout-note">
+          Sold out today: {removedFromCart.map(displayName).join(', ')} — we left {removedFromCart.length === 1 ? 'it' : 'them'} out of your total.
+        </div>
+      )}
+
+      <label className="order-field">
+        <span>Name *</span>
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Who's picking up?" maxLength={60} />
+      </label>
+      <label className="order-field">
+        <span>Phone or Instagram (optional)</span>
+        <input value={contact} onChange={(e) => setContact(e.target.value)} placeholder="So we can reach you" maxLength={80} />
+      </label>
+      <label className="order-field">
+        <span>Notes (optional)</span>
+        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Allergies, requests…" maxLength={280} />
+      </label>
+
+      {error && <div className="order-error">{error}</div>}
+
+      <button type="button"
+        className="btn-primary order-place"
+        disabled={!canPlace}
+        onClick={place}
+      >
+        {placing ? 'Placing…'
+          : cartLines.length === 0 ? 'Add something first'
+          : name.trim().length < 2 ? 'Add your name above'
+          : `Place order · ${fmtMoney(totalCents)}`}
+        {canPlace && <ArrowRight size={14} />}
+      </button>
+      <div className="order-fineprint">
+        No payment needed now — Venmo or Zelle at pickup. We&apos;ll fire your slices in order.
+      </div>
     </div>
   );
 }
@@ -151,7 +287,7 @@ export function OrderPage({ nav }) {
         if (i !== unitIdx) return u;
         if (u.includes(addonName)) return u.filter((a) => a !== addonName);
         // keep add-ons in menu order so identical sets always group together
-        return ADDON_ITEMS.map((a) => a.name).filter((a) => u.includes(a) || a === addonName);
+        return ADDON_ITEMS.flatMap((a) => (u.includes(a.name) || a.name === addonName) ? [a.name] : []);
       }),
     }));
 
@@ -199,10 +335,9 @@ export function OrderPage({ nav }) {
     });
 
   // Items that were in the cart (possibly from a previous visit) but sold out since
-  const removedFromCart = MENU_DATA.flatMap((s) => s.items)
-    .filter((it) => cart[it.name]?.length && unavailable.has(it.name))
-    .map((it) => it.name)
-    .concat([...strippedAddons]);
+  const removedFromCart = MENU_DATA.flatMap((s) =>
+    s.items.flatMap((it) => (cart[it.name]?.length && unavailable.has(it.name)) ? [it.name] : [])
+  ).concat([...strippedAddons]);
   const totalCents = cartLines.reduce((sum, l) => sum + l.unitCents * l.qty, 0);
   const canPlace = cartLines.length > 0 && name.trim().length >= 2 && !placing;
 
@@ -252,128 +387,12 @@ export function OrderPage({ nav }) {
         <ClosedCard store={store} nav={nav} />
       ) : (
         <div className="order-grid">
-          <div className="order-menu">
-            {/* Add-ons aren't standalone rows — they attach to slices below */}
-            {MENU_DATA.filter((s) => s.category !== ADDON_CATEGORY).map((section) => (
-              <div key={section.category}>
-                <div className="order-cat">{section.category}</div>
-                {section.items.map((item) => {
-                  const soldOut = unavailable.has(item.name);
-                  const units = cart[item.name] ?? [];
-                  const showAddons = section.category === PIZZA_CATEGORY && !soldOut && units.length > 0;
-                  return (
-                    <div key={item.name}>
-                      <div className={`order-row${soldOut ? ' order-row-soldout' : ''}${showAddons ? ' order-row-open' : ''}`}>
-                        <div className="order-row-text">
-                          <div className="order-row-name">{item.name}</div>
-                          <div className="order-row-desc">{item.desc}</div>
-                        </div>
-                        <div className="order-row-price">{item.price}</div>
-                        {soldOut
-                          ? <span className="order-soldout-chip">Sold out</span>
-                          : <Stepper qty={units.length} onChange={(q) => setQty(item.name, q)} />}
-                      </div>
-                      {showAddons && (
-                        <div className="addon-units">
-                          {units.map((u, i) => (
-                            // eslint-disable-next-line react/no-array-index-key
-                            <div key={i} className="addon-unit">
-                              <span className="addon-unit-label">{units.length > 1 ? `Slice ${i + 1}` : 'Add-ons'}</span>
-                              {ADDON_ITEMS.map((a) => {
-                                const off = unavailable.has(a.name);
-                                const on = u.includes(a.name);
-                                return (
-                                  <button
-                                    key={a.name}
-                                    type="button"
-                                    disabled={off}
-                                    className={`addon-chip${on ? ' addon-chip-on' : ''}${off ? ' addon-chip-86' : ''}`}
-                                    aria-pressed={on}
-                                    aria-label={`${displayName(a.name)} for ${item.name} ${units.length > 1 ? `slice ${i + 1}` : ''}`}
-                                    onClick={() => toggleAddon(item.name, i, a.name)}
-                                  >
-                                    {displayName(a.name)} · {off ? 'sold out' : a.price}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
-
-          <div className="order-summary">
-            <div className="order-summary-label">Your order</div>
-            {cartLines.length === 0 ? (
-              <div className="order-empty">Nothing here yet — add something from the menu.</div>
-            ) : (
-              <div>
-                {cartLines.map((l) => (
-                  <div key={l.key}>
-                    <div className="order-line">
-                      <button type="button"
-                        className="order-line-x"
-                        aria-label={`Remove ${l.name}${l.addons.length ? ` with ${l.addons.map(displayName).join(', ')}` : ''}`}
-                        onClick={() => removeLine(l)}
-                      >
-                        <X size={11} />
-                      </button>
-                      <span className="order-line-name">{l.qty} × {displayName(l.name)}</span>
-                      <span>{fmtMoney(l.unitCents * l.qty)}</span>
-                    </div>
-                    {l.addons.length > 0 && (
-                      <div className="order-line-addons">{l.addons.map((a) => `+ ${displayName(a)}`).join('  ·  ')}</div>
-                    )}
-                  </div>
-                ))}
-                <div className="order-line order-total">
-                  <span>Total</span>
-                  <span>{fmtMoney(totalCents)}</span>
-                </div>
-              </div>
-            )}
-
-            {removedFromCart.length > 0 && (
-              <div className="order-soldout-note">
-                Sold out today: {removedFromCart.map(displayName).join(', ')} — we left {removedFromCart.length === 1 ? 'it' : 'them'} out of your total.
-              </div>
-            )}
-
-            <label className="order-field">
-              <span>Name *</span>
-              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Who's picking up?" maxLength={60} />
-            </label>
-            <label className="order-field">
-              <span>Phone or Instagram (optional)</span>
-              <input value={contact} onChange={(e) => setContact(e.target.value)} placeholder="So we can reach you" maxLength={80} />
-            </label>
-            <label className="order-field">
-              <span>Notes (optional)</span>
-              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Allergies, requests…" maxLength={280} />
-            </label>
-
-            {error && <div className="order-error">{error}</div>}
-
-            <button type="button"
-              className="btn-primary order-place"
-              disabled={!canPlace}
-              onClick={place}
-            >
-              {placing ? 'Placing…'
-                : cartLines.length === 0 ? 'Add something first'
-                : name.trim().length < 2 ? 'Add your name above'
-                : `Place order · ${fmtMoney(totalCents)}`}
-              {canPlace && <ArrowRight size={14} />}
-            </button>
-            <div className="order-fineprint">
-              No payment needed now — Venmo or Zelle at pickup. We&apos;ll fire your slices in order.
-            </div>
-          </div>
+          <MenuList cart={cart} unavailable={unavailable} setQty={setQty} toggleAddon={toggleAddon} />
+          <OrderSummaryPanel
+            cartLines={cartLines} removedFromCart={removedFromCart} totalCents={totalCents} removeLine={removeLine}
+            name={name} setName={setName} contact={contact} setContact={setContact} notes={notes} setNotes={setNotes}
+            error={error} canPlace={canPlace} placing={placing} place={place}
+          />
         </div>
       )}
 

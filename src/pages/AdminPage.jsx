@@ -3,9 +3,8 @@ import { Check, Flame, LogOut, RotateCcw, Store, UtensilsCrossed, X } from 'luci
 import { Footer } from '../components/Footer';
 import { MENU_DATA } from '../data/menu';
 import { api } from '../utils/api';
-import { DAY_NAMES, displayName, fmtMoney, fmtTime, ageLabel } from '../utils/orders';
+import { DAY_NAMES, displayName, fmtMoney, fmtTime, ageLabel, orderLineKey } from '../utils/orders';
 
-const TOKEN_KEY = 'pp_admin_token';
 const POLL_MS = 5000;
 const PIZZA_CATEGORY = MENU_DATA[0].category;
 const ADDON_CATEGORY = MENU_DATA[1].category;
@@ -17,7 +16,7 @@ const COLUMNS = [
   { status: 'ready', title: 'Ready for pickup', action: 'Picked up', next: 'done', Icon: Check },
 ];
 
-function Login({ onToken }) {
+function Login({ onSuccess }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -27,9 +26,10 @@ function Login({ onToken }) {
     setBusy(true);
     setError('');
     try {
-      const { token } = await api('/api/login', { method: 'POST', body: { password } });
-      localStorage.setItem(TOKEN_KEY, token);
-      onToken(token);
+      // The server sets an HttpOnly cookie on success — there's no token for
+      // this page to hold onto, just a yes/no.
+      await api('/api/login', { method: 'POST', body: { password } });
+      onSuccess();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -69,10 +69,8 @@ function OrderCard({ order, column, onAdvance, onCancel }) {
         <span className="oc-age">{ageLabel(order.createdAt)}</span>
       </div>
       <div className="oc-items">
-        {order.items.map((it, i) => (
-          // index key: two lines can share a name when their add-ons differ
-          // eslint-disable-next-line react/no-array-index-key
-          <div key={`${it.name}-${i}`} className={`oc-item${it.category === PIZZA_CATEGORY ? ' oc-item-pizza' : ''}`}>
+        {order.items.map((it) => (
+          <div key={orderLineKey(it)} className={`oc-item${it.category === PIZZA_CATEGORY ? ' oc-item-pizza' : ''}`}>
             <span className="oc-qty">{it.qty}×</span> {it.category === ADDON_CATEGORY ? `+ ${displayName(it.name)}` : it.name}
             {it.addons?.length > 0 && (
               <span className="oc-item-addons"> · + {it.addons.map((a) => displayName(a.name)).join(', + ')}</span>
@@ -99,8 +97,145 @@ function OrderCard({ order, column, onAdvance, onCancel }) {
   );
 }
 
+function StorePanel({ storeInfo, savingStore, draft, setDraft, saveStore, currentHours }) {
+  return (
+    <div className="store-panel">
+      <div className="store-status">
+        <div className="store-panel-label"><Store size={13} /> Storefront</div>
+        <div className="store-status-row">
+          <span className={`store-pill ${storeInfo.open ? 'store-pill-open' : 'store-pill-closed'}`}>
+            {storeInfo.open ? 'Open' : 'Closed'}
+          </span>
+          <span className="store-mode-desc">
+            {storeInfo.mode === 'open' ? 'Manual override — taking orders'
+              : storeInfo.mode === 'closed' ? 'Manual override — not taking orders'
+              : `On schedule: ${DAY_NAMES[storeInfo.hours.day]}s, ${fmtTime(storeInfo.hours.start)}–${fmtTime(storeInfo.hours.end)} ET`}
+          </span>
+        </div>
+      </div>
+      <div className="store-controls">
+        <div className="store-modes" role="group" aria-label="Store mode">
+          <button type="button"
+            className={storeInfo.mode === 'open' ? 'active' : ''}
+            disabled={savingStore}
+            onClick={() => saveStore({ mode: 'open', hours: currentHours() })}
+          >
+            Open now
+          </button>
+          <button type="button"
+            className={storeInfo.mode === 'closed' ? 'active' : ''}
+            disabled={savingStore}
+            onClick={() => saveStore({ mode: 'closed', hours: currentHours() })}
+          >
+            Close
+          </button>
+          <button type="button"
+            className={storeInfo.mode === 'auto' ? 'active' : ''}
+            disabled={savingStore}
+            onClick={() => saveStore({ mode: 'auto', hours: currentHours() })}
+          >
+            Use schedule
+          </button>
+        </div>
+        <div className="store-schedule">
+          <select
+            aria-label="Open day"
+            value={draft.day}
+            onChange={(e) => setDraft((d) => ({ ...d, day: e.target.value }))}
+          >
+            {DAY_NAMES.map((d, i) => <option key={d} value={i}>{d}s</option>)}
+          </select>
+          <input aria-label="Opens at" type="time" value={draft.start} onChange={(e) => setDraft((d) => ({ ...d, start: e.target.value }))} />
+          <span className="store-schedule-dash">–</span>
+          <input aria-label="Closes at" type="time" value={draft.end} onChange={(e) => setDraft((d) => ({ ...d, end: e.target.value }))} />
+          <button type="button"
+            className="store-save"
+            disabled={savingStore}
+            onClick={() => saveStore({ mode: storeInfo.mode, hours: currentHours() })}
+          >
+            Save times
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AvailabilityPanel({ unavailableSet, savingStore, toggleItem }) {
+  return (
+    <div className="avail-panel">
+      <div className="store-panel-label"><UtensilsCrossed size={13} /> Availability — tap to 86 an item</div>
+      <div className="avail-groups">
+        {MENU_DATA.map((section) => (
+          <div key={section.category} className="avail-group">
+            <div className="avail-group-title">{section.category}</div>
+            <div className="avail-chips">
+              {section.items.map((item) => {
+                const off = unavailableSet.has(item.name);
+                return (
+                  <button type="button"
+                    key={item.name}
+                    className={`avail-chip${off ? ' avail-chip-off' : ''}`}
+                    disabled={savingStore}
+                    onClick={() => toggleItem(item.name)}
+                    aria-pressed={off}
+                    aria-label={`${item.name}: ${off ? 'sold out — tap to restore' : 'available — tap to mark sold out'}`}
+                  >
+                    {displayName(item.name)}
+                    {off && <span className="avail-chip-tag">86&apos;d</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Board({ orders, advance, cancel }) {
+  return (
+    <div className="board">
+      {COLUMNS.map((col) => {
+        const list = orders.filter((o) => o.status === col.status);
+        return (
+          <div key={col.status} className="board-col">
+            <div className="board-col-title">{col.title} <span className="board-count">{list.length}</span></div>
+            {list.length === 0 && <div className="board-empty">—</div>}
+            {list.map((o) => (
+              <OrderCard key={o.id} order={o} column={col} onAdvance={advance} onCancel={cancel} />
+            ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function FinishedList({ finished }) {
+  return (
+    <div className="admin-finished">
+      <div className="board-col-title"><RotateCcw size={11} /> Finished ({finished.length})</div>
+      {finished.map((o) => (
+        <div key={o.id} className="finished-row">
+          <span className="oc-code">#{o.code}</span>
+          <span>{o.name}</span>
+          <span className="finished-items">
+            {o.items.map((it) => `${it.qty}× ${displayName(it.name)}${it.addons?.length ? ` (+ ${it.addons.map((a) => displayName(a.name)).join(', ')})` : ''}`).join(', ')}
+          </span>
+          <span>{fmtMoney(o.totalCents)}</span>
+          <span className={`finished-status finished-${o.status}`}>{o.status === 'done' ? 'picked up' : 'cancelled'}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function AdminPage({ nav }) {
-  const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY) || '');
+  // null = still checking with the server; the cookie is HttpOnly so this
+  // page can't just read it out of storage to know if it's logged in.
+  const [authed, setAuthed] = useState(null);
   const [orders, setOrders] = useState(null); // null = not loaded yet
   const [notice, setNotice] = useState('');
   const [storeInfo, setStoreInfo] = useState(null);
@@ -110,18 +245,24 @@ export function AdminPage({ nav }) {
 
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
-  const logout = useCallback((message = '') => {
-    localStorage.removeItem(TOKEN_KEY);
-    setToken('');
+  useEffect(() => {
+    api('/api/login').then((d) => setAuthed(d.authenticated)).catch(() => setAuthed(false));
+  }, []);
+
+  const logout = useCallback(async (message = '') => {
+    // Only the server can clear an HttpOnly cookie — there's nothing for this
+    // page to remove locally.
+    try { await api('/api/login', { method: 'DELETE' }); } catch { /* clearing client state below is enough */ }
     setOrders(null);
     setNotice(message);
+    setAuthed(false);
   }, []);
 
   const load = useCallback(async () => {
-    if (!token) return;
+    if (!authed) return;
     try {
       const [{ orders: list }, status] = await Promise.all([
-        api('/api/orders', { token }),
+        api('/api/orders'),
         api('/api/store'),
       ]);
       setOrders(list);
@@ -134,12 +275,12 @@ export function AdminPage({ nav }) {
     } catch (err) {
       if (err.status === 401) logout('Session expired — log in again.');
     }
-  }, [token, logout]);
+  }, [authed, logout]);
 
   const saveStore = async (next) => {
     setSavingStore(true);
     try {
-      const status = await api('/api/store', { method: 'PATCH', token, body: next });
+      const status = await api('/api/store', { method: 'PATCH', body: next });
       setStoreInfo(status);
     } catch (err) {
       if (err.status === 401) logout('Session expired — log in again.');
@@ -162,17 +303,17 @@ export function AdminPage({ nav }) {
   };
 
   useEffect(() => {
-    if (!token) return undefined;
+    if (!authed) return undefined;
     load();
     const t = setInterval(load, POLL_MS);
     return () => clearInterval(t);
-  }, [token, load]);
+  }, [authed, load]);
 
   const advance = async (order, status) => {
     // Optimistic update; the next poll reconciles
     setOrders((list) => list.map((o) => (o.id === order.id ? { ...o, status } : o)));
     try {
-      await api(`/api/orders?id=${encodeURIComponent(order.id)}`, { method: 'PATCH', token, body: { status } });
+      await api(`/api/orders?id=${encodeURIComponent(order.id)}`, { method: 'PATCH', body: { status } });
     } catch {
       load();
     }
@@ -215,11 +356,15 @@ export function AdminPage({ nav }) {
 
   const finished = orders ? orders.filter((o) => o.status === 'done' || o.status === 'cancelled') : [];
 
-  if (!token) {
+  if (authed === null) {
+    return <div className="admin-page"><div className="admin-loading">Checking session…</div></div>;
+  }
+
+  if (!authed) {
     return (
       <div className="admin-page">
         {notice && <div className="admin-notice">{notice}</div>}
-        <Login onToken={(t) => { setNotice(''); setToken(t); }} />
+        <Login onSuccess={() => { setNotice(''); setAuthed(true); }} />
         <Footer nav={nav} />
       </div>
     );
@@ -240,96 +385,14 @@ export function AdminPage({ nav }) {
 
       <div className="admin-body">
       {storeInfo && (
-        <div className="store-panel">
-          <div className="store-status">
-            <div className="store-panel-label"><Store size={13} /> Storefront</div>
-            <div className="store-status-row">
-              <span className={`store-pill ${storeInfo.open ? 'store-pill-open' : 'store-pill-closed'}`}>
-                {storeInfo.open ? 'Open' : 'Closed'}
-              </span>
-              <span className="store-mode-desc">
-                {storeInfo.mode === 'open' ? 'Manual override — taking orders'
-                  : storeInfo.mode === 'closed' ? 'Manual override — not taking orders'
-                  : `On schedule: ${DAY_NAMES[storeInfo.hours.day]}s, ${fmtTime(storeInfo.hours.start)}–${fmtTime(storeInfo.hours.end)} ET`}
-              </span>
-            </div>
-          </div>
-          <div className="store-controls">
-            <div className="store-modes" role="group" aria-label="Store mode">
-              <button type="button"
-                className={storeInfo.mode === 'open' ? 'active' : ''}
-                disabled={savingStore}
-                onClick={() => saveStore({ mode: 'open', hours: currentHours() })}
-              >
-                Open now
-              </button>
-              <button type="button"
-                className={storeInfo.mode === 'closed' ? 'active' : ''}
-                disabled={savingStore}
-                onClick={() => saveStore({ mode: 'closed', hours: currentHours() })}
-              >
-                Close
-              </button>
-              <button type="button"
-                className={storeInfo.mode === 'auto' ? 'active' : ''}
-                disabled={savingStore}
-                onClick={() => saveStore({ mode: 'auto', hours: currentHours() })}
-              >
-                Use schedule
-              </button>
-            </div>
-            <div className="store-schedule">
-              <select
-                aria-label="Open day"
-                value={draft.day}
-                onChange={(e) => setDraft((d) => ({ ...d, day: e.target.value }))}
-              >
-                {DAY_NAMES.map((d, i) => <option key={d} value={i}>{d}s</option>)}
-              </select>
-              <input aria-label="Opens at" type="time" value={draft.start} onChange={(e) => setDraft((d) => ({ ...d, start: e.target.value }))} />
-              <span className="store-schedule-dash">–</span>
-              <input aria-label="Closes at" type="time" value={draft.end} onChange={(e) => setDraft((d) => ({ ...d, end: e.target.value }))} />
-              <button type="button"
-                className="store-save"
-                disabled={savingStore}
-                onClick={() => saveStore({ mode: storeInfo.mode, hours: currentHours() })}
-              >
-                Save times
-              </button>
-            </div>
-          </div>
-        </div>
+        <StorePanel
+          storeInfo={storeInfo} savingStore={savingStore}
+          draft={draft} setDraft={setDraft} saveStore={saveStore} currentHours={currentHours}
+        />
       )}
 
       {storeInfo && (
-        <div className="avail-panel">
-          <div className="store-panel-label"><UtensilsCrossed size={13} /> Availability — tap to 86 an item</div>
-          <div className="avail-groups">
-            {MENU_DATA.map((section) => (
-              <div key={section.category} className="avail-group">
-                <div className="avail-group-title">{section.category}</div>
-                <div className="avail-chips">
-                  {section.items.map((item) => {
-                    const off = unavailableSet.has(item.name);
-                    return (
-                      <button type="button"
-                        key={item.name}
-                        className={`avail-chip${off ? ' avail-chip-off' : ''}`}
-                        disabled={savingStore}
-                        onClick={() => toggleItem(item.name)}
-                        aria-pressed={off}
-                        aria-label={`${item.name}: ${off ? 'sold out — tap to restore' : 'available — tap to mark sold out'}`}
-                      >
-                        {displayName(item.name)}
-                        {off && <span className="avail-chip-tag">86&apos;d</span>}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        <AvailabilityPanel unavailableSet={unavailableSet} savingStore={savingStore} toggleItem={toggleItem} />
       )}
 
       <div className="fire-panel">
@@ -357,38 +420,10 @@ export function AdminPage({ nav }) {
       {orders === null ? (
         <div className="admin-loading">Loading orders…</div>
       ) : (
-        <div className="board">
-          {COLUMNS.map((col) => {
-            const list = orders.filter((o) => o.status === col.status);
-            return (
-              <div key={col.status} className="board-col">
-                <div className="board-col-title">{col.title} <span className="board-count">{list.length}</span></div>
-                {list.length === 0 && <div className="board-empty">—</div>}
-                {list.map((o) => (
-                  <OrderCard key={o.id} order={o} column={col} onAdvance={advance} onCancel={cancel} />
-                ))}
-              </div>
-            );
-          })}
-        </div>
+        <Board orders={orders} advance={advance} cancel={cancel} />
       )}
 
-      {finished.length > 0 && (
-        <div className="admin-finished">
-          <div className="board-col-title"><RotateCcw size={11} /> Finished ({finished.length})</div>
-          {finished.map((o) => (
-            <div key={o.id} className="finished-row">
-              <span className="oc-code">#{o.code}</span>
-              <span>{o.name}</span>
-              <span className="finished-items">
-                {o.items.map((it) => `${it.qty}× ${displayName(it.name)}${it.addons?.length ? ` (+ ${it.addons.map((a) => displayName(a.name)).join(', ')})` : ''}`).join(', ')}
-              </span>
-              <span>{fmtMoney(o.totalCents)}</span>
-              <span className={`finished-status finished-${o.status}`}>{o.status === 'done' ? 'picked up' : 'cancelled'}</span>
-            </div>
-          ))}
-        </div>
-      )}
+      {finished.length > 0 && <FinishedList finished={finished} />}
       </div>
 
       <Footer nav={nav} />

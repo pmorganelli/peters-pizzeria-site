@@ -65,11 +65,34 @@ export function checkPassword(password) {
   return crypto.timingSafeEqual(a, b);
 }
 
+// The token lives in an HttpOnly cookie — client-side JS (and any XSS on the
+// page) can never read it, only the browser automatically resending it to us.
+const COOKIE_NAME = 'pp_admin';
+const COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
+
+function parseCookies(req) {
+  const header = req.headers.cookie || '';
+  const out = {};
+  for (const part of header.split(';')) {
+    const i = part.indexOf('=');
+    if (i === -1) continue;
+    out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim());
+  }
+  return out;
+}
+
+export function setAuthCookie(res, value) {
+  res.setHeader('Set-Cookie', `${COOKIE_NAME}=${encodeURIComponent(value)}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${COOKIE_MAX_AGE}`);
+}
+
+export function clearAuthCookie(res) {
+  res.setHeader('Set-Cookie', `${COOKIE_NAME}=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0`);
+}
+
 export function isAdmin(req) {
   const token = adminToken();
   if (!token) return false;
-  const header = req.headers.authorization || '';
-  const provided = header.startsWith('Bearer ') ? header.slice(7) : '';
+  const provided = parseCookies(req)[COOKIE_NAME] || '';
   if (provided.length !== token.length) return false;
   return crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(token));
 }

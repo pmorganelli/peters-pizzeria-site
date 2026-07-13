@@ -1,7 +1,9 @@
-import { readBody, send, checkPassword, adminToken, devMode, clientIp } from './_lib/util.js';
+import { readBody, send, checkPassword, adminToken, devMode, clientIp, isAdmin, setAuthCookie, clearAuthCookie } from './_lib/util.js';
 import { rateLimit } from './_lib/store.js';
 
 export default async function handler(req, res) {
+  if (req.method === 'GET') return send(res, 200, { authenticated: isAdmin(req) });
+  if (req.method === 'DELETE') { clearAuthCookie(res); return send(res, 200, { ok: true }); }
   if (req.method !== 'POST') return send(res, 405, { error: 'Method not allowed' });
 
   // Brute-force guard: a human mistypes a few times; a bot doesn't get more.
@@ -20,5 +22,8 @@ export default async function handler(req, res) {
   if (!checkPassword(body.password)) {
     return send(res, 401, { error: 'Wrong password' });
   }
-  return send(res, 200, { token: adminToken(), devMode: devMode() });
+  // The token never reaches the response body or client-side JS — only this
+  // HttpOnly cookie, which the browser resends automatically and no script can read.
+  setAuthCookie(res, adminToken());
+  return send(res, 200, { devMode: devMode() });
 }

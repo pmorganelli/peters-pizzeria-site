@@ -879,7 +879,8 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 44px 60p
 .finished-cancelled { color: var(--red-light); }
 
 /* ── LIGHTBOX ───────────────────────────────────────────────────────── */
-.lb-overlay { position: fixed; inset: 0; z-index: 600; background: rgba(15,8,2,0.96); display: flex; align-items: center; justify-content: center; touch-action: none; overscroll-behavior: contain; animation: lb-overlay-in 0.18s ease; }
+.lb-overlay { position: fixed; inset: 0; z-index: 600; margin: 0; border: none; padding: 0; max-width: none; max-height: none; color: inherit; background: rgba(15,8,2,0.96); display: flex; align-items: center; justify-content: center; touch-action: none; overscroll-behavior: contain; animation: lb-overlay-in 0.18s ease; }
+.lb-overlay::backdrop { background: transparent; }
 .lb-img { max-width: 88vw; max-height: 88vh; object-fit: contain; display: block; user-select: none; animation: lb-img-in 0.22s ease; }
 @keyframes lb-overlay-in { from { opacity: 0; } }
 @keyframes lb-img-in { from { opacity: 0; transform: scale(0.965); } }
