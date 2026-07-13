@@ -44,7 +44,7 @@ export function ArticlePage({ article, nav }) {
   return (
     <div className="article-page">
       <div className="article-back-row">
-        <button className="article-back" onClick={() => nav('blog')}>
+        <button type="button" className="article-back" onClick={() => nav('blog')}>
           <ChevronLeft size={14} strokeWidth={1.5} />
           Back to Blog
         </button>
@@ -80,8 +80,8 @@ export function ArticlePage({ article, nav }) {
             {article.content.intro}
           </p>
         )}
-        {(article.content.sections ?? []).map((s, i) => (
-          <div key={i}>
+        {(article.content.sections ?? []).map((s) => (
+          <div key={s.heading}>
             <h2>{s.heading}</h2>
             {/* Magazine treatment: a lone figure floats right and the text wraps around it */}
             {s.images && s.images.length === 1 && (
@@ -112,7 +112,7 @@ export function ArticlePage({ article, nav }) {
       {next && (
         <div className="article-next">
           <div className="article-next-label">Read next</div>
-          <button className="article-next-card" onClick={() => nav('article', next)} aria-label={`Read next: ${next.title}`}>
+          <button type="button" className="article-next-card" onClick={() => nav('article', next)} aria-label={`Read next: ${next.title}`}>
             <img src={thumbSrc(next.img)} alt="" loading="lazy" decoding="async" />
             <div>
               <div className="article-next-meta">{next.tag} · {next.date}</div>

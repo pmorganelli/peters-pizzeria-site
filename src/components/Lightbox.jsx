@@ -47,20 +47,20 @@ export function Lightbox({ photos, index, onClose, onPrev, onNext }) {
         touchX.current = null;
       }}
     >
-      <button className="lb-close" aria-label="Close lightbox" onClick={(e) => { e.stopPropagation(); onClose(); }}><X size={13} /> close</button>
+      <button type="button" className="lb-close" aria-label="Close lightbox" onClick={(e) => { e.stopPropagation(); onClose(); }}><X size={13} /> close</button>
       <img
         key={photos[index]}
         className="lb-img"
         src={webSrc(photos[index])}
         srcSet={`${webSrc(photos[index])} 1600w, ${photos[index]} 3600w`}
         sizes="88vw"
-        alt="Photo"
+        alt="Enlarged view"
         onClick={(e) => e.stopPropagation()}
       />
       {photos.length > 1 && (
         <>
-          <button className="lb-arrow lb-prev" aria-label="Previous photo" onClick={(e) => { e.stopPropagation(); onPrev(); }}><ArrowLeft size={20} strokeWidth={1.5} /></button>
-          <button className="lb-arrow lb-next" aria-label="Next photo" onClick={(e) => { e.stopPropagation(); onNext(); }}><ArrowRight size={20} strokeWidth={1.5} /></button>
+          <button type="button" className="lb-arrow lb-prev" aria-label="Previous photo" onClick={(e) => { e.stopPropagation(); onPrev(); }}><ArrowLeft size={20} strokeWidth={1.5} /></button>
+          <button type="button" className="lb-arrow lb-next" aria-label="Next photo" onClick={(e) => { e.stopPropagation(); onNext(); }}><ArrowRight size={20} strokeWidth={1.5} /></button>
           <div className="lb-counter">{index + 1} / {photos.length}</div>
         </>
       )}

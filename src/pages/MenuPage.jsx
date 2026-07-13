@@ -85,7 +85,7 @@ export function MenuPage({ nav }) {
             &ldquo;Can you save me a slice?&rdquo; — Jonah Pflaster
             <span className="menu-quote-alt">&ldquo;really f*cking good&rdquo; — Harrison Tun</span>
           </div>
-          <button
+          <button type="button"
             className="btn-primary"
             style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
             onClick={() => nav('order')}

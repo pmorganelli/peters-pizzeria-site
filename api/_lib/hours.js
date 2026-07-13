@@ -12,6 +12,20 @@ export const DEFAULT_SETTINGS = {
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 const toMins = (s) => { const [h, m] = s.split(':').map(Number); return h * 60 + m; };
 
+// Cached per timezone: Intl.DateTimeFormat construction loads locale-data
+// tables and is too slow to redo on every isOpenNow() call.
+const dayPartsFormatters = new Map();
+function dayPartsFormatter(tz) {
+  let fmt = dayPartsFormatters.get(tz);
+  if (!fmt) {
+    fmt = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz, weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    });
+    dayPartsFormatters.set(tz, fmt);
+  }
+  return fmt;
+}
+
 export function validateSettings(body) {
   const mode = body?.mode;
   if (!['open', 'closed', 'auto'].includes(mode)) return null;
@@ -29,9 +43,7 @@ export function isOpenNow(settings, now = new Date()) {
   if (settings.mode === 'open') return true;
   if (settings.mode === 'closed') return false;
   const { day, start, end, tz } = settings.hours;
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: tz, weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
-  }).formatToParts(now);
+  const parts = dayPartsFormatter(tz).formatToParts(now);
   const get = (type) => parts.find((p) => p.type === type)?.value;
   const dayIdx = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(get('weekday'));
   const mins = Number(get('hour')) * 60 + Number(get('minute'));

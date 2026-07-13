@@ -44,7 +44,7 @@ export function BlogPage({ nav, openArticle }) {
       <div className="blog-body">
         <div className="blog-grid">
           {POSTS_BY_DATE.map((post, i) => (
-            <button
+            <button type="button"
               key={post.id}
               ref={ref(i)}
               className={`blog-card reveal reveal-delay-${(i % 3) + 1}`}

@@ -154,7 +154,7 @@ export function StudioPage({ nav }) {
           <div className="studio-label">Photo</div>
           <div className="studio-photos">
             {ALL_PHOTOS.map((src) => (
-              <button
+              <button type="button"
                 key={src}
                 className={`studio-photo${photo === src ? ' selected' : ''}`}
                 onClick={() => setPhoto(src)}
@@ -165,7 +165,7 @@ export function StudioPage({ nav }) {
             ))}
           </div>
 
-          <button
+          <button type="button"
             className="btn-primary"
             style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
             onClick={download}

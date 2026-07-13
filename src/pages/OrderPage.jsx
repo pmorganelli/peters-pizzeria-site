@@ -10,7 +10,7 @@ import { DAY_NAMES, displayName, fmtMoney, fmtTime, parsePriceCents } from '../u
 const SAVED_KEY = 'pp_order_id';
 const CART_KEY = 'pp_cart2';
 const LEGACY_CART_KEY = 'pp_cart';
-const WHO_KEY = 'pp_who';
+const WHO_KEY = 'pp_who:v1';
 
 const readJSON = (key, fallback) => {
   try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
@@ -39,16 +39,16 @@ function readCart() {
 function Stepper({ qty, onChange }) {
   if (!qty) {
     return (
-      <button className="order-add-btn" onClick={() => onChange(1)}>
+      <button type="button" className="order-add-btn" onClick={() => onChange(1)}>
         <Plus size={12} /> Add
       </button>
     );
   }
   return (
     <div className="order-stepper">
-      <button aria-label="Remove one" onClick={() => onChange(qty - 1)}><Minus size={13} /></button>
+      <button type="button" aria-label="Remove one" onClick={() => onChange(qty - 1)}><Minus size={13} /></button>
       <span>{qty}</span>
-      <button aria-label="Add one" onClick={() => onChange(Math.min(30, qty + 1))}><Plus size={13} /></button>
+      <button type="button" aria-label="Add one" onClick={() => onChange(Math.min(30, qty + 1))}><Plus size={13} /></button>
     </div>
   );
 }
@@ -72,7 +72,7 @@ function ClosedCard({ store, nav }) {
           </p>
         )}
         <div className="confirm-actions">
-          <button
+          <button type="button"
             className="btn-primary"
             style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
             onClick={() => nav('menu')}
@@ -316,7 +316,7 @@ export function OrderPage({ nav }) {
                 {cartLines.map((l) => (
                   <div key={l.key}>
                     <div className="order-line">
-                      <button
+                      <button type="button"
                         className="order-line-x"
                         aria-label={`Remove ${l.name}${l.addons.length ? ` with ${l.addons.map(displayName).join(', ')}` : ''}`}
                         onClick={() => removeLine(l)}
@@ -359,7 +359,7 @@ export function OrderPage({ nav }) {
 
             {error && <div className="order-error">{error}</div>}
 
-            <button
+            <button type="button"
               className="btn-primary order-place"
               disabled={!canPlace}
               onClick={place}
@@ -378,7 +378,7 @@ export function OrderPage({ nav }) {
       )}
 
       {!order && !loadingSaved && store?.open && cartLines.length > 0 && (
-        <button
+        <button type="button"
           className="order-mobilebar"
           onClick={() => document.querySelector('.order-summary')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
         >

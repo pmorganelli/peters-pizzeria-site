@@ -26,7 +26,7 @@ export function Footer({ nav }) {
         <div>
           <div className="footer-col-title">Navigate</div>
           {PAGES.map(([id, label]) => (
-            <button key={id} className="footer-link" onClick={() => nav(id)}>
+            <button type="button" key={id} className="footer-link" onClick={() => nav(id)}>
               {label}
             </button>
           ))}
@@ -62,7 +62,7 @@ export function Footer({ nav }) {
 
       <div className="footer-bottom">
         <span>© 2026 Peter&apos;s Pizzeria · Not affiliated with Tufts University</span>
-        <button onClick={() => nav('admin')}>Admin</button>
+        <button type="button" onClick={() => nav('admin')}>Admin</button>
       </div>
     </footer>
   );

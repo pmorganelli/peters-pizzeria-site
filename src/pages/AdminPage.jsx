@@ -48,7 +48,6 @@ function Login({ onToken }) {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            autoFocus
             autoComplete="current-password"
           />
         </label>
@@ -87,11 +86,11 @@ function OrderCard({ order, column, onAdvance, onCancel }) {
         {order.contact && <span className="oc-contact">{order.contact}</span>}
       </div>
       <div className="oc-actions">
-        <button className="oc-advance" onClick={() => onAdvance(order, column.next)}>
+        <button type="button" className="oc-advance" onClick={() => onAdvance(order, column.next)}>
           <column.Icon size={12} /> {column.action}
         </button>
         {column.status === 'new' && (
-          <button className="oc-cancel" aria-label={`Cancel order ${order.code}`} onClick={() => onCancel(order)}>
+          <button type="button" className="oc-cancel" aria-label={`Cancel order ${order.code}`} onClick={() => onCancel(order)}>
             <X size={12} />
           </button>
         )}
@@ -183,6 +182,8 @@ export function AdminPage({ nav }) {
     if (window.confirm(`Cancel order #${order.code} for ${order.name}?`)) advance(order, 'cancelled');
   };
 
+  const unavailableSet = useMemo(() => new Set(storeInfo?.unavailable || []), [storeInfo]);
+
   const fireNext = useMemo(() => {
     if (!orders) return { pizzas: [], addons: [], waiting: 0, oldest: null };
     const queued = orders.filter((o) => o.status === 'new');
@@ -233,7 +234,7 @@ export function AdminPage({ nav }) {
         </div>
         <div className="admin-head-right">
           <span className="admin-live"><span className="pulse-dot" aria-hidden="true" /> Live · refreshes every 5s</span>
-          <button className="admin-logout" onClick={() => logout()}><LogOut size={12} /> Log out</button>
+          <button type="button" className="admin-logout" onClick={() => logout()}><LogOut size={12} /> Log out</button>
         </div>
       </div>
 
@@ -255,21 +256,21 @@ export function AdminPage({ nav }) {
           </div>
           <div className="store-controls">
             <div className="store-modes" role="group" aria-label="Store mode">
-              <button
+              <button type="button"
                 className={storeInfo.mode === 'open' ? 'active' : ''}
                 disabled={savingStore}
                 onClick={() => saveStore({ mode: 'open', hours: currentHours() })}
               >
                 Open now
               </button>
-              <button
+              <button type="button"
                 className={storeInfo.mode === 'closed' ? 'active' : ''}
                 disabled={savingStore}
                 onClick={() => saveStore({ mode: 'closed', hours: currentHours() })}
               >
                 Close
               </button>
-              <button
+              <button type="button"
                 className={storeInfo.mode === 'auto' ? 'active' : ''}
                 disabled={savingStore}
                 onClick={() => saveStore({ mode: 'auto', hours: currentHours() })}
@@ -288,7 +289,7 @@ export function AdminPage({ nav }) {
               <input aria-label="Opens at" type="time" value={draft.start} onChange={(e) => setDraft((d) => ({ ...d, start: e.target.value }))} />
               <span className="store-schedule-dash">–</span>
               <input aria-label="Closes at" type="time" value={draft.end} onChange={(e) => setDraft((d) => ({ ...d, end: e.target.value }))} />
-              <button
+              <button type="button"
                 className="store-save"
                 disabled={savingStore}
                 onClick={() => saveStore({ mode: storeInfo.mode, hours: currentHours() })}
@@ -309,9 +310,9 @@ export function AdminPage({ nav }) {
                 <div className="avail-group-title">{section.category}</div>
                 <div className="avail-chips">
                   {section.items.map((item) => {
-                    const off = (storeInfo.unavailable || []).includes(item.name);
+                    const off = unavailableSet.has(item.name);
                     return (
-                      <button
+                      <button type="button"
                         key={item.name}
                         className={`avail-chip${off ? ' avail-chip-off' : ''}`}
                         disabled={savingStore}

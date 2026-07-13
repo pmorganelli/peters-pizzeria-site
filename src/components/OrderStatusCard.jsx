@@ -95,7 +95,7 @@ export function OrderStatusCard({ order, onNewOrder }) {
           <a className="btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }} href={VENMO_URL} target="_blank" rel="noreferrer">
             Pay {fmtMoney(order.totalCents)} on Venmo <ArrowRight size={13} />
           </a>
-          <button className="text-link-btn" onClick={onNewOrder}>Start another order</button>
+          <button type="button" className="text-link-btn" onClick={onNewOrder}>Start another order</button>
         </div>
         <div className="confirm-fineprint">
           Venmo @Peter-Morganelli24 or Zelle — pay now or at the window. Current status: {STATUS_LABELS[order.status]}.

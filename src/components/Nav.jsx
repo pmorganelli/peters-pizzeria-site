@@ -19,14 +19,14 @@ export function Nav({ page, nav }) {
 
   return (
     <nav className={[scrolled ? 'scrolled' : '', isDark ? 'nav-dark' : ''].filter(Boolean).join(' ')}>
-      <button className="nav-logo-wrap" onClick={() => doNav('home')} aria-label="Go to home page">
+      <button type="button" className="nav-logo-wrap" onClick={() => doNav('home')} aria-label="Go to home page">
         <LogoBadge size={44} />
         <div className="nav-logo-text">Peter&apos;s Pizzeria</div>
       </button>
 
       <div className={`nav-links${menuOpen ? ' mobile-open' : ''}`}>
         {PAGES.map(([id, label]) => (
-          <button
+          <button type="button"
             key={id}
             className={`nav-link ${page === id ? 'active' : ''}`}
             onClick={() => doNav(id)}
@@ -36,9 +36,9 @@ export function Nav({ page, nav }) {
         ))}
       </div>
 
-      <button className="nav-order-btn" onClick={() => doNav('order')}>Order Now</button>
+      <button type="button" className="nav-order-btn" onClick={() => doNav('order')}>Order Now</button>
 
-      <button
+      <button type="button"
         className={`nav-hamburger${menuOpen ? ' open' : ''}`}
         onClick={() => setMenuOpen((o) => !o)}
         aria-label="Menu"

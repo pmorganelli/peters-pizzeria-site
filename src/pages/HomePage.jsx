@@ -74,8 +74,8 @@ export function HomePage({ nav, openArticle, openLightbox }) {
           one shared kitchen, and a 72-hour ferment.
         </p>
         <div className="hero-ctas">
-          <button className="btn-primary" onClick={() => nav('menu')}>See the Menu</button>
-          <button className="btn-ghost"   onClick={() => nav('blog')}>Read the Blog</button>
+          <button type="button" className="btn-primary" onClick={() => nav('menu')}>See the Menu</button>
+          <button type="button" className="btn-ghost"   onClick={() => nav('blog')}>Read the Blog</button>
         </div>
         <div className="hero-scroll" aria-hidden="true">
           <div className="scroll-line" />
@@ -100,10 +100,10 @@ export function HomePage({ nav, openArticle, openLightbox }) {
 
         <div className="story-grid">
           <div ref={ref(1)} className="reveal reveal-delay-1 story-photo-stack">
-            <button className="story-photo-btn" onClick={() => openLightbox(STORY_PHOTOS, 0)} aria-label="View team photo">
+            <button type="button" className="story-photo-btn" onClick={() => openLightbox(STORY_PHOTOS, 0)} aria-label="View team photo">
               <img className="story-photo-main" src={webSrc('/photos/team.jpg')} alt="The team" />
             </button>
-            <button className="story-photo-btn story-photo-inset-btn" onClick={() => openLightbox(STORY_PHOTOS, 1)} aria-label="View crew photo">
+            <button type="button" className="story-photo-btn story-photo-inset-btn" onClick={() => openLightbox(STORY_PHOTOS, 1)} aria-label="View crew photo">
               <img className="story-photo-inset" src={thumbSrc('/photos/hug1.jpg')} alt="The crew" />
             </button>
           </div>
@@ -127,7 +127,7 @@ export function HomePage({ nav, openArticle, openLightbox }) {
       {/* ── PHOTO STRIP ── */}
       <div className="photo-strip">
         {STRIP_ITEMS.map((p, i) => (
-          <button key={p.src} className="photo-strip-item" onClick={() => openLightbox(STRIP_SRCS, i)} aria-label={p.alt}>
+          <button type="button" key={p.src} className="photo-strip-item" onClick={() => openLightbox(STRIP_SRCS, i)} aria-label={p.alt}>
             <img src={thumbSrc(p.src)} alt={p.alt} loading="lazy" decoding="async" />
           </button>
         ))}
@@ -142,13 +142,13 @@ export function HomePage({ nav, openArticle, openLightbox }) {
               This week&apos;s <em style={{ color: 'var(--red)' }}>specials.</em>
             </h2>
           </div>
-          <button className="specials-see-all" onClick={() => nav('menu')}>Full Menu <ArrowRight size={13} /></button>
+          <button type="button" className="specials-see-all" onClick={() => nav('menu')}>Full Menu <ArrowRight size={13} /></button>
         </div>
         <div className="specials-grid">
           {SPECIALS.map((s, i) => {
             const soldOut = unavailable.has(s.name);
             return (
-              <button
+              <button type="button"
                 key={s.name}
                 className={`special-card reveal reveal-delay-${i + 1}${soldOut ? ' special-sold-out' : ''}`}
                 ref={ref(3 + i)}
@@ -172,7 +172,7 @@ export function HomePage({ nav, openArticle, openLightbox }) {
             <div className="section-label">From the Blog</div>
             <h2 className="section-title">Latest from<br /><em>the kitchen.</em></h2>
           </div>
-          <button
+          <button type="button"
             className="text-link-btn"
             onClick={() => nav('blog')}
           >
@@ -181,7 +181,7 @@ export function HomePage({ nav, openArticle, openLightbox }) {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(320px, 100%), 1fr))', gap: 28 }}>
           {LATEST_POSTS.map((post, i) => (
-            <button
+            <button type="button"
               key={post.id}
               ref={ref(7 + i)}
               className={`blog-card reveal reveal-delay-${i + 1}`}
@@ -227,7 +227,7 @@ export function HomePage({ nav, openArticle, openLightbox }) {
             </a>{' '}
             on Instagram to keep up with the latest!
           </p>
-          <button
+          <button type="button"
             className="btn-primary"
             style={{ marginTop: 28, background: 'var(--gold)', color: 'var(--ink)', display: 'inline-flex', alignItems: 'center', gap: 8 }}
             onClick={() => nav('gallery')}
@@ -236,13 +236,13 @@ export function HomePage({ nav, openArticle, openLightbox }) {
           </button>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-          <button className="photo-btn" onClick={() => openLightbox(COMMUNITY_PHOTOS, 0)} aria-label="View kitchen photo">
+          <button type="button" className="photo-btn" onClick={() => openLightbox(COMMUNITY_PHOTOS, 0)} aria-label="View kitchen photo">
             <img src={thumbSrc('/photos/img_1082.jpeg')} alt="Kitchen" loading="lazy" decoding="async" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block' }} />
           </button>
-          <button className="photo-btn" onClick={() => openLightbox(COMMUNITY_PHOTOS, 1)} aria-label="View team photo">
+          <button type="button" className="photo-btn" onClick={() => openLightbox(COMMUNITY_PHOTOS, 1)} aria-label="View team photo">
             <img src={thumbSrc('/photos/img_6789.jpeg')} alt="Team" loading="lazy" decoding="async" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block' }} />
           </button>
-          <button className="photo-btn" onClick={() => openLightbox(COMMUNITY_PHOTOS, 2)} aria-label="View pizza photo" style={{ gridColumn: '1/-1' }}>
+          <button type="button" className="photo-btn" onClick={() => openLightbox(COMMUNITY_PHOTOS, 2)} aria-label="View pizza photo" style={{ gridColumn: '1/-1' }}>
             <img src={webSrc('/photos/img_1098.jpeg')} alt="Pizza" loading="lazy" decoding="async" style={{ width: '100%', aspectRatio: '3/2', objectFit: 'cover', display: 'block' }} />
           </button>
         </div>

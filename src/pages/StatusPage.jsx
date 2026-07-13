@@ -125,7 +125,7 @@ export function StatusPage({ nav }) {
         <>
           <OrderStatusCard order={order} onNewOrder={newOrder} />
           <div className="confirm-wrap status-not-you">
-            <button className="text-link-btn" onClick={forget}>
+            <button type="button" className="text-link-btn" onClick={forget}>
               Not your order? Look up a different one
             </button>
           </div>
@@ -146,7 +146,7 @@ export function StatusPage({ nav }) {
                 : store?.mode === 'auto' && store?.hours
                   ? `No order yet? Orders open ${DAY_NAMES[store.hours.day]}s, ${fmtTime(store.hours.start)}–${fmtTime(store.hours.end)} (ET) — `
                   : 'No order yet? '}
-              <button className="status-order-link" onClick={() => nav('order')}>order here</button>.
+              <button type="button" className="status-order-link" onClick={() => nav('order')}>order here</button>.
             </div>
           </div>
         </div>

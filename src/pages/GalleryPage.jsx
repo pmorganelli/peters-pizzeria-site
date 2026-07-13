@@ -21,7 +21,7 @@ export function GalleryPage({ nav, openLightbox }) {
 
       <div className="gallery-grid">
         {ALL_PHOTOS.filter((src) => !failed.has(src)).map((src, i, visible) => (
-          <button
+          <button type="button"
             key={src}
             className="gallery-item"
             onClick={() => openLightbox(visible, i)}
@@ -29,7 +29,7 @@ export function GalleryPage({ nav, openLightbox }) {
           >
             <img
               src={thumbSrc(src)}
-              alt={`Peter's Pizzeria photo ${i + 1}`}
+              alt={`Peter's Pizzeria — view ${i + 1}`}
               loading="lazy"
               decoding="async"
               /* Reserving the final box keeps the masonry from reflowing as photos load */
