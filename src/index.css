@@ -613,6 +613,33 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 44px 60p
   transition: background 0.2s, color 0.2s, border-color 0.2s;
 }
 .order-add-btn:hover { background: var(--red); color: white; border-color: var(--red); }
+/* Per-slice add-on chips, shown under a slice row while it's in the cart.
+   One chip row per slice unit so each slice carries its own add-ons. */
+.order-row-open { border-bottom: none; }
+.addon-units {
+  display: flex; flex-direction: column; gap: 7px;
+  padding: 2px 0 14px; border-bottom: 1px solid var(--cream2);
+}
+.addon-unit { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.addon-unit-label {
+  font-family: var(--mono); font-size: 9px; font-weight: 600; letter-spacing: 1.5px;
+  text-transform: uppercase; color: var(--ink2); min-width: 56px;
+}
+.addon-chip {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.5px; text-transform: uppercase;
+  color: var(--ink2); background: white; border: 1px solid rgba(26,18,8,0.2);
+  padding: 5px 11px; border-radius: 999px;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.addon-chip:hover { border-color: var(--green); color: var(--green); }
+.addon-chip-on { background: var(--green); border-color: var(--green); color: white; }
+.addon-chip-on:hover { background: var(--green-light); border-color: var(--green-light); color: white; }
+.addon-chip-86 { opacity: 0.45; cursor: not-allowed; text-decoration: line-through; }
+/* Add-on names under a summary/status line */
+.order-line-addons {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: 1px; text-transform: uppercase;
+  color: var(--green); padding: 0 0 6px 2px;
+}
 .order-stepper { display: inline-flex; align-items: center; border: 1px solid rgba(26,18,8,0.18); border-radius: 999px; overflow: hidden; background: white; }
 .order-stepper button { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; color: var(--red); transition: background 0.15s; }
 .order-stepper button:hover { background: var(--cream2); }
@@ -831,6 +858,7 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 44px 60p
 .oc-items { border-top: 1px solid rgba(254,245,239,0.08); padding-top: 8px; }
 .oc-item { font-family: var(--serif); font-size: 15px; color: rgba(254,245,239,0.75); padding: 2px 0; }
 .oc-item-pizza { color: var(--cream); }
+.oc-item-addons { font-size: 13px; color: rgba(254,245,239,0.55); }
 .oc-qty { font-family: var(--mono); font-size: 12px; color: var(--gold); }
 .oc-notes { font-family: var(--serif); font-size: 13.5px; font-style: italic; color: rgba(254,245,239,0.5); margin-top: 8px; }
 .oc-meta { display: flex; justify-content: space-between; gap: 10px; font-family: var(--mono); font-size: 11px; color: rgba(254,245,239,0.55); margin-top: 10px; }

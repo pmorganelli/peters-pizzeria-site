@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
-import { readBody, readQuery, send, isAdmin, clientIp } from './_lib/util.js';
-import { catalog } from './_lib/catalog.js';
+import { readBody, readQuery, send, isAdmin, clientIp, hasRedisEnv } from './_lib/util.js';
+import { catalog, ADDON_CATEGORY, PIZZA_CATEGORY } from './_lib/catalog.js';
 import { createOrder, getOrder, listOrders, updateOrder, getSettings, rateLimit } from './_lib/store.js';
 import { isOpenNow } from './_lib/hours.js';
 
@@ -27,10 +27,28 @@ function validateItems(rawItems) {
     const entry = menu.get(raw?.name);
     const qty = Number(raw?.qty);
     if (!entry || !Number.isInteger(qty) || qty < 1 || qty > 30) return null;
-    items.push({ name: entry.name, category: entry.category, priceCents: entry.priceCents, qty });
+    const item = { name: entry.name, category: entry.category, priceCents: entry.priceCents, qty };
+    // Optional per-line add-ons: only on slices, only real add-on items, no dupes
+    if (raw.addons !== undefined) {
+      if (!Array.isArray(raw.addons) || raw.addons.length > 8) return null;
+      if (raw.addons.length > 0) {
+        if (entry.category !== PIZZA_CATEGORY) return null;
+        const addons = [];
+        for (const name of new Set(raw.addons)) {
+          const addon = menu.get(name);
+          if (!addon || addon.category !== ADDON_CATEGORY) return null;
+          addons.push({ name: addon.name, priceCents: addon.priceCents });
+        }
+        item.addons = addons;
+      }
+    }
+    items.push(item);
   }
   return items;
 }
+
+const lineTotal = (it) =>
+  (it.priceCents + (it.addons ?? []).reduce((sum, a) => sum + a.priceCents, 0)) * it.qty;
 
 export default async function handler(req, res) {
   try {
@@ -46,15 +64,21 @@ export default async function handler(req, res) {
 
 // POST /api/orders — anyone can place an order (while the store is open)
 async function create(req, res) {
+  // Deployed without Redis, orders would silently land in per-instance memory
+  // and vanish between cold starts. Refuse loudly instead of losing orders.
+  if (process.env.VERCEL && !hasRedisEnv()) {
+    return send(res, 503, { error: 'Ordering is temporarily offline — find us at the window!' });
+  }
+
   const settings = await getSettings();
   if (!isOpenNow(settings)) {
     return send(res, 403, { error: 'We are not taking orders right now — check back when we open!', closed: true });
   }
 
-  // Spam guards: a person places a handful of orders at most, and one
-  // pizza night is bounded — cap per-IP and globally per window.
-  if (!(await rateLimit(`order:${clientIp(req)}`, 5, 600))) {
-    return send(res, 429, { error: 'Too many orders from this device — give it a few minutes.' });
+  // Spam guards: cap per-IP and globally per window. The per-IP cap is
+  // generous because campus wifi puts whole dorms behind one NAT address.
+  if (!(await rateLimit(`order:${clientIp(req)}`, 15, 600))) {
+    return send(res, 429, { error: 'Too many orders from this network — give it a few minutes.' });
   }
   if (!(await rateLimit('order:all', 120, 600))) {
     return send(res, 429, { error: 'We are getting slammed! Please try again in a couple minutes.' });
@@ -72,12 +96,13 @@ async function create(req, res) {
   if (!items) return send(res, 400, { error: 'Your cart has an item we did not recognize — please refresh and try again.' });
 
   const eightySixed = new Set(settings.unavailable ?? []);
-  const soldOut = items.find((it) => eightySixed.has(it.name));
+  const soldOut = items.find((it) => eightySixed.has(it.name))
+    ?? items.flatMap((it) => it.addons ?? []).find((a) => eightySixed.has(a.name));
   if (soldOut) {
     return send(res, 400, { error: `${soldOut.name} just sold out — please remove it from your cart.`, soldOut: soldOut.name });
   }
 
-  const totalCents = items.reduce((sum, it) => sum + it.priceCents * it.qty, 0);
+  const totalCents = items.reduce((sum, it) => sum + lineTotal(it), 0);
   const now = Date.now();
   const order = {
     id: makeId(),
@@ -145,6 +170,13 @@ async function patch(req, res) {
   let body;
   try { body = await readBody(req); } catch { return send(res, 400, { error: 'Invalid JSON' }); }
   if (!id || !STATUSES.includes(body.status)) return send(res, 400, { error: 'Invalid id or status' });
+  // Terminal states are final — a stale admin tab must not resurrect a
+  // cancelled order or un-complete a picked-up one.
+  const existing = await getOrder(id);
+  if (!existing) return send(res, 404, { error: 'Order not found' });
+  if ((existing.status === 'cancelled' || existing.status === 'done') && existing.status !== body.status) {
+    return send(res, 409, { error: `Order is already ${existing.status} — refresh the board.` });
+  }
   const order = await updateOrder(id, { status: body.status });
   if (!order) return send(res, 404, { error: 'Order not found' });
   return send(res, 200, { order });

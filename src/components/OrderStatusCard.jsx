@@ -1,5 +1,5 @@
 import { ArrowRight, Check, Clock, Flame } from 'lucide-react';
-import { displayName, fmtMoney, STATUS_LABELS } from '../utils/orders';
+import { displayName, fmtMoney, itemTotalCents, STATUS_LABELS } from '../utils/orders';
 
 const VENMO_URL = 'https://venmo.com/u/Peter-Morganelli24';
 
@@ -72,10 +72,17 @@ export function OrderStatusCard({ order, onNewOrder }) {
         )}
 
         <div className="confirm-items">
-          {order.items.map((it) => (
-            <div key={it.name} className="order-line">
-              <span className="order-line-name">{it.qty} × {displayName(it.name)}</span>
-              <span>{fmtMoney(it.priceCents * it.qty)}</span>
+          {order.items.map((it, i) => (
+            // index key: two lines can share a name when their add-ons differ
+            // eslint-disable-next-line react/no-array-index-key
+            <div key={`${it.name}-${i}`}>
+              <div className="order-line">
+                <span className="order-line-name">{it.qty} × {displayName(it.name)}</span>
+                <span>{fmtMoney(itemTotalCents(it))}</span>
+              </div>
+              {it.addons?.length > 0 && (
+                <div className="order-line-addons">{it.addons.map((a) => `+ ${displayName(a.name)}`).join('  ·  ')}</div>
+              )}
             </div>
           ))}
           <div className="order-line order-total">

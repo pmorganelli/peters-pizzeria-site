@@ -8,13 +8,33 @@ import { api } from '../utils/api';
 import { DAY_NAMES, displayName, fmtMoney, fmtTime, parsePriceCents } from '../utils/orders';
 
 const SAVED_KEY = 'pp_order_id';
-const CART_KEY = 'pp_cart';
+const CART_KEY = 'pp_cart2';
+const LEGACY_CART_KEY = 'pp_cart';
 const WHO_KEY = 'pp_who';
 
 const readJSON = (key, fallback) => {
   try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
 };
 const POLL_MS = 8000;
+
+const PIZZA_CATEGORY = MENU_DATA[0].category;
+const ADDON_CATEGORY = MENU_DATA[1].category;
+const ADDON_ITEMS = MENU_DATA[1].items;
+
+// Cart model: item name → one entry per unit, each entry listing that unit's
+// add-on names — so "one cheese slice with burrata, one plain" is two units.
+// Migrates the old { name: qty } shape from before add-ons were per-slice.
+function readCart() {
+  const v2 = readJSON(CART_KEY, null);
+  if (v2 && typeof v2 === 'object') return v2;
+  const legacy = readJSON(LEGACY_CART_KEY, null);
+  if (!legacy || typeof legacy !== 'object') return {};
+  const units = {};
+  for (const [name, qty] of Object.entries(legacy)) {
+    if (Number.isInteger(qty) && qty > 0) units[name] = Array.from({ length: Math.min(qty, 30) }, () => []);
+  }
+  return units;
+}
 
 function Stepper({ qty, onChange }) {
   if (!qty) {
@@ -67,7 +87,7 @@ function ClosedCard({ store, nav }) {
 
 export function OrderPage({ nav }) {
   // Cart and pickup identity survive navigation and refreshes
-  const [cart, setCart] = useState(() => readJSON(CART_KEY, {}));
+  const [cart, setCart] = useState(readCart);
   const [name, setName] = useState(() => readJSON(WHO_KEY, {}).name || '');
   const [contact, setContact] = useState(() => readJSON(WHO_KEY, {}).contact || '');
   const [notes, setNotes] = useState('');
@@ -114,24 +134,76 @@ export function OrderPage({ nav }) {
     return () => clearInterval(t);
   }, [order]);
 
+  // Grow with plain units, shrink from the end (a removed unit takes its add-ons with it)
   const setQty = (itemName, qty) =>
     setCart((c) => {
+      const units = (c[itemName] ?? []).slice(0, qty);
+      while (units.length < qty) units.push([]);
       const next = { ...c };
-      if (qty > 0) next[itemName] = qty; else delete next[itemName];
+      if (qty > 0) next[itemName] = units; else delete next[itemName];
       return next;
     });
 
+  const toggleAddon = (itemName, unitIdx, addonName) =>
+    setCart((c) => ({
+      ...c,
+      [itemName]: (c[itemName] ?? []).map((u, i) => {
+        if (i !== unitIdx) return u;
+        if (u.includes(addonName)) return u.filter((a) => a !== addonName);
+        // keep add-ons in menu order so identical sets always group together
+        return ADDON_ITEMS.map((a) => a.name).filter((a) => u.includes(a) || a === addonName);
+      }),
+    }));
+
   const unavailable = new Set(store?.unavailable || []);
-  const cartLines = MENU_DATA.flatMap((section) =>
-    section.items
-      .filter((it) => cart[it.name] && !unavailable.has(it.name))
-      .map((it) => ({ name: it.name, qty: cart[it.name], priceCents: parsePriceCents(it.price) }))
-  );
+
+  // Group each item's units by identical add-on sets → the order lines shown
+  // in the summary and sent to the API. Sold-out add-ons are stripped.
+  const cartLines = [];
+  const strippedAddons = new Set();
+  for (const section of MENU_DATA) {
+    if (section.category === ADDON_CATEGORY) continue;
+    for (const item of section.items) {
+      const units = cart[item.name];
+      if (!units?.length || unavailable.has(item.name)) continue;
+      const groups = new Map();
+      for (const u of units) {
+        const kept = u.filter((a) => {
+          if (unavailable.has(a)) { strippedAddons.add(a); return false; }
+          return true;
+        });
+        const key = kept.join('|');
+        const g = groups.get(key) ?? { addons: kept, qty: 0 };
+        g.qty += 1;
+        groups.set(key, g);
+      }
+      for (const [key, g] of groups) {
+        const addonCents = g.addons.reduce(
+          (sum, a) => sum + parsePriceCents(ADDON_ITEMS.find((x) => x.name === a)?.price ?? '$0'), 0);
+        cartLines.push({
+          name: item.name, qty: g.qty, addons: g.addons,
+          unitCents: parsePriceCents(item.price) + addonCents,
+          key: `${item.name}|${key}`,
+        });
+      }
+    }
+  }
+  const removeLine = (line) =>
+    setCart((c) => {
+      const key = line.addons.join('|');
+      const remaining = (c[line.name] ?? []).filter(
+        (u) => u.filter((a) => !unavailable.has(a)).join('|') !== key);
+      const next = { ...c };
+      if (remaining.length) next[line.name] = remaining; else delete next[line.name];
+      return next;
+    });
+
   // Items that were in the cart (possibly from a previous visit) but sold out since
   const removedFromCart = MENU_DATA.flatMap((s) => s.items)
-    .filter((it) => cart[it.name] && unavailable.has(it.name))
-    .map((it) => it.name);
-  const totalCents = cartLines.reduce((sum, l) => sum + l.priceCents * l.qty, 0);
+    .filter((it) => cart[it.name]?.length && unavailable.has(it.name))
+    .map((it) => it.name)
+    .concat([...strippedAddons]);
+  const totalCents = cartLines.reduce((sum, l) => sum + l.unitCents * l.qty, 0);
   const canPlace = cartLines.length > 0 && name.trim().length >= 2 && !placing;
 
   const place = async () => {
@@ -140,7 +212,11 @@ export function OrderPage({ nav }) {
     try {
       const { order: created } = await api('/api/orders', {
         method: 'POST',
-        body: { name, contact, notes, items: cartLines.map(({ name: n, qty }) => ({ name: n, qty })) },
+        body: {
+          name, contact, notes,
+          items: cartLines.map(({ name: n, qty, addons }) =>
+            addons.length ? { name: n, qty, addons } : { name: n, qty }),
+        },
       });
       localStorage.setItem(SAVED_KEY, created.id);
       localStorage.setItem(WHO_KEY, JSON.stringify({ name, contact }));
@@ -177,21 +253,53 @@ export function OrderPage({ nav }) {
       ) : (
         <div className="order-grid">
           <div className="order-menu">
-            {MENU_DATA.map((section) => (
+            {/* Add-ons aren't standalone rows — they attach to slices below */}
+            {MENU_DATA.filter((s) => s.category !== ADDON_CATEGORY).map((section) => (
               <div key={section.category}>
                 <div className="order-cat">{section.category}</div>
                 {section.items.map((item) => {
                   const soldOut = unavailable.has(item.name);
+                  const units = cart[item.name] ?? [];
+                  const showAddons = section.category === PIZZA_CATEGORY && !soldOut && units.length > 0;
                   return (
-                    <div key={item.name} className={`order-row${soldOut ? ' order-row-soldout' : ''}`}>
-                      <div className="order-row-text">
-                        <div className="order-row-name">{item.name}</div>
-                        <div className="order-row-desc">{item.desc}</div>
+                    <div key={item.name}>
+                      <div className={`order-row${soldOut ? ' order-row-soldout' : ''}${showAddons ? ' order-row-open' : ''}`}>
+                        <div className="order-row-text">
+                          <div className="order-row-name">{item.name}</div>
+                          <div className="order-row-desc">{item.desc}</div>
+                        </div>
+                        <div className="order-row-price">{item.price}</div>
+                        {soldOut
+                          ? <span className="order-soldout-chip">Sold out</span>
+                          : <Stepper qty={units.length} onChange={(q) => setQty(item.name, q)} />}
                       </div>
-                      <div className="order-row-price">{item.price}</div>
-                      {soldOut
-                        ? <span className="order-soldout-chip">Sold out</span>
-                        : <Stepper qty={cart[item.name] || 0} onChange={(q) => setQty(item.name, q)} />}
+                      {showAddons && (
+                        <div className="addon-units">
+                          {units.map((u, i) => (
+                            // eslint-disable-next-line react/no-array-index-key
+                            <div key={i} className="addon-unit">
+                              <span className="addon-unit-label">{units.length > 1 ? `Slice ${i + 1}` : 'Add-ons'}</span>
+                              {ADDON_ITEMS.map((a) => {
+                                const off = unavailable.has(a.name);
+                                const on = u.includes(a.name);
+                                return (
+                                  <button
+                                    key={a.name}
+                                    type="button"
+                                    disabled={off}
+                                    className={`addon-chip${on ? ' addon-chip-on' : ''}${off ? ' addon-chip-86' : ''}`}
+                                    aria-pressed={on}
+                                    aria-label={`${displayName(a.name)} for ${item.name} ${units.length > 1 ? `slice ${i + 1}` : ''}`}
+                                    onClick={() => toggleAddon(item.name, i, a.name)}
+                                  >
+                                    {displayName(a.name)} · {off ? 'sold out' : a.price}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -206,12 +314,21 @@ export function OrderPage({ nav }) {
             ) : (
               <div>
                 {cartLines.map((l) => (
-                  <div key={l.name} className="order-line">
-                    <button className="order-line-x" aria-label={`Remove ${l.name}`} onClick={() => setQty(l.name, 0)}>
-                      <X size={11} />
-                    </button>
-                    <span className="order-line-name">{l.qty} × {displayName(l.name)}</span>
-                    <span>{fmtMoney(l.priceCents * l.qty)}</span>
+                  <div key={l.key}>
+                    <div className="order-line">
+                      <button
+                        className="order-line-x"
+                        aria-label={`Remove ${l.name}${l.addons.length ? ` with ${l.addons.map(displayName).join(', ')}` : ''}`}
+                        onClick={() => removeLine(l)}
+                      >
+                        <X size={11} />
+                      </button>
+                      <span className="order-line-name">{l.qty} × {displayName(l.name)}</span>
+                      <span>{fmtMoney(l.unitCents * l.qty)}</span>
+                    </div>
+                    {l.addons.length > 0 && (
+                      <div className="order-line-addons">{l.addons.map((a) => `+ ${displayName(a)}`).join('  ·  ')}</div>
+                    )}
                   </div>
                 ))}
                 <div className="order-line order-total">

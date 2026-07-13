@@ -70,9 +70,14 @@ function OrderCard({ order, column, onAdvance, onCancel }) {
         <span className="oc-age">{ageLabel(order.createdAt)}</span>
       </div>
       <div className="oc-items">
-        {order.items.map((it) => (
-          <div key={it.name} className={`oc-item${it.category === PIZZA_CATEGORY ? ' oc-item-pizza' : ''}`}>
+        {order.items.map((it, i) => (
+          // index key: two lines can share a name when their add-ons differ
+          // eslint-disable-next-line react/no-array-index-key
+          <div key={`${it.name}-${i}`} className={`oc-item${it.category === PIZZA_CATEGORY ? ' oc-item-pizza' : ''}`}>
             <span className="oc-qty">{it.qty}×</span> {it.category === ADDON_CATEGORY ? `+ ${displayName(it.name)}` : it.name}
+            {it.addons?.length > 0 && (
+              <span className="oc-item-addons"> · + {it.addons.map((a) => displayName(a.name)).join(', + ')}</span>
+            )}
           </div>
         ))}
       </div>
@@ -187,6 +192,8 @@ export function AdminPage({ nav }) {
       for (const it of o.items) {
         if (it.category === PIZZA_CATEGORY) pizzas.set(it.name, (pizzas.get(it.name) || 0) + it.qty);
         else if (it.category === ADDON_CATEGORY) addons.set(it.name, (addons.get(it.name) || 0) + it.qty);
+        // add-ons attached to slices (each applies once per slice in the line)
+        for (const a of it.addons ?? []) addons.set(a.name, (addons.get(a.name) || 0) + it.qty);
       }
     }
     const sorted = (m) => [...m.entries()].sort((a, b) => b[1] - a[1]);
@@ -372,7 +379,9 @@ export function AdminPage({ nav }) {
             <div key={o.id} className="finished-row">
               <span className="oc-code">#{o.code}</span>
               <span>{o.name}</span>
-              <span className="finished-items">{o.items.map((it) => `${it.qty}× ${displayName(it.name)}`).join(', ')}</span>
+              <span className="finished-items">
+                {o.items.map((it) => `${it.qty}× ${displayName(it.name)}${it.addons?.length ? ` (+ ${it.addons.map((a) => displayName(a.name)).join(', ')})` : ''}`).join(', ')}
+              </span>
               <span>{fmtMoney(o.totalCents)}</span>
               <span className={`finished-status finished-${o.status}`}>{o.status === 'done' ? 'picked up' : 'cancelled'}</span>
             </div>

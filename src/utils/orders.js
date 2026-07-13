@@ -3,6 +3,7 @@
 
 export function parsePriceCents(label) {
   const s = String(label).replace('+', '').trim();
+  if (/^free$/i.test(s)) return 0;
   if (s.endsWith('¢')) return Math.round(Number(s.slice(0, -1)));
   if (s.startsWith('$')) return Math.round(Number(s.slice(1)) * 100);
   return NaN;
@@ -22,6 +23,12 @@ export const STATUS_LABELS = {
 // Menu add-ons are named "+ Burrata" etc.; strip the prefix when the name
 // appears after a quantity ("2 × + Burrata" reads badly).
 export const displayName = (name) => String(name).replace(/^\+\s*/, '');
+
+
+// One order line's total: (slice + its add-ons) × qty. Add-ons are nested
+// on the line ({ name, priceCents }) — legacy orders have none.
+export const itemTotalCents = (it) =>
+  (it.priceCents + (it.addons ?? []).reduce((sum, a) => sum + a.priceCents, 0)) * it.qty;
 
 export const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 

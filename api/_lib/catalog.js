@@ -22,3 +22,4 @@ export function catalog() {
 }
 
 export const PIZZA_CATEGORY = MENU_DATA[0].category; // "Saturday Slices" — what the oven fires
+export const ADDON_CATEGORY = MENU_DATA[1].category; // "Add Ons" — attachable to slices
