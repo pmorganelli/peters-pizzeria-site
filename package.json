@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "dev:api": "node scripts/dev-api.mjs"
+    "dev:api": "node scripts/dev-api.mjs",
+    "doctor": "npx react-doctor"
   },
   "dependencies": {
     "@chenglou/pretext": "^0.0.8",
@@ -16,14 +17,51 @@
     "gsap": "^3.15.0",
     "lucide-react": "^1.24.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "vercel": "^55.0.0"
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^4.3.1",
+    "@vitejs/plugin-react": "^4.7.0",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.47",
+    "react-doctor": "^0.7.7",
+    "react-scan": "^0.5.7",
     "tailwindcss": "^3.4.14",
-    "vite": "^5.4.10"
+    "vercel": "^55.0.0",
+    "vite": "^6.4.3"
+  },
+  "overrides": {
+    "@tootallnate/once@<2.0.1": "2.0.1",
+    "ajv@>=7.0.0-alpha.0 <8.18.0": "8.20.0",
+    "esbuild@<=0.24.2": "0.27.7",
+    "js-yaml@>=4.0.0 <4.2.0": "4.3.0",
+    "minimatch@>=10.0.0 <10.2.3": "10.2.5",
+    "smol-toml@<1.6.1": "1.6.1",
+    "tar@<=7.5.15": "7.5.20",
+    "@vercel/node": {
+      "undici": "6.27.0",
+      "path-to-regexp": "6.3.0"
+    },
+    "@vercel/fun": {
+      "undici": "6.27.0",
+      "path-to-regexp": "8.4.2",
+      "tar": "7.5.20",
+      "@tootallnate/once": "2.0.1"
+    },
+    "@vercel/remix-builder": {
+      "path-to-regexp": "6.3.0"
+    },
+    "@vercel/backends": {
+      "path-to-regexp": "8.4.2"
+    },
+    "@vercel/express": {
+      "path-to-regexp": "8.4.2"
+    },
+    "@vercel/hono": {
+      "path-to-regexp": "8.4.2"
+    },
+    "vercel": {
+      "undici": "6.27.0",
+      "smol-toml": "1.6.1"
+    }
   }
 }

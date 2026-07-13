@@ -97,7 +97,8 @@ export function OrderPage({ nav }) {
     let cancelled = false;
     api(`/api/orders?id=${encodeURIComponent(saved)}`)
       .then((d) => { if (!cancelled) setOrder(d.order); })
-      .catch(() => { if (!cancelled) localStorage.removeItem(SAVED_KEY); })
+      // Forget only when the server says it's gone; keep it through blips
+      .catch((err) => { if (!cancelled && err.status === 404) localStorage.removeItem(SAVED_KEY); })
       .finally(() => { if (!cancelled) setLoadingSaved(false); });
     return () => { cancelled = true; };
   }, []);

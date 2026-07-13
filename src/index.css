@@ -316,7 +316,7 @@ nav.nav-dark.scrolled .nav-hamburger span { background: var(--ink); }
 .special-soldout-tag { color: var(--red-light); }
 
 /* ── MENU PAGE ─────────────────────────────────────────────────────── */
-.menu-page { background: var(--cream); min-height: 100vh; }
+.menu-page { background: var(--cream); }
 .menu-hero { background: var(--ink); color: var(--cream); padding: 152px 60px 64px; position: relative; overflow: hidden; }
 .menu-hero-bg {
   /* top extends past the hero so the GSAP parallax drift never exposes an edge */
@@ -388,7 +388,7 @@ nav.nav-dark.scrolled .nav-hamburger span { background: var(--ink); }
 .menu-quote-alt { display: block; margin-top: 8px; opacity: 0.6; font-size: 14px; }
 
 /* ── BLOG PAGE ─────────────────────────────────────────────────────── */
-.blog-page { background: var(--cream); min-height: 100vh; }
+.blog-page { background: var(--cream); }
 .blog-hero { background: var(--ink); color: var(--cream); padding: 152px 60px 64px; position: relative; overflow: hidden; }
 .blog-hero-bg {
   /* top extends past the hero so the GSAP parallax drift never exposes an edge */
@@ -432,7 +432,7 @@ nav.nav-dark.scrolled .nav-hamburger span { background: var(--ink); }
 .blog-card-read { font-family: var(--mono); font-size: 10px; letter-spacing: 1px; color: var(--red); text-transform: uppercase; }
 
 /* ── ARTICLE ───────────────────────────────────────────────────────── */
-.article-page { background: var(--cream); min-height: 100vh; padding-top: 72px; }
+.article-page { background: var(--cream); padding-top: 72px; }
 .article-back-row { max-width: 720px; margin: 0 auto; }
 .article-back {
   display: inline-flex; align-items: center; gap: 8px;
@@ -486,11 +486,17 @@ nav.nav-dark.scrolled .nav-hamburger span { background: var(--ink); }
 .article-next-cta { font-family: var(--mono); font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--red); display: inline-flex; align-items: center; gap: 6px; }
 
 /* ── FOOTER ────────────────────────────────────────────────────────── */
-footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 44px 60px 20px; }
+/* Page wrappers are min-height:100vh flex columns (see below); margin-top:auto
+   pins the footer to the bottom so short pages on tall/fullscreen windows
+   don't leave a cream gap beneath it. */
+footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 44px 60px 20px; margin-top: auto; }
+.menu-page, .blog-page, .article-page, .gallery-page, .studio-page, .order-page, .admin-page {
+  min-height: 100vh; display: flex; flex-direction: column;
+}
 .footer-top { display: grid; grid-template-columns: 2fr 1fr 1fr 1.2fr; gap: 36px; margin-bottom: 32px; }
 .footer-logo-wrap { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
 .footer-wordmark { font-family: var(--serif); font-size: 18px; font-weight: 700; font-style: italic; color: var(--cream); }
-.footer-tagline { font-family: var(--serif); font-size: 15px; font-style: italic; color: rgba(254,245,239,0.4); max-width: 260px; line-height: 1.6; }
+.footer-tagline { font-family: var(--serif); font-size: 15px; color: rgba(254,245,239,0.4); max-width: 260px; line-height: 1.6; }
 .footer-col-title { font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; color: var(--cream); margin-bottom: 10px; }
 .footer-col-gap { margin-top: 18px; }
 .footer-link { display: block; font-family: var(--serif); font-size: 15px; color: rgba(254,245,239,0.45); margin-bottom: 6px; cursor: pointer; text-align: left; text-decoration: none; transition: color 0.2s; }
@@ -507,7 +513,7 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 44px 60p
 .footer-bottom button:hover { color: var(--cream); }
 
 /* ── GALLERY ────────────────────────────────────────────────────────── */
-.gallery-page { background: var(--ink); min-height: 100vh; padding-top: 72px; }
+.gallery-page { background: var(--ink); padding-top: 72px; }
 .gallery-hero {
   background: var(--ink); padding: 80px 60px 56px; position: relative; overflow: hidden;
   border-bottom: 1px solid rgba(254,245,239,0.06);
@@ -533,7 +539,7 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 44px 60p
 .text-link-btn:hover { opacity: 0.7; }
 
 /* ── STUDIO ─────────────────────────────────────────────────────────── */
-.studio-page { background: var(--ink); min-height: 100vh; padding-top: 72px; color: var(--cream); }
+.studio-page { background: var(--ink); padding-top: 72px; color: var(--cream); }
 .studio-head { padding: 60px 60px 8px; }
 .studio-title {
   font-family: var(--serif); font-size: clamp(38px, 5.5vw, 64px);
@@ -564,7 +570,7 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 44px 60p
 .studio-preview canvas { width: 100%; display: block; box-shadow: 0 28px 90px rgba(0,0,0,0.55); }
 
 /* ── ORDER PAGE ─────────────────────────────────────────────────────── */
-.order-page { background: var(--cream); min-height: 100vh; padding-top: 72px; }
+.order-page { background: var(--cream); padding-top: 72px; }
 .order-head { max-width: 1100px; margin: 0 auto; padding: 48px 60px 8px; }
 .order-title { font-family: var(--serif); font-size: clamp(38px, 5.5vw, 64px); font-weight: 800; font-style: italic; color: var(--ink); line-height: 1; }
 .order-sub { font-family: var(--mono); font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--ink2); margin-top: 14px; }
@@ -724,7 +730,7 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 44px 60p
 .order-closed-sub a { color: var(--red); text-decoration: none; border-bottom: 1px solid rgba(224,54,22,0.4); }
 
 /* ── ADMIN ──────────────────────────────────────────────────────────── */
-.admin-page { background: var(--ink); min-height: 100vh; padding-top: 72px; color: var(--cream); }
+.admin-page { background: var(--ink); padding-top: 72px; color: var(--cream); }
 .admin-notice { max-width: 520px; margin: 24px auto 0; padding: 0 24px; font-family: var(--mono); font-size: 11px; letter-spacing: 1px; color: var(--gold); text-align: center; }
 .admin-login-wrap { display: flex; justify-content: center; padding: 80px 24px 120px; }
 .admin-login { width: 100%; max-width: 400px; background: rgba(255,255,255,0.04); border: 1px solid rgba(254,245,239,0.12); padding: 36px; }
@@ -857,6 +863,13 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 44px 60p
 .lb-arrow.lb-next { right: 20px; }
 .lb-counter { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); font-family: var(--mono); font-size: 11px; letter-spacing: 2px; color: rgba(254,245,239,0.4); }
 
+/* SplitText line masks clip at the line box, but EB Garamond's bold-italic
+   descenders (the "y" tail) paint below the font's declared descent — no
+   line-height fully contains them. Extend each mask's clip window 0.35em
+   downward; the negative margin cancels the layout shift. LineReveal starts
+   lines at yPercent 150 so they stay hidden inside the taller window. */
+.line-reveal > div { padding-bottom: 0.35em; margin-bottom: -0.35em; }
+
 /* ── REVEAL ANIMATIONS (driven by GSAP ScrollTrigger in useScrollReveal) ──
    .reveal is the pre-animation hidden state; GSAP tweens the element in and
    stamps .revealed on completion. reveal-delay-N classes are stagger markers
@@ -873,14 +886,10 @@ body, .story-section, .home-latest, .menu-page, .blog-page, .article-page {
 /* ── RESPONSIVE ─────────────────────────────────────────────────────── */
 @media (max-width: 900px) { .gallery-grid { columns: 2; } }
 
-/* Tablet: fixed sidebars would squeeze the main column below ~300px */
-@media (max-width: 1000px) {
-  .order-grid { grid-template-columns: 1fr 300px; gap: 32px; }
-  .studio-grid { grid-template-columns: 1fr; gap: 36px; }
-  .studio-preview { max-width: 520px; }
-}
-
-@media (max-width: 768px) {
+/* Nav switches to the hamburger earlier than the page layouts (900px, not
+   768px): with five links plus Order Now, the desktop nav has no breathing
+   room below ~900px and Slice Status crowds the button. */
+@media (max-width: 900px) {
   nav { padding: 0 16px; justify-content: flex-start; gap: 12px; }
   .nav-logo-wrap { margin-right: auto; }
   .nav-links { display: none; }
@@ -897,8 +906,18 @@ body, .story-section, .home-latest, .menu-page, .blog-page, .article-page {
   nav .nav-links.mobile-open .nav-link::after { background: var(--green); }
   nav.scrolled .nav-links.mobile-open { top: 60px; }
   .nav-hamburger { display: flex; }
-  /* Keep Order Now reachable on mobile — it's the entry point to ordering */
+  /* Keep Order Now reachable — it's the entry point to ordering */
   .nav-order-btn { padding: 9px 14px; font-size: 10px; }
+}
+
+/* Tablet: fixed sidebars would squeeze the main column below ~300px */
+@media (max-width: 1000px) {
+  .order-grid { grid-template-columns: 1fr 300px; gap: 32px; }
+  .studio-grid { grid-template-columns: 1fr; gap: 36px; }
+  .studio-preview { max-width: 520px; }
+}
+
+@media (max-width: 768px) {
   .hero { padding: 0 24px 60px; }
   .hero-title { font-size: clamp(52px, 13vw, 90px); }
   .hero-scroll { display: none; }

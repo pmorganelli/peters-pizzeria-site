@@ -13,6 +13,7 @@ const POLL_MS = 8000;
 // (saved on submit by the order page), show its live status; otherwise show
 // the kitchen's open/closed state and point people at ordering.
 export function StatusPage({ nav }) {
+  const [trackedId, setTrackedId] = useState(() => localStorage.getItem(SAVED_KEY));
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(() => Boolean(localStorage.getItem(SAVED_KEY)));
   const [store, setStore] = useState(null);
@@ -30,20 +31,28 @@ export function StatusPage({ nav }) {
     return () => { cancelled = true; };
   }, []);
 
-  // Restore this device's order (or one found via lookup), then keep it
-  // fresh while it's still cooking
+  // Fetch the tracked order, then poll while it's still cooking. Keyed on the
+  // id (not the order object) so a poll result doesn't re-arm the interval.
+  const settled = order && (order.status === 'done' || order.status === 'cancelled');
   useEffect(() => {
-    const saved = localStorage.getItem(SAVED_KEY);
-    if (!saved) { setLoading(false); return undefined; }
+    if (!trackedId || settled) { setLoading(false); return undefined; }
     let cancelled = false;
     const fetchOrder = () =>
-      api(`/api/orders?id=${encodeURIComponent(saved)}`)
+      api(`/api/orders?id=${encodeURIComponent(trackedId)}`)
         .then((d) => { if (!cancelled) setOrder(d.order); })
-        .catch(() => { if (!cancelled) { localStorage.removeItem(SAVED_KEY); setOrder(null); } });
+        .catch((err) => {
+          // Forget the order only when the server says it's gone — a network
+          // blip or a 5xx mustn't wipe live tracking mid-bake.
+          if (!cancelled && err.status === 404) {
+            localStorage.removeItem(SAVED_KEY);
+            setTrackedId(null);
+            setOrder(null);
+          }
+        });
     fetchOrder().finally(() => { if (!cancelled) setLoading(false); });
     const t = setInterval(fetchOrder, POLL_MS);
     return () => { cancelled = true; clearInterval(t); };
-  }, [order?.id]); // re-arm polling when a lookup swaps in a different order
+  }, [trackedId, settled]);
 
   const lookup = async (e) => {
     e.preventDefault();
@@ -54,6 +63,7 @@ export function StatusPage({ nav }) {
       const { order: found } = await api(`/api/orders?find=${encodeURIComponent(query.trim())}`);
       localStorage.setItem(SAVED_KEY, found.id);
       setOrder(found);
+      setTrackedId(found.id);
       setQuery('');
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err) {
@@ -65,12 +75,14 @@ export function StatusPage({ nav }) {
 
   const forget = () => {
     localStorage.removeItem(SAVED_KEY);
+    setTrackedId(null);
     setOrder(null);
     setLookupError('');
   };
 
   const newOrder = () => {
     localStorage.removeItem(SAVED_KEY);
+    setTrackedId(null);
     setOrder(null);
     nav('order');
   };
@@ -134,7 +146,7 @@ export function StatusPage({ nav }) {
                 : store?.mode === 'auto' && store?.hours
                   ? `No order yet? Orders open ${DAY_NAMES[store.hours.day]}s, ${fmtTime(store.hours.start)}–${fmtTime(store.hours.end)} (ET) — `
                   : 'No order yet? '}
-              <button className="status-order-link" onClick={() => nav('order')}>order ahead here</button>.
+              <button className="status-order-link" onClick={() => nav('order')}>order here</button>.
             </div>
           </div>
         </div>

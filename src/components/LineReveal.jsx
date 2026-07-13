@@ -20,7 +20,10 @@ export function LineReveal({ text, className, as: Tag = 'div', stagger = 90 }) {
       autoSplit: true,
       onSplit: (self) =>
         gsap.from(self.lines, {
-          yPercent: 110,
+          // 150 (not 110): the masks' clip windows extend 0.35em below the
+          // line box (see .line-reveal CSS), so lines must start deeper down
+          // to stay hidden before their reveal.
+          yPercent: 150,
           duration: 0.7,
           ease: 'power3.out',
           stagger: stagger / 1000,
@@ -28,5 +31,5 @@ export function LineReveal({ text, className, as: Tag = 'div', stagger = 90 }) {
     });
   }, { dependencies: [text, stagger], revertOnUpdate: true, scope: ref });
 
-  return <Tag ref={ref} className={className}>{text}</Tag>;
+  return <Tag ref={ref} className={[className, 'line-reveal'].filter(Boolean).join(' ')}>{text}</Tag>;
 }
