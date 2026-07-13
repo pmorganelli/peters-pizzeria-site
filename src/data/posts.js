@@ -37,7 +37,7 @@ export const BLOG_POSTS = [
         },
         {
           heading: 'Their Vodka Slice',
-          body: 'One of the most popular slices behind their Vito Slice is the Vodka Slice. Bambino uses a genius method for their Vodka Slice: they take a cheese slice, dress it with the Vodka sauce from a squeeze bottle, and then reheat it. This allows them to use the cheese pizzas that were made from before and simply use the Vodka sauce as an easy topping that reduces the friction for making the slice.',
+          body: 'One of the most popular slices behind their Vito Slice is the Vodka Slice. Bambino uses a genius method for their Vodka Slice: they take a cheese slice, dress it with the vodka sauce from a squeeze bottle, and then reheat it. This allows them to use previous cheese pizzas and simply use the vodka sauce as an easy topping that reduces the friction for making the slice.',
           images: [
             { src: '/photos/bambinoPictures/vodkaSlice.jpeg', caption: 'The Vodka Slice (right)' },
           ],
@@ -52,7 +52,7 @@ export const BLOG_POSTS = [
         },
         {
           heading: 'Basil',
-          body: 'One potentially controversial aspect about Bambino\'s pizza is how they do their basil: in full, uncut, unripped pieces. This is certainly the most convenient way to put basil on a pizza, but is it the best? Personally, I disagree with this method. I stand by the chiffonade method, which cuts the basil into long, thin strips. I\'ve even had friends that take off the basil leaves entirely, throwing away a huge chunk of the flavor simply because the whole leaf was too overwhelming to the slice. The unfortunate thing about chiffonading basil is that it oxidizes faster, which turns the bright green basil into a dark, sometimes black leaf within minutes. At Saturday Slices, we do our best to chiffonade as soon as the slice is ready, which solves this problem, but also increases friction and time to prepare a slice.',
+          body: 'One potentially controversial aspect about Bambino\'s pizza is how they present their basil: in full, uncut, unripped pieces. This is certainly the most convenient way to put basil on a pizza, but is it the best? Personally, I disagree with this method. I stand by the chiffonade method, which cuts the basil into long, thin strips. I\'ve even had friends that take off the basil leaves entirely, throwing away a huge chunk of the flavor simply because the whole leaf was too overwhelming to the slice. The unfortunate thing about chiffonading basil is that it oxidizes faster, which turns the bright green basil into a dark, sometimes black leaf within minutes. At Saturday Slices, we do our best to chiffonade as soon as the slice is ready, which solves this problem, but also increases friction and time to prepare a slice.',
           images: [
             { src: '/photos/bambinoPictures/chiffonadedBasil.png', caption: 'Example of chiffonaded basil — better for a pizza in my opinion' },
           ],
