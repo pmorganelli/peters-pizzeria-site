@@ -27,9 +27,11 @@ export function MenuPage({ nav }) {
     return () => { cancelled = true; };
   }, []);
 
-  // Hero background drifts slower than the page scroll (parallax)
+  // Hero background drifts slower than the page scroll (parallax).
+  // Desktop-only — see HomePage for the mobile rationale.
   useGSAP(() => {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (window.matchMedia('(max-width: 768px)').matches) return;
     gsap.to('.menu-hero-bg', {
       yPercent: 14,
       ease: 'none',
@@ -47,7 +49,7 @@ export function MenuPage({ nav }) {
       </div>
 
       <div className="menu-body">
-        <img src={webSrc('/photos/menu-board.jpg')} alt="Saturday Slices board" className="menu-board-photo" />
+        <img src={webSrc('/photos/menu-board.jpg')} alt="Saturday Slices board" className="menu-board-photo" loading="lazy" decoding="async" />
 
         {MENU_DATA.map((section, si) => (
           <div key={section.category} ref={ref(si)} className="reveal">

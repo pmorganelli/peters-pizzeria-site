@@ -973,12 +973,17 @@ body, .story-section, .home-latest, .menu-page, .blog-page, .article-page {
 @media (max-width: 900px) {
   /* safe-area insets keep the logo/hamburger clear of the notch in landscape */
   nav { padding: 0 max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left)); justify-content: flex-start; gap: 12px; }
+  /* No backdrop blur on phones: the nav background is 96% opaque so the blur
+     is barely visible, but it forces a full-width blur pass every frame while
+     the page moves beneath it (scroll, page transitions) — a top jank source. */
+  nav.scrolled { backdrop-filter: none; }
   .nav-logo-wrap { margin-right: auto; }
   .nav-links { display: none; }
   .nav-links.mobile-open {
     display: flex; flex-direction: column; gap: 0;
     position: fixed; top: 72px; left: 0; right: 0;
-    background: rgba(254,245,239,0.98); backdrop-filter: blur(16px);
+    /* 98% opaque — skip the backdrop blur (see nav.scrolled note above) */
+    background: rgba(254,245,239,0.98);
     border-bottom: 1px solid var(--cream2); z-index: 99; padding: 8px 0;
   }
   /* The dropdown panel is cream even on dark pages, so links revert to dark text */

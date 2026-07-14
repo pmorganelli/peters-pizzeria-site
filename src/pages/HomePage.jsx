@@ -48,9 +48,13 @@ export function HomePage({ nav, openArticle, openLightbox }) {
     return () => { cancelled = true; };
   }, []);
 
-  // Hero photo drifts slower than the page scroll (parallax)
+  // Hero photo drifts slower than the page scroll (parallax). Desktop-only:
+  // on phones the scrubbed transform of a viewport-sized image costs more in
+  // scroll jank than the drift is worth. (Checked once per mount — a resize
+  // across the breakpoint corrects itself on the next page visit.)
   useGSAP(() => {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (window.matchMedia('(max-width: 768px)').matches) return;
     gsap.to('.hero-img', {
       yPercent: 10,
       ease: 'none',
@@ -101,10 +105,10 @@ export function HomePage({ nav, openArticle, openLightbox }) {
         <div className="story-grid">
           <div ref={ref(1)} className="reveal reveal-delay-1 story-photo-stack">
             <button type="button" className="story-photo-btn" onClick={() => openLightbox(STORY_PHOTOS, 0)} aria-label="View team photo">
-              <img className="story-photo-main" src={webSrc('/photos/team.jpg')} alt="The team" />
+              <img className="story-photo-main" src={webSrc('/photos/team.jpg')} alt="The team" loading="lazy" decoding="async" />
             </button>
             <button type="button" className="story-photo-btn story-photo-inset-btn" onClick={() => openLightbox(STORY_PHOTOS, 1)} aria-label="View crew photo">
-              <img className="story-photo-inset" src={thumbSrc('/photos/hug1.jpg')} alt="The crew" />
+              <img className="story-photo-inset" src={thumbSrc('/photos/hug1.jpg')} alt="The crew" loading="lazy" decoding="async" />
             </button>
           </div>
 

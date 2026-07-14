@@ -16,9 +16,11 @@ export function BlogPage({ nav, openArticle }) {
 
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
-  // Hero background drifts slower than the page scroll (parallax)
+  // Hero background drifts slower than the page scroll (parallax).
+  // Desktop-only — see HomePage for the mobile rationale.
   useGSAP(() => {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (window.matchMedia('(max-width: 768px)').matches) return;
     gsap.to('.blog-hero-bg', {
       yPercent: 14,
       ease: 'none',

@@ -67,6 +67,7 @@ export function ArticlePage({ article, nav }) {
           <img
             src={webSrc(article.img)}
             alt={article.title}
+            decoding="async"
             style={{ width: '100%', aspectRatio: '16/9', maxHeight: 400, objectFit: 'cover', display: 'block' }}
           />
         </div>
