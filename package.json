@@ -23,7 +23,7 @@
     "@vitejs/plugin-react": "^4.7.0",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.47",
-    "react-doctor": "^0.7.7",
+    "react-doctor": "^0.7.8",
     "react-scan": "^0.5.7",
     "tailwindcss": "^3.4.14",
     "vercel": "^55.0.0",
