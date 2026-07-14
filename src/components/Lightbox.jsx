@@ -7,8 +7,14 @@ export function Lightbox({ photos, index, onClose, onPrev, onNext }) {
   const dialogRef = useRef(null);
 
   // Native <dialog> gives us the focus trap and backdrop for free, but it has
-  // to be opened imperatively via showModal() — there's no declarative "open as modal" prop.
-  useEffect(() => { dialogRef.current?.showModal(); }, []);
+  // to be opened imperatively via showModal() — there's no declarative "open as
+  // modal" prop. The close() cleanup pairs with it: without one, StrictMode's
+  // dev remount calls showModal() on an already-open dialog and throws.
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    dialog?.showModal();
+    return () => dialog?.close();
+  }, []);
 
   useEffect(() => {
     const onKey = (e) => {

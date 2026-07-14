@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { gsap } from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { Nav }         from './components/Nav';
 import { Lightbox }    from './components/Lightbox';
 import { HomePage }    from './pages/HomePage';
@@ -10,6 +12,8 @@ import { StudioPage }  from './pages/StudioPage';
 import { OrderPage }   from './pages/OrderPage';
 import { StatusPage }  from './pages/StatusPage';
 import { AdminPage }   from './pages/AdminPage';
+
+gsap.registerPlugin(ScrollTrigger);
 
 const TRANSITION_MS = 260;
 const VALID_PAGES = ['home', 'menu', 'blog', 'gallery', 'studio', 'order', 'status', 'admin'];
@@ -29,12 +33,14 @@ export default function App() {
   const pending = useRef({});
   const navTimer = useRef(null);
   const navRaf = useRef(null);
+  const refreshTimer = useRef(null);
 
   useEffect(() => { localStorage.setItem('pp_page2', page); }, [page]);
 
   const nav = useCallback((newPage, newArticle = null) => {
     if (navTimer.current) clearTimeout(navTimer.current);
     if (navRaf.current) cancelAnimationFrame(navRaf.current);
+    if (refreshTimer.current) clearTimeout(refreshTimer.current);
     setPhase('out');
     pending.current = { page: newPage, article: newArticle };
     navTimer.current = setTimeout(() => {
@@ -44,6 +50,13 @@ export default function App() {
       navRaf.current = requestAnimationFrame(() => {
         navRaf.current = requestAnimationFrame(() => { setPhase('in'); navRaf.current = null; });
       });
+      // The new page mounts while this wrapper is still translated 18px, so its
+      // ScrollTriggers measure offset start positions. Re-measure once the
+      // transition has fully settled and the transform is back to 'none'.
+      refreshTimer.current = setTimeout(() => {
+        ScrollTrigger.refresh();
+        refreshTimer.current = null;
+      }, TRANSITION_MS * 2 + 60);
       navTimer.current = null;
     }, TRANSITION_MS);
   }, []);

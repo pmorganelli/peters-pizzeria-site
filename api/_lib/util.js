@@ -3,14 +3,19 @@ import crypto from 'node:crypto';
 // ── Request helpers (work both on Vercel and in scripts/dev-api.mjs) ──
 
 export async function readBody(req) {
+  let body;
   if (req.body !== undefined) {
     // Vercel parses JSON bodies; it may hand us a string for other content types
-    return typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body ?? {});
+    body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body;
+  } else {
+    const chunks = [];
+    for await (const chunk of req) chunks.push(chunk);
+    const raw = Buffer.concat(chunks).toString('utf8');
+    body = raw ? JSON.parse(raw) : {};
   }
-  const chunks = [];
-  for await (const chunk of req) chunks.push(chunk);
-  const raw = Buffer.concat(chunks).toString('utf8');
-  return raw ? JSON.parse(raw) : {};
+  // JSON.parse legally returns null/numbers/strings too; handlers expect an
+  // object, and `null` would turn their field reads into a 500 instead of a 400.
+  return body && typeof body === 'object' ? body : {};
 }
 
 export function readQuery(req) {
@@ -37,7 +42,9 @@ export function send(res, status, data) {
 
 export function devMode() {
   // No password configured AND no Redis configured → local development.
-  return !process.env.ADMIN_PASSWORD && !hasRedisEnv();
+  // Never on Vercel: missing Redis there is a misconfigured deploy, not dev,
+  // and must not unlock the fallback 'admin' password.
+  return !process.env.VERCEL && !process.env.ADMIN_PASSWORD && !hasRedisEnv();
 }
 
 export function hasRedisEnv() {

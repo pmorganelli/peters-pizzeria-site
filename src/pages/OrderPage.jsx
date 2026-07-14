@@ -259,16 +259,20 @@ export function OrderPage({ nav }) {
     return () => { cancelled = true; };
   }, []);
 
-  // Live status while the order is open
+  // Live status while the order is open. Depend on id/status rather than the
+  // order object — every poll builds a fresh object, and keying the effect on
+  // it would tear down and re-arm the interval on each response.
+  const orderId = order?.id;
+  const orderSettled = !order || order.status === 'done' || order.status === 'cancelled';
   useEffect(() => {
-    if (!order || order.status === 'done' || order.status === 'cancelled') return undefined;
+    if (orderSettled) return undefined;
     const t = setInterval(() => {
-      api(`/api/orders?id=${encodeURIComponent(order.id)}`)
+      api(`/api/orders?id=${encodeURIComponent(orderId)}`)
         .then((d) => setOrder(d.order))
         .catch(() => {});
     }, POLL_MS);
     return () => clearInterval(t);
-  }, [order]);
+  }, [orderId, orderSettled]);
 
   // Grow with plain units, shrink from the end (a removed unit takes its add-ons with it)
   const setQty = (itemName, qty) =>

@@ -3,6 +3,9 @@ import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
 gsap.registerPlugin(ScrollTrigger);
+// Mobile browsers fire resize when the address bar collapses/expands mid-scroll;
+// a full ScrollTrigger refresh there makes scrubbed/parallax tweens jump.
+ScrollTrigger.config({ ignoreMobileResize: true });
 
 const prefersReducedMotion = () =>
   window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -36,21 +39,46 @@ function animate(el) {
 export function useScrollReveal() {
   const els = useRef([]);
   const ctx = useRef(null);
+  const setters = useRef([]);
+  // Guards against re-animating an element that already has its tween — without
+  // it, any re-render re-invokes the callback refs and every reveal replays.
+  const animated = useRef(new WeakSet());
 
   useEffect(() => {
     // Under reduced motion the CSS override shows everything; skip the tweens.
     if (prefersReducedMotion()) return undefined;
-    ctx.current = gsap.context(() => { els.current.forEach((el) => el && animate(el)); });
-    return () => { ctx.current?.revert(); ctx.current = null; };
+    ctx.current = gsap.context(() => {
+      els.current.forEach((el) => {
+        if (el && !animated.current.has(el)) {
+          animated.current.add(el);
+          animate(el);
+        }
+      });
+    });
+    return () => {
+      ctx.current?.revert();
+      ctx.current = null;
+      animated.current = new WeakSet();
+    };
   }, []);
 
-  // Returns a ref-setter for index i; also stamps the 'reveal' class immediately on mount.
-  // Elements attached after the initial mount get their tween created here.
-  return (i) => (el) => {
-    els.current[i] = el;
-    if (el) {
-      el.classList.add('reveal');
-      ctx.current?.add(() => animate(el));
+  // Returns a stable ref-setter for index i (identity must not change across
+  // renders, or React detaches/reattaches the ref every render); stamps the
+  // 'reveal' class immediately on mount. Elements attached after the initial
+  // mount get their tween created here.
+  return (i) => {
+    if (!setters.current[i]) {
+      setters.current[i] = (el) => {
+        els.current[i] = el;
+        if (el) {
+          el.classList.add('reveal');
+          if (ctx.current && !animated.current.has(el)) {
+            animated.current.add(el);
+            ctx.current.add(() => animate(el));
+          }
+        }
+      };
     }
+    return setters.current[i];
   };
 }
