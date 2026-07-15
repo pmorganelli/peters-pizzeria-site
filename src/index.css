@@ -301,6 +301,8 @@ nav.nav-dark.scrolled .nav-hamburger span { background: var(--ink); }
 .menu-hero .section-label::before { background: var(--gold); }
 .gallery-hero .section-label::before { background: var(--gold); }
 .blog-hero .section-label::before { background: var(--gold); }
+.community-section .section-label { color: var(--gold); }
+.community-section .section-label::before { background: var(--gold); }
 .specials-see-all {
   font-family: var(--mono); font-size: 11px; letter-spacing: 1px; text-transform: uppercase;
   color: rgba(254,245,239,0.5); cursor: pointer; border-bottom: 1px solid rgba(254,245,239,0.2);

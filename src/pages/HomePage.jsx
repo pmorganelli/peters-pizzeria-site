@@ -213,7 +213,7 @@ export function HomePage({ nav, openArticle, openLightbox }) {
       {/* ── COMMUNITY ── */}
       <section className="community-section">
         <div>
-          <div className="section-label" style={{ color: 'var(--gold)' }}>Community</div>
+          <div className="section-label">Community</div>
           <h2 className="section-title" style={{ color: 'var(--cream)', marginBottom: 20 }}>
             We make pizza.<br /><em style={{ color: 'var(--gold)' }}>We make community.</em>
           </h2>
