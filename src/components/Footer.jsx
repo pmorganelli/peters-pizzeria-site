@@ -61,7 +61,7 @@ export function Footer({ nav }) {
       </div>
 
       <div className="footer-bottom">
-        <span>© 2026 Peter&apos;s Pizzeria · Not affiliated with Tufts University</span>
+        <span>2026 Peter&apos;s Pizzeria · Not affiliated with Tufts University</span>
         <button type="button" onClick={() => nav('admin')}>Admin</button>
       </div>
     </footer>
