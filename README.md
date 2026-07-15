@@ -57,6 +57,12 @@ src/
 
 Photos live in `photos/` at the repo root and are served from `public/photos/` via a symlink. If you clone on Windows or the symlink breaks, copy the `photos/` folder into `public/`.
 
+### Adding photos to the gallery
+
+1. Drop the new image files into `photos/` (or `photos/bambinoPictures/`).
+2. Run `bash scripts/gen-photo-derivatives.sh` — it generates `thumbs/` (max 640px) and `web/` (max 1600px) derivatives and regenerates `src/data/photoDims.js` (the aspect ratios the gallery uses to reserve layout space). It skips files that already have derivatives, so it's safe to re-run.
+3. Add each new file's `/photos/<filename>` path to the `ALL_PHOTOS` array in `src/data/posts.js` — that's what makes it show up in the gallery.
+
 ## Ordering system
 
 Customers hit **Order Now**, build a cart from the menu, and place an order

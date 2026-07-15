@@ -228,7 +228,7 @@ export const POSTS_BY_DATE = [...BLOG_POSTS].sort((a, b) => new Date(b.date) - n
 
 export const ALL_PHOTOS = [
   '/photos/pizza-ooni.jpg',  '/photos/team.jpg',         '/photos/pizza-chess.jpg',
-  '/photos/pizza-burrata.jpg', '/photos/house-sign.jpg', '/photos/peter-apron.jpg',
+  '/photos/pizza-burrata.jpg', '/photos/peter-apron.jpg',
   '/photos/hug1.jpg',        '/photos/hug2.jpg',         '/photos/menu-board.jpg',
   '/photos/img_1054.jpeg',   '/photos/img_1082.jpeg',    '/photos/img_1098.jpeg',
   '/photos/img_2215.jpeg',   '/photos/img_2220.jpeg',    '/photos/img_3337.jpeg',
@@ -241,4 +241,8 @@ export const ALL_PHOTOS = [
   '/photos/img_6831.jpeg',   '/photos/img_9315.jpeg',    '/photos/img_9326.jpeg',
   '/photos/img_9330.jpeg',   '/photos/img_9383.jpeg',    '/photos/img_9740.jpeg',
   '/photos/gustongue.jpg',   '/photos/ovenpizza.jpg',
+  '/photos/000059370005.jpg', '/photos/image09324.jpg',  '/photos/image0983.jpg',
+  '/photos/image0984.jpg',    '/photos/image1091.jpg',   '/photos/image6658.jpg',
+  '/photos/image6661.jpg',    '/photos/image6761.jpg',   '/photos/image6762.jpg',
+  '/photos/image6799.jpg',    '/photos/image6834.jpg',   '/photos/image9375.jpg',
 ];
