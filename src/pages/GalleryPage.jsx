@@ -6,6 +6,8 @@ import { thumbSrc } from '../utils/photos';
 
 export function GalleryPage({ nav, openLightbox }) {
   const [failed, setFailed] = useState(new Set());
+  // The lightbox gets this same array, so indices stay aligned after failures
+  const visible = ALL_PHOTOS.filter((src) => !failed.has(src));
 
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
@@ -20,7 +22,7 @@ export function GalleryPage({ nav, openLightbox }) {
       </div>
 
       <div className="gallery-grid">
-        {ALL_PHOTOS.filter((src) => !failed.has(src)).map((src, i, visible) => (
+        {visible.map((src, i) => (
           <button type="button"
             key={src}
             className="gallery-item"

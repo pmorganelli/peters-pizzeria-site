@@ -21,6 +21,8 @@ const POLL_MS = 8000;
 const PIZZA_CATEGORY = MENU_DATA[0].category;
 const ADDON_CATEGORY = MENU_DATA[1].category;
 const ADDON_ITEMS = MENU_DATA[1].items;
+// Add-ons aren't standalone order rows — they attach to slices per unit
+const ORDERABLE_SECTIONS = MENU_DATA.filter((s) => s.category !== ADDON_CATEGORY);
 
 // Cart model: item name → one entry per unit, each entry listing that unit's
 // add-on names — so "one cheese slice with burrata, one plain" is two units.
@@ -57,8 +59,7 @@ function Stepper({ qty, onChange }) {
 function MenuList({ cart, unavailable, setQty, toggleAddon }) {
   return (
     <div className="order-menu">
-      {/* Add-ons aren't standalone rows — they attach to slices below */}
-      {MENU_DATA.filter((s) => s.category !== ADDON_CATEGORY).map((section) => (
+      {ORDERABLE_SECTIONS.map((section) => (
         <div key={section.category}>
           <div className="order-cat">{section.category}</div>
           {section.items.map((item) => {
@@ -311,8 +312,7 @@ export function OrderPage({ nav }) {
   // in the summary and sent to the API. Sold-out add-ons are stripped.
   const cartLines = [];
   const strippedAddons = new Set();
-  for (const section of MENU_DATA) {
-    if (section.category === ADDON_CATEGORY) continue;
+  for (const section of ORDERABLE_SECTIONS) {
     for (const item of section.items) {
       const units = cart[item.name];
       if (!units?.length || unavailable.has(item.name)) continue;

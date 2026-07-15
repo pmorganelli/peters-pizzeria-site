@@ -224,7 +224,7 @@ export const BLOG_POSTS = [
   // },
 ];
 
-export const POSTS_BY_DATE = [...BLOG_POSTS].sort((a, b) => new Date(b.date) - new Date(a.date));
+export const POSTS_BY_DATE = BLOG_POSTS.toSorted((a, b) => new Date(b.date) - new Date(a.date));
 
 export const ALL_PHOTOS = [
   '/photos/pizza-ooni.jpg',  '/photos/team.jpg',         '/photos/pizza-chess.jpg',

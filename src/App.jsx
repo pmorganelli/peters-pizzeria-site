@@ -38,8 +38,11 @@ export default function App() {
   // re-render the whole mounted page three times per switch (out/enter/in) —
   // a visible cost on phones when tapping between pages quickly.
   const wrapRef = useRef(null);
+  // Mirrors the committed page for nav()'s guards. Synced in an effect, not
+  // during render — React can replay or discard render work (StrictMode,
+  // concurrent features), and a discarded render must not leak into the ref.
   const pageNow = useRef(page);
-  pageNow.current = page;
+  useEffect(() => { pageNow.current = page; }, [page]);
 
   useEffect(() => { localStorage.setItem('pp_page2', page); }, [page]);
 
