@@ -28,8 +28,13 @@ function animate(el) {
       ease: 'power3.out',
       scrollTrigger: { trigger: el, start: 'top 88%', once: true },
       onComplete() {
-        // Hand styling back to CSS so hover transforms (e.g. card lifts) still apply.
-        el.classList.add('revealed');
+        // Hand styling back to CSS so hover transforms (e.g. card lifts) still
+        // apply. A data attribute, not a class: React rewrites className
+        // wholesale when a dynamic className prop changes (e.g. a special card
+        // going sold-out), which would strip a class we added here and snap the
+        // element back to the hidden .reveal state — attributes React didn't
+        // render are left alone.
+        el.dataset.revealed = 'true';
         gsap.set(el, { clearProps: 'all' });
       },
     }

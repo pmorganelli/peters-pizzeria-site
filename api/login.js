@@ -2,6 +2,15 @@ import { readBody, send, checkPassword, adminToken, devMode, clientIp, isAdmin, 
 import { rateLimit } from './_lib/store.js';
 
 export default async function handler(req, res) {
+  try {
+    return await login(req, res);
+  } catch (err) {
+    console.error('login api error:', err);
+    return send(res, 500, { error: 'Something went wrong on our end. Please try again.' });
+  }
+}
+
+async function login(req, res) {
   if (req.method === 'GET') return send(res, 200, { authenticated: isAdmin(req) });
   if (req.method === 'DELETE') { clearAuthCookie(res); return send(res, 200, { ok: true }); }
   if (req.method !== 'POST') return send(res, 405, { error: 'Method not allowed' });

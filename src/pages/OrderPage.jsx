@@ -266,12 +266,22 @@ export function OrderPage({ nav }) {
   const orderSettled = !order || order.status === 'done' || order.status === 'cancelled';
   useEffect(() => {
     if (orderSettled) return undefined;
+    // The cancelled flag covers the fetch in flight when the interval clears —
+    // without it, a late response resurrects an order the user just dismissed.
+    let cancelled = false;
     const t = setInterval(() => {
       api(`/api/orders?id=${encodeURIComponent(orderId)}`)
-        .then((d) => setOrder(d.order))
-        .catch(() => {});
+        .then((d) => { if (!cancelled) setOrder(d.order); })
+        .catch((err) => {
+          // Forget the order only when the server says it's gone — a network
+          // blip or a 5xx mustn't wipe live tracking mid-bake.
+          if (!cancelled && err.status === 404) {
+            localStorage.removeItem(SAVED_KEY);
+            setOrder(null);
+          }
+        });
     }, POLL_MS);
-    return () => clearInterval(t);
+    return () => { cancelled = true; clearInterval(t); };
   }, [orderId, orderSettled]);
 
   // Grow with plain units, shrink from the end (a removed unit takes its add-ons with it)
@@ -346,6 +356,12 @@ export function OrderPage({ nav }) {
   const canPlace = cartLines.length > 0 && name.trim().length >= 2 && !placing;
 
   const place = async () => {
+    // The API caps orders at 40 lines; grouping by add-on set can genuinely
+    // exceed that, and the server's generic 400 would be misleading here.
+    if (cartLines.length > 40) {
+      setError("That's a lot of different combinations for one order — please split it into two.");
+      return;
+    }
     setPlacing(true);
     setError('');
     try {

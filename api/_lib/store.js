@@ -56,8 +56,14 @@ export async function getSettings() {
   const stored = hasRedisEnv()
     ? await redisClient().get(SETTINGS_KEY)
     : globalThis.__ppSettings;
-  // Merge over defaults so settings saved before new fields existed stay valid
-  return { ...DEFAULT_SETTINGS, ...(stored ?? {}) };
+  // Merge over defaults so settings saved before new fields existed stay
+  // valid. `hours` merges per-field: a stored hours object from before `tz`
+  // existed must not silently evaluate in the server's timezone (UTC).
+  return {
+    ...DEFAULT_SETTINGS,
+    ...(stored ?? {}),
+    hours: { ...DEFAULT_SETTINGS.hours, ...(stored?.hours ?? {}) },
+  };
 }
 
 export async function saveSettings(settings) {
@@ -70,6 +76,14 @@ export async function saveSettings(settings) {
 // Returns true when the request is allowed. Uses Redis INCR+EXPIRE in
 // production and a small in-memory map in dev.
 
+// INCR and EXPIRE run in one script so a crash between them can't leave a
+// counter key without a TTL (the window number in the key keeps counting
+// correct regardless — this only prevents orphaned keys accumulating).
+const RATE_LIMIT_LUA = `
+local c = redis.call('INCR', KEYS[1])
+if c == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
+return c`;
+
 export async function rateLimit(key, limit, windowSeconds) {
   const bucket = `pp:rl:${key}:${Math.floor(Date.now() / (windowSeconds * 1000))}`;
   if (!hasRedisEnv()) {
@@ -79,20 +93,43 @@ export async function rateLimit(key, limit, windowSeconds) {
     mem.set(bucket, count);
     return count <= limit;
   }
-  const redis = redisClient();
-  const count = await redis.incr(bucket);
-  if (count === 1) await redis.expire(bucket, windowSeconds);
+  const count = await redisClient().eval(RATE_LIMIT_LUA, [bucket], [windowSeconds]);
   return count <= limit;
 }
 
-export async function updateOrder(id, patch) {
-  const existing = await getOrder(id);
-  if (!existing) return null;
-  const updated = { ...existing, ...patch, updatedAt: Date.now() };
+// Status changes are read-check-write, so they run as one Lua script: two
+// admin tabs racing (one marking done, a stale one still on firing) must not
+// let the stale write resurrect a terminal order. KEEPTTL preserves the
+// original 3-day expiry instead of restarting it on every touch.
+// Returns { order }, { conflict: currentStatus }, or { order: null } (missing).
+const SET_STATUS_LUA = `
+local cur = redis.call('GET', KEYS[1])
+if not cur then return nil end
+local order = cjson.decode(cur)
+if (order.status == 'done' or order.status == 'cancelled') and order.status ~= ARGV[1] then
+  return 'terminal:' .. order.status
+end
+order.status = ARGV[1]
+order.updatedAt = tonumber(ARGV[2])
+local encoded = cjson.encode(order)
+redis.call('SET', KEYS[1], encoded, 'KEEPTTL')
+return encoded`;
+
+export async function setOrderStatus(id, status) {
   if (!hasRedisEnv()) {
+    // Single-process and synchronous between read and write — no await, no race
+    const existing = memory.get(id);
+    if (!existing) return { order: null };
+    if ((existing.status === 'done' || existing.status === 'cancelled') && existing.status !== status) {
+      return { conflict: existing.status };
+    }
+    const updated = { ...existing, status, updatedAt: Date.now() };
     memory.set(id, updated);
-    return updated;
+    return { order: updated };
   }
-  await redisClient().set(`pp:order:${id}`, updated, { ex: ORDER_TTL_SECONDS });
-  return updated;
+  const res = await redisClient().eval(SET_STATUS_LUA, [`pp:order:${id}`], [status, Date.now()]);
+  if (res === null) return { order: null };
+  if (typeof res === 'string' && res.startsWith('terminal:')) return { conflict: res.slice('terminal:'.length) };
+  // The SDK auto-parses JSON results; a raw string means parsing was disabled
+  return { order: typeof res === 'string' ? JSON.parse(res) : res };
 }

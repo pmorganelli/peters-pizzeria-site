@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { readBody, readQuery, send, isAdmin, clientIp, hasRedisEnv } from './_lib/util.js';
 import { catalog, ADDON_CATEGORY, PIZZA_CATEGORY } from './_lib/catalog.js';
-import { createOrder, getOrder, listOrders, updateOrder, getSettings, rateLimit } from './_lib/store.js';
+import { createOrder, getOrder, listOrders, setOrderStatus, getSettings, rateLimit } from './_lib/store.js';
 import { isOpenNow } from './_lib/hours.js';
 
 const STATUSES = ['new', 'firing', 'ready', 'done', 'cancelled'];
@@ -23,6 +23,7 @@ function validateItems(rawItems) {
   if (!Array.isArray(rawItems) || rawItems.length === 0 || rawItems.length > 40) return null;
   const menu = catalog();
   const items = [];
+  const seen = new Set();
   for (const raw of rawItems) {
     const entry = menu.get(raw?.name);
     const qty = Number(raw?.qty);
@@ -42,6 +43,11 @@ function validateItems(rawItems) {
         item.addons = addons;
       }
     }
+    // One line per name+addon set — the client's grouping guarantees this,
+    // and the admin/status UIs key list rows on it.
+    const lineKey = `${item.name}::${(item.addons ?? []).map((a) => a.name).sort().join(',')}`;
+    if (seen.has(lineKey)) return null;
+    seen.add(lineKey);
     items.push(item);
   }
   return items;
@@ -103,10 +109,18 @@ async function create(req, res) {
   }
 
   const totalCents = items.reduce((sum, it) => sum + lineTotal(it), 0);
+
+  // 4 chars from a 31-symbol alphabet is only ~923k codes — at a few hundred
+  // live orders a birthday collision is a real % chance, and `find` would
+  // then hand a customer someone else's order. Reroll against live codes.
+  const liveCodes = new Set((await listOrders()).map((o) => o.code));
+  let code = makeCode();
+  for (let i = 0; i < 10 && liveCodes.has(code); i++) code = makeCode();
+
   const now = Date.now();
   const order = {
     id: makeId(),
-    code: makeCode(),
+    code,
     name,
     contact,
     notes,
@@ -171,13 +185,10 @@ async function patch(req, res) {
   try { body = await readBody(req); } catch { return send(res, 400, { error: 'Invalid JSON' }); }
   if (!id || !STATUSES.includes(body.status)) return send(res, 400, { error: 'Invalid id or status' });
   // Terminal states are final — a stale admin tab must not resurrect a
-  // cancelled order or un-complete a picked-up one.
-  const existing = await getOrder(id);
-  if (!existing) return send(res, 404, { error: 'Order not found' });
-  if ((existing.status === 'cancelled' || existing.status === 'done') && existing.status !== body.status) {
-    return send(res, 409, { error: `Order is already ${existing.status} — refresh the board.` });
-  }
-  const order = await updateOrder(id, { status: body.status });
+  // cancelled order or un-complete a picked-up one. The check-and-write is
+  // atomic in the store so two racing tabs can't slip past it.
+  const { order, conflict } = await setOrderStatus(id, body.status);
+  if (conflict) return send(res, 409, { error: `Order is already ${conflict} — refresh the board.` });
   if (!order) return send(res, 404, { error: 'Order not found' });
   return send(res, 200, { order });
 }

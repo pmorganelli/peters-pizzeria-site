@@ -241,7 +241,12 @@ export function AdminPage({ nav }) {
   const [storeInfo, setStoreInfo] = useState(null);
   const [draft, setDraft] = useState({ day: 6, start: '19:00', end: '20:30' });
   const [savingStore, setSavingStore] = useState(false);
+  const [storeError, setStoreError] = useState('');
   const draftSeeded = useRef(false);
+  // Bumped by every mutation (advance, 86 toggle, hours save). A poll snapshot
+  // taken before a mutation is stale — applying it would visually revert the
+  // change, and a re-tap would then persist the wrong state to the server.
+  const epoch = useRef(0);
 
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
@@ -260,11 +265,13 @@ export function AdminPage({ nav }) {
 
   const load = useCallback(async () => {
     if (!authed) return;
+    const snapshot = epoch.current;
     try {
       const [{ orders: list }, status] = await Promise.all([
         api('/api/orders'),
         api('/api/store'),
       ]);
+      if (epoch.current !== snapshot) return; // a mutation superseded this poll
       setOrders(list);
       setStoreInfo(status);
       // Seed the schedule editor once; don't clobber in-progress edits on poll
@@ -279,11 +286,15 @@ export function AdminPage({ nav }) {
 
   const saveStore = async (next) => {
     setSavingStore(true);
+    setStoreError('');
+    epoch.current += 1; // invalidate polls in flight before this save
     try {
       const status = await api('/api/store', { method: 'PATCH', body: next });
+      epoch.current += 1; // …and polls whose GET raced the PATCH server-side
       setStoreInfo(status);
     } catch (err) {
       if (err.status === 401) logout('Session expired — log in again.');
+      else setStoreError(err.message || 'Could not save — try again.');
     } finally {
       setSavingStore(false);
     }
@@ -311,9 +322,11 @@ export function AdminPage({ nav }) {
 
   const advance = async (order, status) => {
     // Optimistic update; the next poll reconciles
+    epoch.current += 1; // a poll from before this tap must not snap the card back
     setOrders((list) => list.map((o) => (o.id === order.id ? { ...o, status } : o)));
     try {
       await api(`/api/orders?id=${encodeURIComponent(order.id)}`, { method: 'PATCH', body: { status } });
+      epoch.current += 1;
     } catch {
       load();
     }
@@ -332,8 +345,10 @@ export function AdminPage({ nav }) {
     const addons = new Map();
     for (const o of queued) {
       for (const it of o.items) {
+        // Pizzas get the bright chips; everything else (add-ons, desserts,
+        // sides) is dimmed — a dessert-only order must still show up here.
         if (it.category === PIZZA_CATEGORY) pizzas.set(it.name, (pizzas.get(it.name) || 0) + it.qty);
-        else if (it.category === ADDON_CATEGORY) addons.set(it.name, (addons.get(it.name) || 0) + it.qty);
+        else addons.set(it.name, (addons.get(it.name) || 0) + it.qty);
         // add-ons attached to slices (each applies once per slice in the line)
         for (const a of it.addons ?? []) addons.set(a.name, (addons.get(a.name) || 0) + it.qty);
       }
@@ -384,6 +399,7 @@ export function AdminPage({ nav }) {
       </div>
 
       <div className="admin-body">
+      {storeError && <div className="order-error admin-store-error" role="alert">{storeError}</div>}
       {storeInfo && (
         <StorePanel
           storeInfo={storeInfo} savingStore={savingStore}
@@ -397,7 +413,7 @@ export function AdminPage({ nav }) {
 
       <div className="fire-panel">
         <div className="fire-panel-label"><Flame size={13} /> Fire next</div>
-        {fireNext.pizzas.length === 0 && fireNext.addons.length === 0 ? (
+        {fireNext.waiting === 0 ? (
           <div className="fire-empty">Oven&apos;s clear — no new orders waiting.</div>
         ) : (
           <>

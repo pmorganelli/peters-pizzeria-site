@@ -55,7 +55,38 @@ export default function App() {
     if (navTimer.current) clearTimeout(navTimer.current);
     if (navRaf.current) cancelAnimationFrame(navRaf.current);
     if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    // Reduced motion: swap instantly. The CSS reduced-motion block forces
+    // transition-duration to ~0 (!important beats inline styles), so the fade
+    // choreography below would just blank the page for the whole 260ms timeout.
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      // Clear any leftovers from a fade that was in flight when the
+      // preference flipped — otherwise the wrapper could stay at opacity 0.
+      el.style.willChange = '';
+      el.style.transition = '';
+      el.style.opacity = '';
+      el.style.transform = '';
+      if (newArticle) setArticle(newArticle);
+      setPage(newPage);
+      return;
+    }
     const transition = `opacity ${TRANSITION_MS}ms ease, transform ${TRANSITION_MS}ms ease`;
+    // Tapping back to the still-rendered page mid-fade-out: reverse the fade
+    // in place rather than completing a swap to the same page (which would
+    // replay the whole out/in for nothing).
+    if (inFlight && !newArticle && newPage === pageNow.current) {
+      el.style.transition = transition;
+      el.style.opacity = '1';
+      el.style.transform = 'none';
+      refreshTimer.current = setTimeout(() => {
+        el.style.willChange = '';
+        el.style.transition = '';
+        el.style.opacity = '';
+        el.style.transform = '';
+        refreshTimer.current = null;
+      }, TRANSITION_MS + 150);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
     // Promote the wrapper to its own layer for the whole out→in sequence so the
     // compositor isn't re-rasterizing the page at each phase; cleared on settle.
     el.style.willChange = 'opacity, transform';

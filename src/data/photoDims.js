@@ -12,6 +12,7 @@ export const PHOTO_RATIOS = {
   '/photos/bambinoPictures/vodkaSlice.jpeg': '3024/4032',
   '/photos/bambinoVitoSlice.png': '1122/1449',
   '/photos/gustongue.jpg': '4284/5712',
+  '/photos/house-sign.jpg': '1124/1358',
   '/photos/hug1.jpg': '816/1199',
   '/photos/hug2.jpg': '980/1030',
   '/photos/image09324.jpg': '3024/4032',

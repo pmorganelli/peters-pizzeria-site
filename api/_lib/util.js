@@ -83,23 +83,31 @@ function parseCookies(req) {
   for (const part of header.split(';')) {
     const i = part.indexOf('=');
     if (i === -1) continue;
-    out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim());
+    // A malformed %-escape in any cookie must not throw — skip that cookie
+    try { out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim()); } catch { /* ignore */ }
   }
   return out;
 }
 
+// `Secure` only on Vercel: local dev serves http://localhost, and Safari
+// (unlike Chrome/Firefox) refuses Secure cookies over plain http even there.
+const cookieAttrs = () => `HttpOnly;${process.env.VERCEL ? ' Secure;' : ''} SameSite=Strict; Path=/`;
+
 export function setAuthCookie(res, value) {
-  res.setHeader('Set-Cookie', `${COOKIE_NAME}=${encodeURIComponent(value)}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${COOKIE_MAX_AGE}`);
+  res.setHeader('Set-Cookie', `${COOKIE_NAME}=${encodeURIComponent(value)}; ${cookieAttrs()}; Max-Age=${COOKIE_MAX_AGE}`);
 }
 
 export function clearAuthCookie(res) {
-  res.setHeader('Set-Cookie', `${COOKIE_NAME}=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0`);
+  res.setHeader('Set-Cookie', `${COOKIE_NAME}=; ${cookieAttrs()}; Max-Age=0`);
 }
 
 export function isAdmin(req) {
   const token = adminToken();
   if (!token) return false;
-  const provided = parseCookies(req)[COOKIE_NAME] || '';
-  if (provided.length !== token.length) return false;
-  return crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(token));
+  const provided = Buffer.from(parseCookies(req)[COOKIE_NAME] || '');
+  const expected = Buffer.from(token);
+  // Compare byte lengths, not string lengths — a multibyte cookie value with
+  // the right character count would make timingSafeEqual throw.
+  if (provided.length !== expected.length) return false;
+  return crypto.timingSafeEqual(provided, expected);
 }

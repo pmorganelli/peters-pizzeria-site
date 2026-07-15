@@ -32,6 +32,9 @@ export function validateSettings(body) {
   const h = body.hours ?? DEFAULT_SETTINGS.hours;
   const day = Number(h.day);
   if (!Number.isInteger(day) || day < 0 || day > 6) return null;
+  // Strings only: RegExp.test coerces, so ['19:00'] would pass the regex
+  // and then crash toMins with a 500 instead of this 400.
+  if (typeof h.start !== 'string' || typeof h.end !== 'string') return null;
   if (!HHMM.test(h.start) || !HHMM.test(h.end)) return null;
   if (toMins(h.start) >= toMins(h.end)) return null;
   let tz = typeof h.tz === 'string' ? h.tz : DEFAULT_SETTINGS.hours.tz;

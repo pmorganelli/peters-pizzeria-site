@@ -63,7 +63,7 @@ export function Lightbox({ photos, index, onClose, onPrev, onNext }) {
         className="lb-img"
         src={webSrc(photos[index])}
         srcSet={`${webSrc(photos[index])} 1600w, ${photos[index]} 3600w`}
-        sizes="88vw"
+        sizes="(max-width: 768px) 96vw, 88vw"
         alt="Enlarged view"
         onClick={(e) => e.stopPropagation()}
       />
@@ -71,7 +71,9 @@ export function Lightbox({ photos, index, onClose, onPrev, onNext }) {
         <>
           <button type="button" className="lb-arrow lb-prev" aria-label="Previous photo" onClick={(e) => { e.stopPropagation(); onPrev(); }}><ArrowLeft size={20} strokeWidth={1.5} /></button>
           <button type="button" className="lb-arrow lb-next" aria-label="Next photo" onClick={(e) => { e.stopPropagation(); onNext(); }}><ArrowRight size={20} strokeWidth={1.5} /></button>
-          <div className="lb-counter">{index + 1} / {photos.length}</div>
+          {/* stopPropagation: bottom-center is a natural thumb rest on phones —
+              a tap here must not bubble to the dialog's onClick and close it */}
+          <div className="lb-counter" onClick={(e) => e.stopPropagation()}>{index + 1} / {photos.length}</div>
         </>
       )}
     </dialog>

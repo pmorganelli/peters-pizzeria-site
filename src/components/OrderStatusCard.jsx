@@ -23,13 +23,20 @@ export function OrderStatusCard({ order, onNewOrder }) {
   const doneIdx = TIMELINE.findIndex((s) => s.status === order.status);
   // 'done' means every step is complete; -1 only happens for 'cancelled'
   const activeIdx = order.status === 'done' ? TIMELINE.length : doneIdx;
+  const cancelled = order.status === 'cancelled';
+  const pickedUp = order.status === 'done';
+  const firstName = order.name.split(' ')[0];
 
   return (
     <div className="confirm-wrap">
       <div className="confirm-card">
-        <div className="section-label">Order placed</div>
+        <div className="section-label">
+          {cancelled ? 'Order cancelled' : pickedUp ? 'Order complete' : 'Order placed'}
+        </div>
         <h2 className="confirm-title">
-          Thanks, {order.name.split(' ')[0]} — <em>you&apos;re in the queue.</em>
+          {cancelled ? <>Sorry, {firstName} — <em>this one was cancelled.</em></>
+            : pickedUp ? <>Thanks, {firstName} — <em>enjoy your slices!</em></>
+            : <>Thanks, {firstName} — <em>you&apos;re in the queue.</em></>}
         </h2>
 
         {/* keyed by status so the banner re-animates when the kitchen advances the order */}
@@ -50,7 +57,9 @@ export function OrderStatusCard({ order, onNewOrder }) {
             <div className="confirm-code-label">Pickup code</div>
             <div className="confirm-code">#{order.code}</div>
           </div>
-          <div className="confirm-hint">Show this screen when you pick up. This page updates as we cook.</div>
+          {!cancelled && !pickedUp && (
+            <div className="confirm-hint">Show this screen when you pick up. This page updates as we cook.</div>
+          )}
         </div>
 
         {order.status === 'cancelled' ? (
@@ -90,13 +99,17 @@ export function OrderStatusCard({ order, onNewOrder }) {
         </div>
 
         <div className="confirm-actions">
-          <a className="btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }} href={VENMO_URL} target="_blank" rel="noreferrer">
-            Pay {fmtMoney(order.totalCents)} on Venmo <ArrowRight size={13} />
-          </a>
+          {/* No pay CTA on a cancelled order — nothing is owed */}
+          {!cancelled && (
+            <a className="btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }} href={VENMO_URL} target="_blank" rel="noreferrer">
+              Pay {fmtMoney(order.totalCents)} on Venmo <ArrowRight size={13} />
+            </a>
+          )}
           <button type="button" className="text-link-btn" onClick={onNewOrder}>Start another order</button>
         </div>
         <div className="confirm-fineprint">
-          Venmo @Peter-Morganelli24 or Zelle — pay now or at the window. Current status: {STATUS_LABELS[order.status]}.
+          {!cancelled && <>Venmo @Peter-Morganelli24 or Zelle — pay now or at the window.{' '}</>}
+          Current status: {STATUS_LABELS[order.status]}.
         </div>
       </div>
     </div>

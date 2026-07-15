@@ -927,7 +927,10 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 44px 60p
 .finished-cancelled { color: var(--red-light); }
 
 /* ── LIGHTBOX ───────────────────────────────────────────────────────── */
-.lb-overlay { position: fixed; inset: 0; z-index: 600; margin: 0; border: none; padding: 0; max-width: none; max-height: none; color: inherit; background: rgba(15,8,2,0.96); display: flex; align-items: center; justify-content: center; touch-action: none; overscroll-behavior: contain; animation: lb-overlay-in 0.18s ease; }
+/* width/height auto override the UA dialog's fit-content sizing so inset: 0
+   stretches the box to fill the viewport (fit-content + margin: 0 would
+   shrink-wrap the image and pin it to the top-left corner) */
+.lb-overlay { position: fixed; inset: 0; z-index: 600; margin: 0; border: none; padding: 0; width: auto; height: auto; max-width: none; max-height: none; color: inherit; background: rgba(15,8,2,0.96); display: flex; align-items: center; justify-content: center; touch-action: none; overscroll-behavior: contain; animation: lb-overlay-in 0.18s ease; }
 .lb-overlay::backdrop { background: transparent; }
 .lb-img { max-width: 88vw; max-height: 88vh; object-fit: contain; display: block; user-select: none; animation: lb-img-in 0.22s ease; }
 @keyframes lb-overlay-in { from { opacity: 0; } }
@@ -950,10 +953,12 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 44px 60p
 
 /* ── REVEAL ANIMATIONS (driven by GSAP ScrollTrigger in useScrollReveal) ──
    .reveal is the pre-animation hidden state; GSAP tweens the element in and
-   stamps .revealed on completion. reveal-delay-N classes are stagger markers
+   stamps data-revealed on completion (an attribute, not a class — React
+   rewrites className wholesale when a dynamic className prop changes, which
+   would strip a hook-added class). reveal-delay-N classes are stagger markers
    read by the hook — they carry no styles of their own. */
 .reveal { opacity: 0; transform: translateY(28px); }
-.reveal.revealed { opacity: 1; transform: none; }
+.reveal[data-revealed] { opacity: 1; transform: none; }
 
 /* ── PAPER GRAIN ────────────────────────────────────────────────────── */
 /* Placed after the section backgrounds so background-image wins the cascade */

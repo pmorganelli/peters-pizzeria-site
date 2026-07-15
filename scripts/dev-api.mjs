@@ -5,6 +5,7 @@ import http from 'node:http';
 import ordersHandler from '../api/orders.js';
 import loginHandler from '../api/login.js';
 import storeHandler from '../api/store.js';
+import { devMode } from '../api/_lib/util.js';
 
 const PORT = process.env.API_PORT || 3010;
 const routes = {
@@ -29,5 +30,5 @@ http.createServer(async (req, res) => {
     res.end(JSON.stringify({ error: 'Internal error' }));
   }
 }).listen(PORT, () => {
-  console.log(`[dev-api] listening on http://localhost:${PORT} (in-memory orders${process.env.ADMIN_PASSWORD ? '' : ', admin password: "admin"'})`);
+  console.log(`[dev-api] listening on http://localhost:${PORT} (in-memory orders${devMode() ? ', admin password: "admin"' : ''})`);
 });

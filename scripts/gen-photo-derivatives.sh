@@ -2,7 +2,7 @@
 # Generate photos/thumbs (max 640px) and photos/web (max 1600px) derivatives.
 # Never upscales: images smaller than the target are copied as-is.
 set -euo pipefail
-cd /Users/petermorganelli/peters-pizzeria-site
+cd "$(dirname "$0")/.."
 
 mkdir -p photos/thumbs/bambinoPictures photos/web/bambinoPictures
 
