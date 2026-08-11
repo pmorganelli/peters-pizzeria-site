@@ -14,6 +14,7 @@
     "@chenglou/pretext": "^0.0.8",
     "@gsap/react": "^2.1.2",
     "@upstash/redis": "^1.38.0",
+    "@vercel/blob": "^2.8.0",
     "gsap": "^3.15.0",
     "lucide-react": "^1.24.0",
     "react": "^18.3.1",
@@ -26,25 +27,28 @@
     "react-doctor": "^0.7.8",
     "react-scan": "^0.5.7",
     "tailwindcss": "^3.4.14",
-    "vercel": "^55.0.0",
+    "vercel": "^58.9.2",
     "vite": "^6.4.3"
   },
   "overrides": {
     "@tootallnate/once@<2.0.1": "2.0.1",
     "ajv@>=7.0.0-alpha.0 <8.18.0": "8.20.0",
+    "brace-expansion@5": "5.0.9",
     "esbuild@<=0.24.2": "0.27.7",
-    "js-yaml@>=4.0.0 <4.2.0": "4.3.0",
+    "fast-uri@>=3.0.0 <=3.1.4": "3.1.5",
+    "js-yaml@>=4.0.0 <=4.3.0": "4.3.1",
     "minimatch@>=10.0.0 <10.2.3": "10.2.5",
     "smol-toml@<1.6.1": "1.6.1",
-    "tar@<=7.5.15": "7.5.20",
+    "tar@<=7.5.21": "7.5.22",
+    "undici@<=6.27.0": "6.28.0",
     "@vercel/node": {
-      "undici": "6.27.0",
+      "undici": "6.28.0",
       "path-to-regexp": "6.3.0"
     },
     "@vercel/fun": {
-      "undici": "6.27.0",
+      "undici": "6.28.0",
       "path-to-regexp": "8.4.2",
-      "tar": "7.5.20",
+      "tar": "7.5.22",
       "@tootallnate/once": "2.0.1"
     },
     "@vercel/remix-builder": {
@@ -59,8 +63,11 @@
     "@vercel/hono": {
       "path-to-regexp": "8.4.2"
     },
+    "@vercel/sandbox": {
+      "undici": "7.29.0"
+    },
     "vercel": {
-      "undici": "6.27.0",
+      "undici": "6.28.0",
       "smol-toml": "1.6.1"
     }
   }

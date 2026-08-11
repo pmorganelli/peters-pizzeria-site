@@ -1,7 +1,9 @@
-import { ArrowRight, Check, Clock, Flame } from 'lucide-react';
+import { ArrowRight, Camera, Check, Clock, Flame } from 'lucide-react';
 import { displayName, fmtMoney, itemTotalCents, orderLineKey, STATUS_LABELS } from '../utils/orders';
 
 const VENMO_URL = 'https://venmo.com/u/Peter-Morganelli24';
+// Handed to the wall so the customer doesn't retype a code they're looking at.
+const SLICE_HANDOFF_KEY = 'pp_slice_code:v1';
 
 const TIMELINE = [
   { status: 'new', label: 'Received', Icon: Clock },
@@ -19,7 +21,7 @@ const STATUS_META = {
 };
 
 // Live order card shared by the order confirmation and the Slice Status page.
-export function OrderStatusCard({ order, onNewOrder }) {
+export function OrderStatusCard({ order, onNewOrder, nav }) {
   const doneIdx = TIMELINE.findIndex((s) => s.status === order.status);
   // 'done' means every step is complete; -1 only happens for 'cancelled'
   const activeIdx = order.status === 'done' ? TIMELINE.length : doneIdx;
@@ -97,6 +99,27 @@ export function OrderStatusCard({ order, onNewOrder }) {
             <span>{fmtMoney(order.totalCents)}</span>
           </div>
         </div>
+
+        {/* Only once there's actually a slice in hand — no point asking someone
+            to photograph a pizza that's still in the oven. */}
+        {(pickedUp || order.status === 'ready') && nav && (
+          <button
+            type="button"
+            className="slices-cta"
+            onClick={() => {
+              // The name is only a label for the "post as" toggle — the server
+              // still resolves the real one from the order.
+              localStorage.setItem(SLICE_HANDOFF_KEY, JSON.stringify({ code: order.code, name: firstName }));
+              nav('slices');
+            }}
+          >
+            <Camera size={16} strokeWidth={1.5} />
+            <span>
+              <strong>Got your slice?</strong> Put a photo on the wall.
+            </span>
+            <ArrowRight size={13} />
+          </button>
+        )}
 
         <div className="confirm-actions">
           {/* No pay CTA on a cancelled order — nothing is owed */}

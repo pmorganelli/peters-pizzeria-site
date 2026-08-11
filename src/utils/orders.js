@@ -51,3 +51,20 @@ export function ageLabel(ts) {
   if (mins < 60) return `${mins}m`;
   return `${Math.floor(mins / 60)}h ${mins % 60}m`;
 }
+
+// Spelled-out relative time for the community wall. The kitchen board keeps the
+// compact ageLabel above — "12m" scans better down a dense column of live
+// orders — but a photo caption reads better as "12 min ago". This also grows a
+// days bucket, which the wall needs and the board never does: orders expire in
+// 3 days, wall posts live 90, and "1583h 12m" is not a timestamp.
+export function agoLabel(ts) {
+  // floor, not round: a photo posted 40 seconds ago should still read "just
+  // now" rather than jumping to "1 min ago" before a minute has passed.
+  const mins = Math.max(0, Math.floor((Date.now() - ts) / 60000));
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins} min ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days === 1 ? '' : 's'} ago`;
+}

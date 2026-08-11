@@ -55,11 +55,12 @@ nav.scrolled {
   font-family: var(--serif); font-size: 20px; font-weight: 700; font-style: italic;
   color: var(--red); letter-spacing: 0.3px; line-height: 1;
 }
-.nav-links { display: flex; gap: 36px; align-items: center; }
+.nav-links { display: flex; gap: 28px; align-items: center; }
 .nav-link {
   font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 1.5px;
   text-transform: uppercase; color: var(--ink2); cursor: pointer;
   position: relative; padding-bottom: 2px; transition: color 0.2s;
+  white-space: nowrap; /* "Community Pictures" must not wrap to two lines */
 }
 .nav-link::after {
   content: ''; position: absolute; bottom: -2px; left: 0; right: 0;
@@ -516,7 +517,7 @@ nav.nav-dark.scrolled .nav-hamburger span { background: var(--ink); }
    pins the footer to the bottom so short pages on tall/fullscreen windows
    don't leave a cream gap beneath it. */
 footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 44px 60px 20px; margin-top: auto; }
-.menu-page, .blog-page, .article-page, .gallery-page, .studio-page, .order-page, .admin-page {
+.menu-page, .blog-page, .article-page, .gallery-page, .studio-page, .order-page, .slices-page, .admin-page {
   min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column;
 }
 .footer-top { display: grid; grid-template-columns: 2fr 1fr 1fr 1.2fr; gap: 36px; margin-bottom: 32px; }
@@ -563,6 +564,171 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 44px 60p
 .story-photo-inset-btn { position: absolute; bottom: -24px; right: -24px; width: 34%; }
 .text-link-btn { font-family: var(--mono); font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--red); border-bottom: 1px solid var(--red); padding-bottom: 2px; transition: opacity 0.2s; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
 .text-link-btn:hover { opacity: 0.7; }
+
+/* ── SLICES (community wall) ────────────────────────────────────────── */
+.slices-page { background: var(--ink); padding-top: 72px; }
+.slices-hero {
+  background: var(--ink); padding: 80px 60px 48px; position: relative; overflow: hidden;
+  border-bottom: 1px solid rgba(254,245,239,0.06);
+}
+.slices-hero .section-label::before { background: var(--gold); }
+.slices-hero-title {
+  font-family: var(--serif); font-size: clamp(44px, 7vw, 90px);
+  font-weight: 800; font-style: italic; line-height: 0.92; color: var(--cream);
+}
+.slices-hero-sub {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
+  color: rgba(254,245,239,0.4); margin-top: 18px;
+  display: flex; align-items: center; gap: 9px;
+}
+
+/* Composer — a light card on the dark page, so it reads as the one place to
+   act rather than another tile in the wall. */
+.slices-composer-wrap { padding: 40px 60px 0; display: flex; justify-content: center; }
+.slices-composer {
+  width: 100%; max-width: 460px; background: white; border-top: 3px solid var(--red);
+  box-shadow: 0 12px 44px rgba(26,18,8,0.28); padding: 28px 30px 24px;
+}
+/* Collapsed state — the wall is the point of the page when you arrive from the
+   nav, so the form stays out of the way until asked for. */
+.slices-open-composer {
+  width: 100%; max-width: 460px; display: flex; align-items: center; gap: 12px;
+  padding: 16px 20px; background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(254,245,239,0.16); border-left: 3px solid var(--gold);
+  color: var(--cream); font-family: var(--serif); font-size: 15px; text-align: left;
+  transition: background 0.2s, transform 0.15s;
+}
+.slices-open-composer span { flex: 1; }
+.slices-open-composer strong { font-style: italic; }
+@media (hover: hover) {
+  .slices-open-composer:hover { background: rgba(255,255,255,0.09); transform: translateY(-2px); }
+}
+
+.slices-composer-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  margin-bottom: 16px;
+}
+.slices-composer-label {
+  font-family: var(--serif); font-size: 19px; font-style: italic; font-weight: 700;
+  color: var(--ink);
+}
+.slices-composer-close {
+  flex: none; width: 30px; height: 30px; margin: -4px -6px 0 0; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--ink2); transition: background 0.2s, color 0.2s;
+}
+@media (hover: hover) { .slices-composer-close:hover { background: var(--cream2); color: var(--red); } }
+.slices-posted-actions { display: flex; align-items: center; justify-content: center; gap: 20px; flex-wrap: wrap; }
+.slices-picker {
+  width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; padding: 34px 20px; background: var(--cream);
+  border: 1px dashed rgba(26,18,8,0.22); border-radius: 4px; color: var(--ink2);
+  font-family: var(--mono); font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+@media (hover: hover) {
+  .slices-picker:hover { background: var(--cream2); border-color: var(--red); color: var(--red); }
+}
+.slices-picker:disabled { opacity: 0.45; cursor: not-allowed; }
+.slices-preview { position: relative; }
+.slices-preview img { width: 100%; display: block; border-radius: 4px; object-fit: cover; }
+.slices-preview-clear {
+  position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; border-radius: 50%;
+  background: rgba(26,18,8,0.72); color: var(--cream);
+  display: flex; align-items: center; justify-content: center; transition: background 0.2s;
+}
+@media (hover: hover) { .slices-preview-clear:hover { background: var(--red); } }
+.slices-optional { text-transform: none; letter-spacing: 0; color: rgba(90,74,58,0.6); }
+/* Post-as toggle — a two-up segmented control, not a checkbox, so the
+   attributed and anonymous choices carry equal visual weight. */
+.slices-who { display: flex; gap: 8px; }
+.slices-who-btn {
+  flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  padding: 10px 8px; background: var(--cream); border: 1px solid var(--cream2);
+  border-radius: 3px; color: var(--ink2);
+  font-family: var(--serif); font-size: 14px;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+@media (hover: hover) { .slices-who-btn:hover { border-color: rgba(224,54,22,0.45); color: var(--ink); } }
+.slices-who-on { background: white; border-color: var(--red); color: var(--red); font-style: italic; }
+.slices-submit { width: 100%; margin-top: 18px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.slices-submit:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: none; }
+.slices-fineprint {
+  font-family: var(--serif); font-size: 12.5px; color: var(--ink2);
+  margin-top: 14px; line-height: 1.55;
+}
+.slices-posted { text-align: center; padding: 8px 0 4px; }
+.slices-posted-sub { font-family: var(--serif); font-size: 14px; color: var(--ink2); margin: 10px 0 16px; }
+
+/* Wall */
+/* Deleting your own photo happens out here, with the composer shut — so the
+   failure needs its own home on the dark wall rather than the composer's
+   .order-error, which is off-screen or unmounted at that point. */
+.slices-wall-error {
+  max-width: 560px; margin: 28px auto 0; padding: 0 20px 0 12px;
+  border-left-color: var(--red-light); color: var(--red-light);
+}
+.slices-empty {
+  padding: 60px 60px 80px; text-align: center;
+  font-family: var(--serif); font-size: 17px; font-style: italic; color: rgba(254,245,239,0.35);
+}
+.slices-grid { padding: 40px 60px 80px; columns: 4; column-gap: 10px; }
+/* The tile is a plain wrapper, not the clickable element — a poster's delete
+   button sits inside it, and a button can't nest in a button. */
+.slices-item {
+  break-inside: avoid; margin-bottom: 10px; overflow: hidden; position: relative;
+  display: block; width: 100%; background: rgba(254,245,239,0.04);
+  /* New posts arrive by polling — reuse the status-banner entrance so an item
+     appearing mid-scroll reads as arriving rather than as a layout glitch. */
+  animation: status-rise 0.45s cubic-bezier(.22,1,.36,1) both;
+}
+.slices-item-open { display: block; width: 100%; cursor: pointer; }
+/* Only shown on your own photos; sits opposite the caption so it never covers it */
+.slices-item-delete {
+  position: absolute; top: 8px; right: 8px; min-width: 30px; height: 30px; padding: 0 9px;
+  border-radius: 15px; background: rgba(26,18,8,0.66); color: rgba(254,245,239,0.85);
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  font-family: var(--mono); font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase;
+  transition: background 0.2s, color 0.2s;
+}
+@media (hover: hover) { .slices-item-delete:hover { background: var(--red); color: white; } }
+.slices-item-delete-armed { background: var(--red); color: white; }
+.slices-item-delete:disabled { opacity: 0.5; cursor: wait; }
+.slices-item img { width: 100%; display: block; transition: transform 0.5s cubic-bezier(.22,1,.36,1); filter: brightness(0.92); }
+@media (hover: hover) { .slices-item:hover img { transform: scale(1.04); filter: brightness(1); } }
+.slices-item-meta {
+  position: absolute; inset: auto 0 0 0; padding: 26px 14px 12px; text-align: left;
+  display: flex; flex-direction: column; gap: 2px;
+  background: linear-gradient(to top, rgba(26,18,8,0.82), transparent);
+  opacity: 0; transition: opacity 0.25s;
+}
+/* Touch devices get no hover, so the caption has to be visible by default */
+@media (hover: hover) { .slices-item:hover .slices-item-meta { opacity: 1; } }
+@media (hover: none) { .slices-item-meta { opacity: 1; } }
+.slices-item-name {
+  font-family: var(--serif); font-size: 15px; font-style: italic; font-weight: 700; color: var(--cream);
+}
+.slices-item-caption {
+  font-family: var(--serif); font-size: 13px; color: rgba(254,245,239,0.8); line-height: 1.4;
+  /* Captions are customer-written and length-capped server-side, but a single
+     unbroken 80-char string would still blow out the column */
+  overflow-wrap: anywhere;
+}
+.slices-item-age {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: 1.5px; text-transform: uppercase;
+  color: rgba(254,245,239,0.45); margin-top: 3px;
+}
+
+/* CTA on the order confirmation / status card */
+.slices-cta {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  margin-top: 20px; padding: 14px 16px; background: var(--cream);
+  border-left: 3px solid var(--gold); color: var(--ink);
+  font-family: var(--serif); font-size: 14.5px; transition: background 0.2s, transform 0.15s;
+}
+.slices-cta span { flex: 1; }
+.slices-cta strong { font-style: italic; }
+@media (hover: hover) { .slices-cta:hover { background: var(--cream2); transform: translateX(2px); } }
 
 /* ── STUDIO ─────────────────────────────────────────────────────────── */
 .studio-page { background: var(--ink); padding-top: 72px; color: var(--cream); }
@@ -882,6 +1048,34 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 44px 60p
 .avail-chip-tag { font-family: var(--mono); font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--red-light); font-style: normal; }
 .avail-chip:disabled { cursor: wait; }
 
+/* Slice wall moderation */
+.mod-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
+.mod-item {
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(254,245,239,0.1);
+  padding: 8px; display: flex; flex-direction: column; gap: 6px;
+}
+/* Hidden posts stay legible but obviously inert — this is the takedown state */
+.mod-item-hidden { opacity: 0.42; border-style: dashed; }
+.mod-item img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
+.mod-meta { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.mod-name { font-family: var(--serif); font-size: 14px; font-style: italic; font-weight: 700; color: var(--cream); }
+.mod-age { font-family: var(--mono); font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: rgba(254,245,239,0.4); }
+.mod-caption {
+  font-family: var(--serif); font-size: 12.5px; color: rgba(254,245,239,0.7); line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.mod-actions { display: flex; gap: 6px; margin-top: auto; }
+.mod-btn {
+  flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  padding: 7px 6px; border: 1px solid rgba(254,245,239,0.22); color: rgba(254,245,239,0.8);
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: 1px; text-transform: uppercase;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+@media (hover: hover) { .mod-btn:hover { background: rgba(254,245,239,0.1); color: var(--cream); } }
+@media (hover: hover) { .mod-btn-danger:hover { background: rgba(224,54,22,0.18); border-color: var(--red-light); color: var(--red-light); } }
+.mod-btn-armed { background: var(--red); border-color: var(--red); color: white; }
+.mod-btn:disabled { cursor: wait; opacity: 0.5; }
+
 .fire-panel { padding: 20px 24px; background: rgba(200,147,58,0.07); border: 1px solid rgba(200,147,58,0.35); margin-bottom: 28px; }
 .fire-panel-label { display: inline-flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 10px; font-weight: 500; letter-spacing: 2.5px; text-transform: uppercase; color: var(--gold); margin-bottom: 12px; }
 .fire-counts { display: flex; flex-wrap: wrap; gap: 10px; }
@@ -943,6 +1137,19 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 44px 60p
 .lb-arrow.lb-prev { left: 20px; }
 .lb-arrow.lb-next { right: 20px; }
 .lb-counter { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); font-family: var(--mono); font-size: 11px; letter-spacing: 2px; color: rgba(254,245,239,0.4); }
+/* Caption bar for community photos — sits above the counter so the two never
+   overlap on a tall portrait shot. */
+.lb-caption {
+  position: absolute; bottom: 52px; left: 50%; transform: translateX(-50%);
+  max-width: min(88vw, 620px); text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+}
+.lb-caption-name { font-family: var(--serif); font-size: 17px; font-style: italic; font-weight: 700; color: var(--cream); }
+.lb-caption-text { font-family: var(--serif); font-size: 15px; color: rgba(254,245,239,0.82); line-height: 1.45; overflow-wrap: anywhere; }
+.lb-caption-age { font-family: var(--mono); font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: rgba(254,245,239,0.4); }
+/* The image is centred and sized off the viewport, so it has to give up room
+   for the caption or a tall portrait shot renders straight through it. */
+.lb-has-caption .lb-img { max-height: 70vh; }
 
 /* SplitText line masks clip at the line box, but EB Garamond's bold-italic
    descenders (the "y" tail) paint below the font's declared descent — no
@@ -969,15 +1176,18 @@ body, .story-section, .home-latest, .menu-page, .blog-page, .article-page {
 /* ── RESPONSIVE ─────────────────────────────────────────────────────── */
 @media (max-width: 900px) {
   .gallery-grid { columns: 2; }
+  .slices-grid { columns: 2; }
   /* No horizontal overhang once the layout tightens — the -24px corner accent
      would poke past the viewport edge (masked only by body overflow-x:hidden) */
   .story-photo-inset-btn { right: 0; }
 }
 
-/* Nav switches to the hamburger earlier than the page layouts (900px, not
-   768px): with five links plus Order Now, the desktop nav has no breathing
-   room below ~900px and Slice Status crowds the button. */
-@media (max-width: 900px) {
+/* Nav switches to the hamburger earlier than the page layouts (1080px, not
+   768px): with six links plus Order Now — and "Community Pictures" being the
+   longest label by some margin — the desktop nav runs out of breathing room
+   well before the page grids do, and the last link crowds the button.
+   Was 900px when the nav carried five links. */
+@media (max-width: 1080px) {
   /* safe-area insets keep the logo/hamburger clear of the notch in landscape */
   nav { padding: 0 max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left)); justify-content: flex-start; gap: 12px; }
   /* No backdrop blur on phones: the nav background is 96% opaque so the blur
@@ -1035,9 +1245,17 @@ body, .story-section, .home-latest, .menu-page, .blog-page, .article-page {
   .blog-hero { padding: 132px 24px 48px; }
   /* .gallery-page already carries 72px of nav clearance — don't double it */
   .gallery-hero { padding: 56px 24px 40px; }
+  .slices-hero { padding: 56px 24px 36px; }
+  .slices-composer-wrap { padding: 28px 20px 0; }
+  .slices-composer { padding: 24px 22px 22px; }
+  /* Unlike the gallery, the wall keeps its masonry columns on phones — these
+     are portrait phone photos, and cropping them square is the whole subject. */
+  .slices-grid { padding: 24px 20px 60px; column-gap: 8px; }
+  .slices-item { margin-bottom: 8px; }
+  .slices-empty { padding: 40px 24px 60px; }
   .studio-head { padding: 40px 24px 0; }
   .studio-grid { grid-template-columns: 1fr; gap: 32px; padding: 28px 24px 64px; }
-  .blog-hero-title, .gallery-hero-title { font-size: clamp(36px, 10vw, 60px); }
+  .blog-hero-title, .gallery-hero-title, .slices-hero-title { font-size: clamp(36px, 10vw, 60px); }
   .article-back, .article-hero, .article-divider, .article-body,
   .article-hero-img, .article-next { padding-left: 20px; padding-right: 20px; }
   .article-next-card { grid-template-columns: 96px 1fr; gap: 14px; padding: 12px; }
@@ -1069,6 +1287,10 @@ body, .story-section, .home-latest, .menu-page, .blog-page, .article-page {
   .lb-arrow.lb-prev { left: 6px; }
   .lb-arrow.lb-next { right: 6px; }
   .lb-img { max-width: 96vw; max-height: 80vh; }
+  .lb-has-caption .lb-img { max-height: 62vh; }
+  .lb-caption { max-width: 92vw; bottom: 46px; }
+  .lb-caption-name { font-size: 16px; }
+  .lb-caption-text { font-size: 14px; }
   .order-head { padding: 28px 24px 0; }
   .order-grid { grid-template-columns: 1fr; gap: 32px; padding: 28px 24px 96px; }
   .order-mobilebar { display: flex; }

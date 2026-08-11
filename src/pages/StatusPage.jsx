@@ -123,7 +123,7 @@ export function StatusPage({ nav }) {
 
       {loading ? null : order ? (
         <>
-          <OrderStatusCard order={order} onNewOrder={newOrder} />
+          <OrderStatusCard order={order} onNewOrder={newOrder} nav={nav} />
           <div className="confirm-wrap status-not-you">
             <button type="button" className="text-link-btn" onClick={forget}>
               Not your order? Look up a different one

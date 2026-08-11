@@ -402,7 +402,7 @@ export function OrderPage({ nav }) {
       </div>
 
       {loadingSaved || store === null ? null : order ? (
-        <OrderStatusCard order={order} onNewOrder={newOrder} />
+        <OrderStatusCard order={order} onNewOrder={newOrder} nav={nav} />
       ) : !store.open ? (
         <ClosedCard store={store} nav={nav} />
       ) : (

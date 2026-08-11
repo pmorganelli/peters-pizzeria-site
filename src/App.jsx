@@ -12,12 +12,13 @@ import { GalleryPage } from './pages/GalleryPage';
 import { StudioPage }  from './pages/StudioPage';
 import { OrderPage }   from './pages/OrderPage';
 import { StatusPage }  from './pages/StatusPage';
+import { SlicesPage }  from './pages/SlicesPage';
 import { AdminPage }   from './pages/AdminPage';
 
 gsap.registerPlugin(ScrollTrigger);
 
 const TRANSITION_MS = 260;
-const VALID_PAGES = ['home', 'menu', 'blog', 'gallery', 'studio', 'order', 'status', 'admin'];
+const VALID_PAGES = ['home', 'menu', 'blog', 'gallery', 'studio', 'order', 'status', 'slices', 'admin'];
 
 export default function App() {
   const [page,    setPage]    = useState(() => {
@@ -29,6 +30,7 @@ export default function App() {
   const [lbPhotos, setLbPhotos] = useState([]);
   const [lbIndex,  setLbIndex]  = useState(0);
   const [lbOpen,   setLbOpen]   = useState(false);
+  const [lbCaptions, setLbCaptions] = useState(null);
   const pending = useRef({});
   const navTimer = useRef(null);
   const navRaf = useRef(null);
@@ -139,7 +141,10 @@ export default function App() {
   }, []);
 
   const openArticle  = useCallback((post) => nav('article', post), [nav]);
-  const openLightbox = useCallback((photos, index) => { setLbPhotos(photos); setLbIndex(index); setLbOpen(true); }, []);
+  // `captions` is optional — only the community wall passes one.
+  const openLightbox = useCallback((photos, index, captions = null) => {
+    setLbPhotos(photos); setLbIndex(index); setLbCaptions(captions); setLbOpen(true);
+  }, []);
   const lbPrev = useCallback(() => setLbIndex((i) => (i - 1 + lbPhotos.length) % lbPhotos.length), [lbPhotos]);
   const lbNext = useCallback(() => setLbIndex((i) => (i + 1) % lbPhotos.length), [lbPhotos]);
 
@@ -160,12 +165,14 @@ export default function App() {
         {page === 'studio'  && <StudioPage  nav={nav} />}
         {page === 'order'   && <OrderPage   nav={nav} />}
         {page === 'status'  && <StatusPage  nav={nav} />}
+        {page === 'slices'  && <SlicesPage  nav={nav} openLightbox={openLightbox} />}
         {page === 'admin'   && <AdminPage   nav={nav} />}
       </div>
 
       {lbOpen && (
         <Lightbox
           photos={lbPhotos}
+          captions={lbCaptions}
           index={lbIndex}
           onClose={() => setLbOpen(false)}
           onPrev={lbPrev}

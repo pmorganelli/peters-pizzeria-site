@@ -2,9 +2,15 @@ import { useEffect, useRef } from 'react';
 import { X, ArrowLeft, ArrowRight } from 'lucide-react';
 import { webSrc } from '../utils/photos';
 
-export function Lightbox({ photos, index, onClose, onPrev, onNext }) {
+// `captions` is optional and parallel to `photos` — the community wall passes
+// one, the gallery doesn't. Each entry is { name, caption, age } or null.
+export function Lightbox({ photos, index, onClose, onPrev, onNext, captions }) {
   const touchX = useRef(null);
   const dialogRef = useRef(null);
+  // A photo with neither a name nor a caption gets no bar at all, rather than
+  // an empty strip across the bottom of the image.
+  const entry = captions?.[index];
+  const caption = entry && (entry.name || entry.caption) ? entry : null;
 
   // Native <dialog> gives us the focus trap and backdrop for free, but it has
   // to be opened imperatively via showModal() — there's no declarative "open as
@@ -44,17 +50,21 @@ export function Lightbox({ photos, index, onClose, onPrev, onNext }) {
   return (
     <dialog
       ref={dialogRef}
-      className="lb-overlay"
+      className={`lb-overlay${caption ? ' lb-has-caption' : ''}`}
       aria-label="Photo lightbox"
       onClick={onClose}
       onCancel={(e) => { e.preventDefault(); onClose(); }}
-      onTouchStart={(e) => { touchX.current = e.touches[0].clientX; }}
+      onTouchStart={(e) => { touchX.current = e.touches[0]?.clientX ?? null; }}
       onTouchEnd={(e) => {
-        if (touchX.current === null) return;
-        const dx = e.changedTouches[0].clientX - touchX.current;
+        // A touch list can come back empty (cancelled or multi-touch gestures),
+        // and reading .clientX off nothing throws mid-swipe.
+        const endX = e.changedTouches[0]?.clientX;
+        const startX = touchX.current;
+        touchX.current = null;
+        if (startX === null || endX === undefined) return;
+        const dx = endX - startX;
         if (dx > 50) onPrev();
         else if (dx < -50) onNext();
-        touchX.current = null;
       }}
     >
       <button type="button" className="lb-close" aria-label="Close lightbox" onClick={(e) => { e.stopPropagation(); onClose(); }}><X size={13} /> close</button>
@@ -67,12 +77,20 @@ export function Lightbox({ photos, index, onClose, onPrev, onNext }) {
         alt="Enlarged view"
         onClick={(e) => e.stopPropagation()}
       />
+      {/* stopPropagation throughout the bottom furniture: it sits where a thumb
+          naturally rests on phones, and a tap must not bubble to the dialog's
+          onClick and close the lightbox. */}
+      {caption && (
+        <div className="lb-caption" onClick={(e) => e.stopPropagation()}>
+          {caption.name && <span className="lb-caption-name">{caption.name}</span>}
+          {caption.caption && <span className="lb-caption-text">{caption.caption}</span>}
+          {caption.age && <span className="lb-caption-age">{caption.age}</span>}
+        </div>
+      )}
       {photos.length > 1 && (
         <>
           <button type="button" className="lb-arrow lb-prev" aria-label="Previous photo" onClick={(e) => { e.stopPropagation(); onPrev(); }}><ArrowLeft size={20} strokeWidth={1.5} /></button>
           <button type="button" className="lb-arrow lb-next" aria-label="Next photo" onClick={(e) => { e.stopPropagation(); onNext(); }}><ArrowRight size={20} strokeWidth={1.5} /></button>
-          {/* stopPropagation: bottom-center is a natural thumb rest on phones —
-              a tap here must not bubble to the dialog's onClick and close it */}
           <div className="lb-counter" onClick={(e) => e.stopPropagation()}>{index + 1} / {photos.length}</div>
         </>
       )}
