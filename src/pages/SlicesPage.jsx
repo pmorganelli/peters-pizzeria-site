@@ -12,6 +12,11 @@ import { readMine, writeMine, readHandoff, clearHandoff, deviceToken, formReduce
 // reads as live for a page people leave open, at a third of the traffic.
 const POLL_MS = 30000;
 
+// Same key OrderPage.jsx / StatusPage.jsx save the device's current order id
+// under — reused here (not imported) to match how those two already each
+// keep their own copy of it.
+const ORDER_ID_KEY = 'pp_order_id';
+
 // `code` deliberately stays in the parent: closing the composer unmounts
 // this and everything here resets, but the pickup code is the tedious part
 // to retype if you reopen.
@@ -158,7 +163,7 @@ function SliceComposer({ code, setCode, name, onPosted, onClose }) {
       </div>
 
       <label className="order-field">
-        <span>Caption <span className="slices-optional">(optional)</span></span>
+        <span><span className="slices-optional">Caption (optional)</span></span>
         <input
           value={caption}
           onChange={(e) => dispatch({ type: 'caption', caption: e.target.value })}
@@ -178,8 +183,7 @@ function SliceComposer({ code, setCode, name, onPosted, onClose }) {
       {error && <div className="order-error" role="alert">{error}</div>}
 
       <div className="slices-fineprint">
-        Your first name comes from your order — pick Anonymous and it won&apos;t be shown.
-        Maximum three photos per order. The code stays good for a few days after you pick up!
+        Maximum three photos per order.
       </div>
     </form>
   );
@@ -195,6 +199,7 @@ export function SlicesPage({ nav, openLightbox }) {
   // key straight afterwards — a later read would always come back empty.
   const [handoff] = useState(readHandoff);
   const [code, setCode] = useState(handoff.code);
+  const [posterName, setPosterName] = useState(handoff.name);
   // Arriving from the nav, this page is a wall of pictures and the form would
   // just push it down; arriving from the order confirmation, posting is the
   // entire reason you're here, so the form is already open and prefilled.
@@ -215,6 +220,29 @@ export function SlicesPage({ nav, openLightbox }) {
     window.scrollTo(0, 0);
     clearHandoff(); // one-shot handoff
   }, []);
+
+  // Arriving from the nav rather than the order-ready CTA, there's no handoff
+  // — but this device may still be tracking an order (pp_order_id, same key
+  // StatusPage/OrderPage use). Look it up so the code is filled with whatever
+  // order is actually current instead of sitting blank or, worse, whatever the
+  // customer last typed in weeks ago. A cancelled order can't post — leave the
+  // field blank rather than filling in a code that will just get rejected.
+  useEffect(() => {
+    if (handoff.code) return undefined;
+    const savedId = localStorage.getItem(ORDER_ID_KEY);
+    if (!savedId) return undefined;
+    let cancelled = false;
+    api(`/api/orders?id=${encodeURIComponent(savedId)}`)
+      .then(({ order }) => {
+        if (cancelled || order.status === 'cancelled') return;
+        setCode((cur) => cur || order.code);
+        setPosterName((cur) => cur || (order.name || '').split(' ')[0]);
+      })
+      .catch((err) => {
+        if (!cancelled && err.status === 404) localStorage.removeItem(ORDER_ID_KEY);
+      });
+    return () => { cancelled = true; };
+  }, [handoff.code]);
 
   // Persisted from an effect rather than inside the setMine updaters: state
   // updaters have to stay pure, and React may invoke them more than once.
@@ -316,7 +344,7 @@ export function SlicesPage({ nav, openLightbox }) {
           <SliceComposer
             code={code}
             setCode={setCode}
-            name={handoff.name}
+            name={posterName}
             onPosted={handlePosted}
             onClose={() => setComposerOpen(false)}
           />
