@@ -39,7 +39,7 @@ export function BlogPage({ nav, openArticle }) {
         <LineReveal
           as="p"
           className="blog-hero-sub"
-          text="New posts every week — what we're making, learning, and eating."
+          text="What we're making, learning, and eating."
         />
       </div>
 

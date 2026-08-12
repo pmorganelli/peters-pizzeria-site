@@ -31,3 +31,4 @@ skills-lock.json
 
 # personal Claude Code permissions (machine-local)
 .claude/settings.local.json
+.env*.local

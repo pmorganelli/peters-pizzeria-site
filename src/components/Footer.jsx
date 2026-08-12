@@ -7,6 +7,7 @@ const PAGES = [
   ['blog', 'Blog'],
   ['gallery', 'Gallery'],
   ['status', 'Slice Status'],
+  ['slices', 'Community Pictures'],
 ];
 
 export function Footer({ nav }) {

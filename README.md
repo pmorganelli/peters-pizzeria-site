@@ -83,8 +83,16 @@ log in, and get a live board — New / In the oven / Ready columns plus a
   86 it — it greys out on the homepage specials, menu, and order page, and
   can't be ordered until you tap it back on. Homepage specials come from
   menu items tagged `special` in `src/data/menu.js`
-- **Safeguards**: per-IP + global rate limits on orders, login brute-force
-  lockout, server-side price/item validation, unguessable order ids,
+- **Post your slice**: customers put a photo of themselves with their pizza on
+  a public wall that updates live. Posting needs the pickup code from a real
+  order (3 photos per order, code good for as long as the order lives — 3
+  days); photos go up instantly and are taken down from the admin board's
+  Slice wall panel, which offers Hide (reversible) and Delete (permanent).
+  Posters can also delete their own photo from the wall, on the device they
+  posted it from
+- **Safeguards**: per-IP + global rate limits on orders, uploads and login,
+  brute-force lockout, server-side price/item validation, unguessable order
+  ids, uploads validated by magic bytes and capped in size,
   security headers via `vercel.json`
 
 ### Production setup (Vercel)
@@ -93,7 +101,10 @@ log in, and get a live board — New / In the oven / Ready columns plus a
    injects `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN`
 2. Set `ADMIN_PASSWORD` in the project's environment variables — admin login
    refuses to work in production until this is set
-3. Redeploy
+3. Create a Blob store (dashboard → Storage → Blob, or `vercel blob store add`)
+   — injects `BLOB_READ_WRITE_TOKEN`, which the slice wall needs. Without it
+   the wall still displays, but posting returns a friendly 503
+4. Redeploy
 
 Follow **@peterspizzeria_** on Instagram for weekly drop location and order
 open announcements.
