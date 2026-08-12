@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { put, del } from '@vercel/blob';
 import { readBody, readQuery, send, isAdmin, clientIp, hasRedisEnv } from './_lib/util.js';
-import { listOrders, rateLimit } from './_lib/store.js';
+import { listOrders, rateLimit, ORDER_TTL_SECONDS } from './_lib/store.js';
 import {
   createSlice, getSlice, listSlices, setSliceHidden, deleteSlice,
   claimSliceQuota, releaseSliceQuota,
@@ -10,15 +10,17 @@ import {
 const MAX_PER_ORDER = 3;
 
 // A pickup code can only be resolved while its order still exists, and orders
-// self-expire after 3 days (ORDER_TTL_SECONDS in _lib/store.js). Advertising a
-// longer window than that would just fail confusingly at the lookup step.
-const POST_WINDOW_MS = 1000 * 60 * 60 * 24 * 3;
+// self-expire after ORDER_TTL_SECONDS (_lib/store.js). Advertising a longer
+// window than that would just fail confusingly at the lookup step.
+const POST_WINDOW_MS = ORDER_TTL_SECONDS * 1000;
 
 // Encoded payload cap. The client downscales to ~200-400 KB before sending;
 // base64 inflates by ~33%, so this leaves generous headroom while keeping the
 // buffered body small.
 const MAX_BODY_BYTES = 1_500_000;
 const MAX_IMAGE_BYTES = 1_000_000;
+// {device} is a short token; a DELETE body claiming more than this is abuse.
+const MAX_DELETE_BODY_BYTES = 2_000;
 
 // @vercel/blob accepts either a long-lived read/write token or OIDC auth
 // (VERCEL_OIDC_TOKEN + BLOB_STORE_ID) — connecting a store through the
@@ -140,11 +142,12 @@ const adminSlice = ({ orderId, deviceHash, ...rest }) => rest;
 // GET /api/slices?admin=1 — full list including hidden (admin only)
 async function read(req, res) {
   const { admin } = readQuery(req);
-  const all = await listSlices();
   if (admin !== undefined) {
     if (!isAdmin(req)) return send(res, 401, { error: 'Admin login required' });
+    const all = await listSlices();
     return send(res, 200, { slices: all.map(adminSlice) });
   }
+  const all = await listSlices();
   // One pass rather than .filter().map() — the wall can hold 300 records and
   // this runs on every poll from every open tab.
   const visible = [];
@@ -190,21 +193,9 @@ async function create(req, res) {
     return send(res, 400, { error: 'Invalid post-as setting — refresh and try again.' });
   }
 
-  const code = clean(body.code, 12).replace(/^#/, '').toUpperCase();
-  if (code.length < 3) return send(res, 400, { error: 'Enter the pickup code from your order.' });
-
-  // Exact code match only — never by name. The `find` lookup in orders.js
-  // matches names too, which is fine for reading your own status but would let
-  // anyone post as anyone here.
-  const orders = await listOrders();
-  const order = orders.find((o) => o.code?.toUpperCase() === code);
-  const tooOld = order && Date.now() - order.createdAt > POST_WINDOW_MS;
-  // One generic message for missing / expired / cancelled, so the endpoint
-  // can't be used to probe which pickup codes are real.
-  if (!order || tooOld || order.status === 'cancelled') {
-    return send(res, 400, { error: 'That pickup code did not match a recent order.' });
-  }
-
+  // Validated before the pickup code is even looked up: if a bad file produced
+  // a different error than a bad code, that difference would let an attacker
+  // probe which codes are real without ever needing a working photo.
   const raw = typeof body.image === 'string' ? body.image : '';
   const base64 = raw.startsWith('data:') ? raw.slice(raw.indexOf(',') + 1) : raw;
   if (!base64 || base64.length > MAX_BODY_BYTES) {
@@ -223,6 +214,21 @@ async function create(req, res) {
   const meta = imageMeta(buf);
   if (!meta || !meta.w || !meta.h) {
     return send(res, 400, { error: 'That file is not a photo we can display (JPEG, PNG or WebP only).' });
+  }
+
+  const code = clean(body.code, 12).replace(/^#/, '').toUpperCase();
+  if (code.length < 3) return send(res, 400, { error: 'Enter the pickup code from your order.' });
+
+  // Exact code match only — never by name. The `find` lookup in orders.js
+  // matches names too, which is fine for reading your own status but would let
+  // anyone post as anyone here.
+  const orders = await listOrders();
+  const order = orders.find((o) => o.code?.toUpperCase() === code);
+  const tooOld = order && Date.now() - order.createdAt > POST_WINDOW_MS;
+  // One generic message for missing / expired / cancelled, so the endpoint
+  // can't be used to probe which pickup codes are real.
+  if (!order || tooOld || order.status === 'cancelled') {
+    return send(res, 400, { error: 'That pickup code did not match a recent order.' });
   }
 
   // Claim the slot before uploading so two parallel requests can't both take
@@ -312,6 +318,10 @@ async function remove(req, res) {
   if (!slice) return send(res, 404, { error: 'Post not found' });
 
   if (!admin) {
+    const declared = Number(req.headers['content-length']);
+    if (Number.isFinite(declared) && declared > MAX_DELETE_BODY_BYTES) {
+      return send(res, 413, { error: 'Invalid request.' });
+    }
     let body = {};
     try { body = await readBody(req); } catch { /* no credential; fails below */ }
     if (!ownsSlice(slice, body.device)) {

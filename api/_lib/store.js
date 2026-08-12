@@ -7,7 +7,7 @@ import { DEFAULT_SETTINGS } from './hours.js';
 // before the integration is installed — a per-process in-memory map is used
 // instead so the whole flow still works end-to-end.
 
-const ORDER_TTL_SECONDS = 60 * 60 * 24 * 3; // orders self-expire after 3 days
+export const ORDER_TTL_SECONDS = 60 * 60 * 24 * 3; // orders self-expire after 3 days
 const INDEX_KEY = 'pp:order-index';
 const MAX_LISTED = 300;
 

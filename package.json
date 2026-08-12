@@ -8,7 +8,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "dev:api": "node scripts/dev-api.mjs",
-    "doctor": "npx react-doctor"
+    "doctor": "npx react-doctor",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@chenglou/pretext": "^0.0.8",
@@ -28,7 +30,8 @@
     "react-scan": "^0.5.7",
     "tailwindcss": "^3.4.14",
     "vercel": "^58.9.2",
-    "vite": "^6.4.3"
+    "vite": "^6.4.3",
+    "vitest": "^4.1.10"
   },
   "overrides": {
     "@tootallnate/once@<2.0.1": "2.0.1",
