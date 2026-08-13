@@ -274,6 +274,9 @@ async function create(req, res) {
     // self-deletable, rather than being deletable by anyone.
     deviceHash: typeof body.device === 'string' && body.device ? hashDevice(body.device) : null,
     createdAt: Date.now(),
+    // Posts go live the moment they're uploaded — moderation is take-down
+    // (DELETE) only, from the community pictures page itself, not a
+    // pre-publish approval queue.
     hidden: false,
   };
 

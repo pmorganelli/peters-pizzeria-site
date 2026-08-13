@@ -7,6 +7,7 @@ import ordersHandler from '../api/orders.js';
 import loginHandler from '../api/login.js';
 import storeHandler from '../api/store.js';
 import slicesHandler from '../api/slices.js';
+import nightsHandler from '../api/nights.js';
 import { devMode } from '../api/_lib/util.js';
 
 // Pull *only* the Blob credentials out of .env.local, so photo posting can be
@@ -32,6 +33,7 @@ const routes = {
   '/api/login': loginHandler,
   '/api/store': storeHandler,
   '/api/slices': slicesHandler,
+  '/api/nights': nightsHandler,
 };
 
 http.createServer(async (req, res) => {

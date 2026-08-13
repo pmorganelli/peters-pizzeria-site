@@ -1,6 +1,28 @@
 // Shared between the client pages and the api/ functions (the API imports
 // parsePriceCents so prices are computed from one implementation).
 
+import { MENU_DATA } from '../data/menu.js';
+
+// Per-slice order cap. Most slices allow up to this many; an item can set its
+// own lower `maxQty` in menu.js (e.g. Margherita, capped at 4).
+export const DEFAULT_MAX_QTY = 8;
+const MAX_QTY_BY_NAME = new Map(MENU_DATA.flatMap((s) => s.items.map((it) => [it.name, it.maxQty ?? DEFAULT_MAX_QTY])));
+
+// Caps each item's units to its current maxQty. Used both to migrate the
+// legacy flat-{name: qty} cart shape and to re-clamp a persisted cart that
+// predates a maxQty change (or a since-lowered one) — without this, a
+// stepper that won't grow past its own stale cap still submits an over-cap
+// total, and checkout fails with a confusing generic error instead of the
+// cart just reading correctly on load.
+export function clampCartQty(cart) {
+  const clamped = {};
+  for (const [name, units] of Object.entries(cart)) {
+    if (!Array.isArray(units) || units.length === 0) continue;
+    clamped[name] = units.slice(0, MAX_QTY_BY_NAME.get(name) ?? DEFAULT_MAX_QTY);
+  }
+  return clamped;
+}
+
 export function parsePriceCents(label) {
   const s = String(label).replace('+', '').trim();
   if (/^free$/i.test(s)) return 0;
@@ -24,6 +46,22 @@ export const STATUS_LABELS = {
 // appears after a quantity ("2 × + Burrata" reads badly).
 export const displayName = (name) => String(name).replace(/^\+\s*/, '');
 
+const ITEM_DESC_BY_NAME = new Map(MENU_DATA.flatMap((s) => s.items.map((it) => [it.name, it.desc])));
+const ADDON_KEYWORD_BY_NAME = new Map(MENU_DATA.flatMap((s) => s.items.map((it) => [it.name, it.keyword])));
+
+// An add-on's display name, adjusted for the slice it's attached to: if the
+// slice's own description already includes that ingredient (e.g. stracciatella
+// on Chef's Choice), the add-on reads as "Extra X" there instead of plain "X".
+export function addonLabel(addonName, itemName) {
+  const label = displayName(addonName);
+  const keyword = ADDON_KEYWORD_BY_NAME.get(addonName);
+  const desc = ITEM_DESC_BY_NAME.get(itemName);
+  if (keyword && desc && desc.toLowerCase().includes(keyword) && !/^extra\b/i.test(label)) {
+    return `Extra ${label}`;
+  }
+  return label;
+}
+
 
 // One order line's total: (slice + its add-ons) × qty. Add-ons are nested
 // on the line ({ name, priceCents }) — legacy orders have none.
@@ -35,6 +73,11 @@ export const itemTotalCents = (it) =>
 // uniquely identifies a line within an order — no index needed.
 export const orderLineKey = (it) =>
   `${it.name}::${(it.addons ?? []).map((a) => a.name).join(',')}`;
+
+// One-line summary of an order's items for compact list rows (admin Finished
+// list, the past-nights archive) — "2× Cheese Slice, 1× Pepperoni (+ Hot Honey)"
+export const formatOrderItems = (items) =>
+  items.map((it) => `${it.qty}× ${displayName(it.name)}${it.addons?.length ? ` (+ ${it.addons.map((a) => addonLabel(a.name, it.name)).join(', ')})` : ''}`).join(', ');
 
 export const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 

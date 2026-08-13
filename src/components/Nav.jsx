@@ -16,7 +16,7 @@ export function Nav({ page, nav }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   const doNav = (p) => { setMenuOpen(false); nav(p); };
-  const isDark = ['home', 'gallery', 'blog', 'menu', 'studio', 'slices', 'admin'].includes(page);
+  const isDark = ['home', 'gallery', 'blog', 'menu', 'studio', 'slices', 'admin', 'nights'].includes(page);
 
   return (
     <nav className={[scrolled ? 'scrolled' : '', isDark ? 'nav-dark' : ''].filter(Boolean).join(' ')}>

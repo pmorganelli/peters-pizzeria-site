@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Camera, Check, Eye, EyeOff, Flame, LogOut, RotateCcw, Store, Trash2, UtensilsCrossed, X } from 'lucide-react';
+import { Archive, Check, Flame, LogOut, Moon, RotateCcw, Store, UtensilsCrossed, X } from 'lucide-react';
 import { Footer } from '../components/Footer';
 import { MENU_DATA } from '../data/menu';
 import { api } from '../utils/api';
-import { DAY_NAMES, displayName, fmtMoney, fmtTime, ageLabel, agoLabel, orderLineKey } from '../utils/orders';
+import { DAY_NAMES, addonLabel, displayName, fmtMoney, fmtTime, formatOrderItems, ageLabel, orderLineKey } from '../utils/orders';
 
 const POLL_MS = 5000;
 const PIZZA_CATEGORY = MENU_DATA[0].category;
@@ -73,7 +73,7 @@ function OrderCard({ order, column, onAdvance, onCancel }) {
           <div key={orderLineKey(it)} className={`oc-item${it.category === PIZZA_CATEGORY ? ' oc-item-pizza' : ''}`}>
             <span className="oc-qty">{it.qty}×</span> {it.category === ADDON_CATEGORY ? `+ ${displayName(it.name)}` : it.name}
             {it.addons?.length > 0 && (
-              <span className="oc-item-addons"> · + {it.addons.map((a) => displayName(a.name)).join(', + ')}</span>
+              <span className="oc-item-addons"> · + {it.addons.map((a) => addonLabel(a.name, it.name)).join(', + ')}</span>
             )}
           </div>
         ))}
@@ -198,7 +198,10 @@ function Board({ orders, advance, cancel }) {
   return (
     <div className="board">
       {COLUMNS.map((col) => {
-        const list = orders.filter((o) => o.status === col.status);
+        // Oldest first — a column reads top-to-bottom as a queue, and the
+        // order nearest to firing/pickup should be at the top, not buried
+        // under whatever just came in.
+        const list = orders.filter((o) => o.status === col.status).sort((a, b) => a.createdAt - b.createdAt);
         return (
           <div key={col.status} className="board-col">
             <div className="board-col-title">{col.title} <span className="board-count">{list.length}</span></div>
@@ -213,71 +216,37 @@ function Board({ orders, advance, cancel }) {
   );
 }
 
-// Community wall moderation. Posts go live the moment they're uploaded, so
-// this is the takedown surface: Hide is instant and reversible, Delete is
-// permanent and also removes the stored image.
-function SlicesPanel({ slices, busyId, armedId, hideSlice, removeSlice }) {
-  if (!slices) return null;
-  return (
-    <div className="avail-panel">
-      <div className="store-panel-label"><Camera size={13} /> Slice wall — {slices.length} posted</div>
-      {slices.length === 0 ? (
-        <div className="fire-empty">Nothing posted yet.</div>
-      ) : (
-        <div className="mod-grid">
-          {slices.map((s) => (
-            <div key={s.id} className={`mod-item${s.hidden ? ' mod-item-hidden' : ''}`}>
-              <img src={s.url} alt={s.caption || `Posted by ${s.name || 'a customer'}`} loading="lazy" decoding="async" />
-              <div className="mod-meta">
-                <span className="mod-name">{s.name || 'anon'}</span>
-                {/* Wall posts live 90 days, so this needs the days bucket that
-                    ageLabel (built for same-day orders) doesn't have. */}
-                <span className="mod-age">{agoLabel(s.createdAt)}</span>
-              </div>
-              {s.caption && <div className="mod-caption">{s.caption}</div>}
-              <div className="mod-actions">
-                <button type="button"
-                  className="mod-btn"
-                  disabled={busyId === s.id}
-                  onClick={() => hideSlice(s, !s.hidden)}
-                  aria-label={s.hidden ? 'Show this post on the wall' : 'Hide this post from the wall'}
-                >
-                  {s.hidden ? <><Eye size={12} /> Show</> : <><EyeOff size={12} /> Hide</>}
-                </button>
-                {/* Two taps rather than a confirm() dialog — deleting is
-                    permanent, but a modal would block the whole board. */}
-                <button type="button"
-                  className={`mod-btn mod-btn-danger${armedId === s.id ? ' mod-btn-armed' : ''}`}
-                  disabled={busyId === s.id}
-                  onClick={() => removeSlice(s)}
-                  aria-label={armedId === s.id ? 'Confirm permanent delete' : 'Delete this post permanently'}
-                >
-                  <Trash2 size={12} /> {armedId === s.id ? 'Tap to confirm' : 'Delete'}
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function FinishedList({ finished }) {
+// Finished orders, plus a footer line with tonight's running total (picked-up
+// orders only — same rule "close for the night" uses, so this number matches
+// what closing will archive) and the close button itself. Keeping the total
+// and the close action here, rather than a standalone panel, means they read
+// as a running tally of the very rows above them.
+function FinishedList({ finished, totalCents, canClose, closing, closeNight }) {
   return (
     <div className="admin-finished">
       <div className="board-col-title"><RotateCcw size={11} /> Finished ({finished.length})</div>
-      {finished.map((o) => (
-        <div key={o.id} className="finished-row">
-          <span className="oc-code">#{o.code}</span>
-          <span>{o.name}</span>
-          <span className="finished-items">
-            {o.items.map((it) => `${it.qty}× ${displayName(it.name)}${it.addons?.length ? ` (+ ${it.addons.map((a) => displayName(a.name)).join(', ')})` : ''}`).join(', ')}
-          </span>
-          <span>{fmtMoney(o.totalCents)}</span>
-          <span className={`finished-status finished-${o.status}`}>{o.status === 'done' ? 'picked up' : 'cancelled'}</span>
-        </div>
-      ))}
+      {finished.length === 0
+        ? <div className="board-empty">—</div>
+        : finished.map((o) => (
+          <div key={o.id} className="finished-row">
+            <span className="oc-code">#{o.code}</span>
+            <span>{o.name}</span>
+            <span className="finished-items">{formatOrderItems(o.items)}</span>
+            <span>{fmtMoney(o.totalCents)}</span>
+            <span className={`finished-status finished-${o.status}`}>{o.status === 'done' ? 'picked up' : 'cancelled'}</span>
+          </div>
+        ))}
+      <div className="finished-row finished-total-row">
+        <span className="finished-total-label">Tonight&apos;s total</span>
+        <span className="finished-total-amount">{fmtMoney(totalCents)}</span>
+        <button type="button"
+          className="night-close-btn"
+          disabled={!canClose || closing}
+          onClick={closeNight}
+        >
+          <Moon size={12} /> {closing ? 'Closing…' : 'Close for the night'}
+        </button>
+      </div>
     </div>
   );
 }
@@ -292,9 +261,7 @@ export function AdminPage({ nav }) {
   const [draft, setDraft] = useState({ day: 6, start: '19:00', end: '20:30' });
   const [savingStore, setSavingStore] = useState(false);
   const [storeError, setStoreError] = useState('');
-  const [slices, setSlices] = useState(null);
-  const [sliceBusyId, setSliceBusyId] = useState(null);
-  const [sliceArmedId, setSliceArmedId] = useState(null);
+  const [closingNight, setClosingNight] = useState(false);
   const draftSeeded = useRef(false);
   // Bumped by every mutation (advance, 86 toggle, hours save). A poll snapshot
   // taken before a mutation is stale — applying it would visually revert the
@@ -320,19 +287,13 @@ export function AdminPage({ nav }) {
     if (!authed) return;
     const snapshot = epoch.current;
     try {
-      const [{ orders: list }, status, wall] = await Promise.all([
+      const [{ orders: list }, status] = await Promise.all([
         api('/api/orders'),
         api('/api/store'),
-        // The wall is a secondary panel — if it errors, this leg resolves to
-        // null instead of rejecting the whole poll. Sharing a Promise.all with
-        // the orders fetch would otherwise let a bad slice record freeze the
-        // kitchen board on stale data while the "live" dot keeps pulsing.
-        api('/api/slices?admin=1').then((d) => d.slices).catch(() => null),
       ]);
       if (epoch.current !== snapshot) return; // a mutation superseded this poll
       setOrders(list);
       setStoreInfo(status);
-      if (wall) setSlices(wall); // null = this poll's wall fetch failed; keep the last good list
       // Seed the schedule editor once; don't clobber in-progress edits on poll
       if (!draftSeeded.current && status.hours) {
         draftSeeded.current = true;
@@ -372,46 +333,37 @@ export function AdminPage({ nav }) {
     saveStore({ unavailable: [...next] });
   };
 
-  const hideSlice = async (slice, hidden) => {
-    setSliceBusyId(slice.id);
-    setSliceArmedId(null);
+  const closeNight = async () => {
+    if (!orders || orders.length === 0 || closingNight) return;
+    setClosingNight(true);
     setStoreError('');
-    epoch.current += 1;
-    // Optimistic: hiding something offensive should feel instant.
-    setSlices((list) => list.map((s) => (s.id === slice.id ? { ...s, hidden } : s)));
     try {
-      await api(`/api/slices?id=${encodeURIComponent(slice.id)}`, { method: 'PATCH', body: { hidden } });
-      epoch.current += 1;
-    } catch (err) {
-      if (err.status === 401) logout('Session expired — log in again.');
-      else { setStoreError(err.message || 'Could not update that post.'); load(); }
-    } finally {
-      setSliceBusyId(null);
-    }
-  };
-
-  const removeSlice = async (slice) => {
-    // First tap arms, second tap deletes — the image is gone for good.
-    if (sliceArmedId !== slice.id) { setSliceArmedId(slice.id); return; }
-    setSliceArmedId(null);
-    setSliceBusyId(slice.id);
-    setStoreError('');
-    epoch.current += 1;
-    setSlices((list) => list.filter((s) => s.id !== slice.id));
-    try {
-      const { blobRemoved } = await api(`/api/slices?id=${encodeURIComponent(slice.id)}`, { method: 'DELETE' });
-      epoch.current += 1;
-      // The post is off the wall either way, but if the image file survived it
-      // is still reachable at its Blob URL — worth saying out loud on a
-      // takedown, since that's usually the whole point of the takedown.
-      if (blobRemoved === false) {
-        setStoreError('Post removed from the wall, but its image file could not be deleted — check the Blob store.');
+      // Confirm against a fresh read, not the last poll — another admin tab
+      // may have closed the night since, and quoting stale counts in the
+      // dialog would have this tab archiving a board that no longer exists.
+      const { orders: fresh } = await api('/api/orders');
+      if (fresh.length === 0) {
+        epoch.current += 1;
+        setOrders([]);
+        setStoreError('The board is already empty — another device may have closed the night.');
+        return;
       }
+      const done = fresh.filter((o) => o.status === 'done').length;
+      const active = fresh.filter((o) => o.status === 'new' || o.status === 'firing' || o.status === 'ready').length;
+      const warn = active > 0 ? `\n\n${active} order${active === 1 ? ' is' : 's are'} still in progress — closing archives and clears them too.` : '';
+      if (!window.confirm(`Close the night? This archives ${fresh.length} order${fresh.length === 1 ? '' : 's'} (${done} picked up) and clears the board.${warn}`)) return;
+      epoch.current += 1;
+      await api('/api/nights', { method: 'POST' });
+      epoch.current += 1;
+      setOrders([]);
     } catch (err) {
       if (err.status === 401) logout('Session expired — log in again.');
-      else { setStoreError(err.message || 'Could not delete that post.'); load(); }
+      // A 409 means the race still won between our fresh read and the POST —
+      // the server refused rather than archiving an empty board; load() below
+      // resyncs this tab to the (now empty) truth.
+      else { setStoreError(err.message || 'Could not close the night — try again.'); load(); }
     } finally {
-      setSliceBusyId(null);
+      setClosingNight(false);
     }
   };
 
@@ -471,7 +423,13 @@ export function AdminPage({ nav }) {
     return () => { document.title = BASE_TITLE; };
   }, [orders]);
 
-  const finished = orders ? orders.filter((o) => o.status === 'done' || o.status === 'cancelled') : [];
+  const finished = orders
+    ? orders.filter((o) => o.status === 'done' || o.status === 'cancelled').sort((a, b) => a.createdAt - b.createdAt)
+    : [];
+  // Revenue only counts orders actually picked up — the same rule "close for
+  // the night" uses, so this matches what closing will archive.
+  const tonightTotalCents = finished.filter((o) => o.status === 'done').reduce((sum, o) => sum + o.totalCents, 0);
+  const canCloseNight = Boolean(orders && orders.length > 0);
 
   if (authed === null) {
     return <div className="admin-page"><div className="admin-loading">Checking session…</div></div>;
@@ -513,14 +471,6 @@ export function AdminPage({ nav }) {
         <AvailabilityPanel unavailableSet={unavailableSet} savingStore={savingStore} toggleItem={toggleItem} />
       )}
 
-      <SlicesPanel
-        slices={slices}
-        busyId={sliceBusyId}
-        armedId={sliceArmedId}
-        hideSlice={hideSlice}
-        removeSlice={removeSlice}
-      />
-
       <div className="fire-panel">
         <div className="fire-panel-label"><Flame size={13} /> Fire next</div>
         {fireNext.waiting === 0 ? (
@@ -549,7 +499,18 @@ export function AdminPage({ nav }) {
         <Board orders={orders} advance={advance} cancel={cancel} />
       )}
 
-      {finished.length > 0 && <FinishedList finished={finished} />}
+      {orders !== null && (
+        <FinishedList
+          finished={finished}
+          totalCents={tonightTotalCents}
+          canClose={canCloseNight}
+          closing={closingNight}
+          closeNight={closeNight}
+        />
+      )}
+      <button type="button" className="nights-archive-link" onClick={() => nav('nights')}>
+        <Archive size={12} /> Past nights archive
+      </button>
       </div>
 
       <Footer nav={nav} />

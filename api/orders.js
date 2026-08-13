@@ -27,7 +27,7 @@ function validateItems(rawItems) {
   for (const raw of rawItems) {
     const entry = menu.get(raw?.name);
     const qty = Number(raw?.qty);
-    if (!entry || !Number.isInteger(qty) || qty < 1 || qty > 30) return null;
+    if (!entry || !Number.isInteger(qty) || qty < 1 || qty > entry.maxQty) return null;
     const item = { name: entry.name, category: entry.category, priceCents: entry.priceCents, qty };
     // Optional per-line add-ons: only on slices, only real add-on items, no dupes
     if (raw.addons !== undefined) {
@@ -49,6 +49,16 @@ function validateItems(rawItems) {
     if (seen.has(lineKey)) return null;
     seen.add(lineKey);
     items.push(item);
+  }
+  // maxQty is a per-item cap, not a per-line one — splitting the same item
+  // across several add-on combinations (each individually under the cap)
+  // must not let the total exceed it. The client's cart model can't produce
+  // this (the stepper counts every unit of an item regardless of its add-ons),
+  // but a hand-built request could.
+  const totalByName = new Map();
+  for (const it of items) totalByName.set(it.name, (totalByName.get(it.name) ?? 0) + it.qty);
+  for (const [name, total] of totalByName) {
+    if (total > menu.get(name).maxQty) return null;
   }
   return items;
 }

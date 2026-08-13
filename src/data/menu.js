@@ -5,7 +5,7 @@ export const MENU_DATA = [
       { name: 'Chef\'s Choice',     desc: "Pepperoni slice with hot honey, stracciatella, fresh basil, and freshly grated parmigiano reggiano",         price: '$4'    },
       { name: 'Cheese Slice',       desc: 'Fresh basil & parmigiano reggiano',                   price: '$2'    },
       { name: 'Pepperoni',          desc: 'House-made sauce, our mozzarella blend, pepperoni',            price: '$2.50' },
-      { name: 'Margherita',         desc: 'Bianco DiNapoli tomatoes, fior di latte, basil',      price: '$4' },
+      { name: 'Margherita',         desc: 'Bianco DiNapoli tomatoes, fior di latte, basil',      price: '$4', maxQty: 4 },
       // `special` puts an item on the homepage "This week's specials" strip
       // and stamps a SPECIAL tag on its menu row.
       // Toggle availability from the admin board — sold-out items grey out
@@ -19,10 +19,14 @@ export const MENU_DATA = [
   {
     category: 'Add Ons',
     items: [
-      { name: '+ Stracciatella',             desc: 'Creamy fresh burrata filling',                        price: '+$1'   },
-      { name: '+ Hot Honey',                 desc: "Mike's Hot Honey",                                    price: '+50¢'  },
-      { name: '+ Extra Parm',                desc: 'An extra generous amount',                            price: '+50¢'  },
-      { name: '+ Extra Basil',               desc: 'An extra generous amount',                            price: 'Free'  },
+      // `keyword` is checked against an item's desc (case-insensitive substring) to
+      // decide whether this add-on reads as "Extra X" there — e.g. stracciatella on
+      // Chef's Choice, which already comes with it — vs. plain "X" on a slice that
+      // doesn't. See addonLabel() in src/utils/orders.js.
+      { name: '+ Stracciatella',             desc: 'Creamy fresh burrata filling',                        price: '+$1',  keyword: 'stracciatella' },
+      { name: '+ Hot Honey',                 desc: "Mike's Hot Honey",                                    price: '+50¢', keyword: 'hot honey'     },
+      { name: '+ Extra Parm',                desc: 'An extra generous amount',                            price: '+50¢', keyword: 'parm'          },
+      { name: '+ Extra Basil',               desc: 'An extra generous amount',                            price: 'Free', keyword: 'basil'         },
     ],
   },
   {
