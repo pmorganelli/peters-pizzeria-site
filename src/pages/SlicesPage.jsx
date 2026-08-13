@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { ArrowRight, Camera, ImagePlus, Trash2, User, UserX, X } from 'lucide-react';
+import { ArrowRight, Camera, Image as ImageIcon, ImagePlus, Trash2, User, UserX, X } from 'lucide-react';
 import { Footer } from '../components/Footer';
 import { LineReveal } from '../components/LineReveal';
 import { api } from '../utils/api';
@@ -7,10 +7,9 @@ import { agoLabel } from '../utils/orders';
 import { downscaleImage } from '../utils/photos';
 import { readMine, writeMine, readHandoff, clearHandoff, deviceToken, formReducer, EMPTY_FORM } from '../utils/slices';
 
-// This is a fully public page with no rate limit in front of it, and every
-// poll costs a function invocation plus a full read of the wall. 30s still
-// reads as live for a page people leave open, at a third of the traffic.
-const POLL_MS = 30000;
+// Matches StatusPage's poll cadence so the wall feels just as live — a new
+// photo shows up for everyone else on the page without a refresh.
+const POLL_MS = 8000;
 
 // Same key OrderPage.jsx / StatusPage.jsx save the device's current order id
 // under — reused here (not imported) to match how those two already each
@@ -25,7 +24,8 @@ function SliceComposer({ code, setCode, name, onPosted, onClose }) {
   const [anon, setAnon] = useState(false);
   const [form, dispatch] = useReducer(formReducer, EMPTY_FORM);
   const { photo, caption, preparing, posting, error, posted } = form;
-  const fileRef = useRef(null);
+  const cameraRef = useRef(null);
+  const libraryRef = useRef(null);
 
   const pickFile = async (e) => {
     const file = e.target.files?.[0];
@@ -108,25 +108,36 @@ function SliceComposer({ code, setCode, name, onPosted, onClose }) {
             <X size={13} />
           </button>
         </div>
+      ) : preparing ? (
+        <div className="slices-picker slices-picker-loading">Getting it ready…</div>
       ) : (
-        <button
-          type="button"
-          className="slices-picker"
-          onClick={() => fileRef.current?.click()}
-          disabled={preparing}
-        >
-          {preparing ? <>Getting it ready…</> : <><Camera size={20} strokeWidth={1.5} /> Take or choose a photo</>}
-        </button>
+        <div className="slices-picker-row">
+          <button type="button" className="slices-picker" onClick={() => cameraRef.current?.click()}>
+            <Camera size={20} strokeWidth={1.5} /> Take a photo
+          </button>
+          <button type="button" className="slices-picker" onClick={() => libraryRef.current?.click()}>
+            <ImageIcon size={20} strokeWidth={1.5} /> Choose from library
+          </button>
+        </div>
       )}
 
-      {/* `capture` opens the phone camera directly. It hands off to the
-          OS camera app rather than calling getUserMedia, so the
-          Permissions-Policy camera=() header doesn't block it. */}
+      {/* Two separate inputs rather than one: `capture` hands off straight to
+          the OS camera app (no getUserMedia, so Permissions-Policy camera=()
+          doesn't block it) — exactly what a "take a photo" button should do,
+          but it also means the OS never offers the library as a choice
+          alongside it. A second, capture-less input is the library picker. */}
       <input
-        ref={fileRef}
+        ref={cameraRef}
         type="file"
         accept="image/*"
         capture="environment"
+        onChange={pickFile}
+        hidden
+      />
+      <input
+        ref={libraryRef}
+        type="file"
+        accept="image/*"
         onChange={pickFile}
         hidden
       />
@@ -206,11 +217,18 @@ export function SlicesPage({ nav, openLightbox }) {
   const [composerOpen, setComposerOpen] = useState(Boolean(handoff.code));
   const [mine, setMine] = useState(readMine);
   const [armedDelete, setArmedDelete] = useState(null);
-  const [deletingId, setDeletingId] = useState(null);
+  const [busyId, setBusyId] = useState(null);
   // Separate from the composer's own error, which only renders inside the open
   // form. Deleting your own photo happens from the wall with the composer shut,
   // so a failure there needs somewhere of its own to show up.
   const [wallError, setWallError] = useState('');
+  // Every post is public the moment it's uploaded; the only moderation is
+  // admin take-down, so this page just needs to know if it's being looked at
+  // by staff to show that control on posts that aren't this device's own.
+  // Starts false (the common case) rather than blocking the page on the
+  // check — a real admin briefly sees the wall without take-down buttons on
+  // other people's photos before this flips.
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // Bumped around every local mutation; a poll that started earlier and lands
   // afterwards is discarded rather than erasing a just-posted photo.
@@ -219,6 +237,10 @@ export function SlicesPage({ nav, openLightbox }) {
   useEffect(() => {
     window.scrollTo(0, 0);
     clearHandoff(); // one-shot handoff
+  }, []);
+
+  useEffect(() => {
+    api('/api/login').then((d) => setIsAdmin(Boolean(d.authenticated))).catch(() => {});
   }, []);
 
   // Arriving from the nav rather than the order-ready CTA, there's no handoff
@@ -292,11 +314,14 @@ export function SlicesPage({ nav, openLightbox }) {
   }, []);
 
   // Two taps rather than a confirm() dialog — deleting the photo and its stored
-  // image is permanent, but a modal would block the page.
-  const removeMine = async (slice) => {
+  // image is permanent, but a modal would block the page. Used both for a
+  // poster removing their own photo and an admin taking one down — the server
+  // tells the two apart by cookie vs. device token, so the client doesn't need
+  // to know which case it's in.
+  const removeSlice = async (slice) => {
     if (armedDelete !== slice.id) { setArmedDelete(slice.id); return; }
     setArmedDelete(null);
-    setDeletingId(slice.id);
+    setBusyId(slice.id);
     setWallError('');
     epoch.current += 1;
     try {
@@ -315,7 +340,7 @@ export function SlicesPage({ nav, openLightbox }) {
       setWallError(err.message || 'Could not delete that photo — try again.');
       load(); // resync rather than guess at what the server kept
     } finally {
-      setDeletingId(null);
+      setBusyId(null);
     }
   };
 
@@ -391,14 +416,14 @@ export function SlicesPage({ nav, openLightbox }) {
                   <span className="slices-item-age">{agoLabel(s.createdAt)}</span>
                 </span>
               </button>
-              {mine.has(s.id) && (
+              {(mine.has(s.id) || isAdmin) && (
                 <button
                   type="button"
                   className={`slices-item-delete${armedDelete === s.id ? ' slices-item-delete-armed' : ''}`}
-                  disabled={deletingId === s.id}
-                  onClick={() => removeMine(s)}
+                  disabled={busyId === s.id}
+                  onClick={() => removeSlice(s)}
                   onBlur={() => setArmedDelete((cur) => (cur === s.id ? null : cur))}
-                  aria-label={armedDelete === s.id ? 'Confirm deleting your photo' : 'Delete your photo'}
+                  aria-label={armedDelete === s.id ? 'Confirm deleting this photo' : (mine.has(s.id) ? 'Delete your photo' : 'Take down this photo')}
                 >
                   {armedDelete === s.id ? <>Delete?</> : <Trash2 size={13} />}
                 </button>

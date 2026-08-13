@@ -14,11 +14,12 @@ import { OrderPage }   from './pages/OrderPage';
 import { StatusPage }  from './pages/StatusPage';
 import { SlicesPage }  from './pages/SlicesPage';
 import { AdminPage }   from './pages/AdminPage';
+import { NightsArchivePage } from './pages/NightsArchivePage';
 
 gsap.registerPlugin(ScrollTrigger);
 
 const TRANSITION_MS = 260;
-const VALID_PAGES = ['home', 'menu', 'blog', 'gallery', 'studio', 'order', 'status', 'slices', 'admin'];
+const VALID_PAGES = ['home', 'menu', 'blog', 'gallery', 'studio', 'order', 'status', 'slices', 'admin', 'nights'];
 
 export default function App() {
   const [page,    setPage]    = useState(() => {
@@ -167,6 +168,7 @@ export default function App() {
         {page === 'status'  && <StatusPage  nav={nav} />}
         {page === 'slices'  && <SlicesPage  nav={nav} openLightbox={openLightbox} />}
         {page === 'admin'   && <AdminPage   nav={nav} />}
+        {page === 'nights'  && <NightsArchivePage nav={nav} />}
       </div>
 
       {lbOpen && (

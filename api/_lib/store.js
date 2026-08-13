@@ -48,6 +48,27 @@ export async function listOrders() {
   return rows.filter(Boolean); // expired keys read back as null
 }
 
+// Removes exactly the given orders — used by "close for the night"
+// (api/nights.js) once they've been archived. Takes explicit ids (the same
+// ones just archived) rather than re-reading the current index: an order
+// placed in the gap between the archive snapshot and this call must survive
+// on the live board, not be silently destroyed alongside the ones that were
+// actually captured. Orders are operational data (3-day TTL) with no history
+// requirement of their own; the archive is what's meant to survive past this.
+export async function clearOrders(ids) {
+  if (!hasRedisEnv()) {
+    for (const id of ids) memory.delete(id);
+    return;
+  }
+  if (!ids.length) return;
+  const redis = redisClient();
+  await redis.del(...ids.map((id) => `pp:order:${id}`));
+  // LREM each id individually rather than dropping INDEX_KEY wholesale —
+  // dropping it would also erase any id pushed onto the list after this
+  // function's caller took its snapshot.
+  await Promise.all(ids.map((id) => redis.lrem(INDEX_KEY, 0, id)));
+}
+
 // ── Store settings (open/closed switch) ───────────────────────────────
 
 const SETTINGS_KEY = 'pp:settings';

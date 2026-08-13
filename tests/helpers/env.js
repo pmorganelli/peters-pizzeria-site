@@ -21,6 +21,7 @@ export function resetEnv() {
   globalThis.__ppOrderStore?.clear();
   globalThis.__ppSliceStore?.clear();
   globalThis.__ppSliceQuota?.clear();
+  globalThis.__ppNightStore?.clear();
   globalThis.__ppRate?.clear();
   delete globalThis.__ppSettings;
 }

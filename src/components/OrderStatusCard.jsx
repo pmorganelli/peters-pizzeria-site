@@ -1,5 +1,5 @@
 import { ArrowRight, Camera, Check, Clock, Flame } from 'lucide-react';
-import { displayName, fmtMoney, itemTotalCents, orderLineKey, STATUS_LABELS } from '../utils/orders';
+import { addonLabel, displayName, fmtMoney, itemTotalCents, orderLineKey, STATUS_LABELS } from '../utils/orders';
 
 const VENMO_URL = 'https://venmo.com/u/Peter-Morganelli24';
 // Handed to the wall so the customer doesn't retype a code they're looking at.
@@ -90,7 +90,7 @@ export function OrderStatusCard({ order, onNewOrder, nav }) {
                 <span>{fmtMoney(itemTotalCents(it))}</span>
               </div>
               {it.addons?.length > 0 && (
-                <div className="order-line-addons">{it.addons.map((a) => `+ ${displayName(a.name)}`).join('  ·  ')}</div>
+                <div className="order-line-addons">{it.addons.map((a) => `+ ${addonLabel(a.name, it.name)}`).join('  ·  ')}</div>
               )}
             </div>
           ))}

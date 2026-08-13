@@ -1,5 +1,5 @@
 import { MENU_DATA } from '../../src/data/menu.js';
-import { parsePriceCents } from '../../src/utils/orders.js';
+import { parsePriceCents, DEFAULT_MAX_QTY } from '../../src/utils/orders.js';
 
 // The menu in src/data/menu.js is the single source of truth for what can be
 // ordered and at what price. Prices are parsed to integer cents here so order
@@ -14,7 +14,10 @@ export function catalog() {
     for (const item of section.items) {
       const cents = parsePriceCents(item.price);
       if (Number.isFinite(cents)) {
-        cached.set(item.name, { name: item.name, category: section.category, priceCents: cents });
+        cached.set(item.name, {
+          name: item.name, category: section.category, priceCents: cents,
+          maxQty: item.maxQty ?? DEFAULT_MAX_QTY,
+        });
       }
     }
   }

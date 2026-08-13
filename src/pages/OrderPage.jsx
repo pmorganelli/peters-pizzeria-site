@@ -5,7 +5,7 @@ import { LineReveal } from '../components/LineReveal';
 import { OrderStatusCard } from '../components/OrderStatusCard';
 import { MENU_DATA } from '../data/menu';
 import { api } from '../utils/api';
-import { DAY_NAMES, displayName, fmtMoney, fmtTime, parsePriceCents } from '../utils/orders';
+import { DAY_NAMES, DEFAULT_MAX_QTY, addonLabel, clampCartQty, displayName, fmtMoney, fmtTime, parsePriceCents } from '../utils/orders';
 
 const SAVED_KEY = 'pp_order_id';
 const CART_KEY = 'pp_cart:v2';
@@ -27,19 +27,21 @@ const ORDERABLE_SECTIONS = MENU_DATA.filter((s) => s.category !== ADDON_CATEGORY
 // Cart model: item name → one entry per unit, each entry listing that unit's
 // add-on names — so "one cheese slice with burrata, one plain" is two units.
 // Migrates the old { name: qty } shape from before add-ons were per-slice.
+// clampCartQty() also re-caps a persisted v2 cart that predates a maxQty
+// change (or a since-lowered one) — not just the legacy migration path.
 function readCart() {
   const v2 = readJSON(CART_KEY, null) ?? readJSON(CART_KEY_UNVERSIONED, null);
-  if (v2 && typeof v2 === 'object') return v2;
+  if (v2 && typeof v2 === 'object') return clampCartQty(v2);
   const legacy = readJSON(LEGACY_CART_KEY, null);
   if (!legacy || typeof legacy !== 'object') return {};
   const units = {};
   for (const [name, qty] of Object.entries(legacy)) {
-    if (Number.isInteger(qty) && qty > 0) units[name] = Array.from({ length: Math.min(qty, 30) }, () => []);
+    if (Number.isInteger(qty) && qty > 0) units[name] = Array.from({ length: qty }, () => []);
   }
-  return units;
+  return clampCartQty(units);
 }
 
-function Stepper({ qty, onChange }) {
+function Stepper({ qty, max, onChange }) {
   if (!qty) {
     return (
       <button type="button" className="order-add-btn" onClick={() => onChange(1)}>
@@ -51,7 +53,7 @@ function Stepper({ qty, onChange }) {
     <div className="order-stepper">
       <button type="button" aria-label="Remove one" onClick={() => onChange(qty - 1)}><Minus size={13} /></button>
       <span>{qty}</span>
-      <button type="button" aria-label="Add one" onClick={() => onChange(Math.min(30, qty + 1))}><Plus size={13} /></button>
+      <button type="button" aria-label="Add one" disabled={qty >= max} onClick={() => onChange(Math.min(max, qty + 1))}><Plus size={13} /></button>
     </div>
   );
 }
@@ -66,6 +68,7 @@ function MenuList({ cart, unavailable, setQty, toggleAddon }) {
             const soldOut = unavailable.has(item.name);
             const units = cart[item.name] ?? [];
             const showAddons = section.category === PIZZA_CATEGORY && !soldOut && units.length > 0;
+            const maxQty = item.maxQty ?? DEFAULT_MAX_QTY;
             return (
               <div key={item.name}>
                 <div className={`order-row${soldOut ? ' order-row-soldout' : ''}${showAddons ? ' order-row-open' : ''}`}>
@@ -76,7 +79,7 @@ function MenuList({ cart, unavailable, setQty, toggleAddon }) {
                   <div className="order-row-price">{item.price}</div>
                   {soldOut
                     ? <span className="order-soldout-chip">Sold out</span>
-                    : <Stepper qty={units.length} onChange={(q) => setQty(item.name, q)} />}
+                    : <Stepper qty={units.length} max={maxQty} onChange={(q) => setQty(item.name, q)} />}
                 </div>
                 {showAddons && (
                   <div className="addon-units">
@@ -84,23 +87,25 @@ function MenuList({ cart, unavailable, setQty, toggleAddon }) {
                       // eslint-disable-next-line react/no-array-index-key
                       <div key={i} className="addon-unit">
                         <span className="addon-unit-label">{units.length > 1 ? `Slice ${i + 1}` : 'Add-ons'}</span>
-                        {ADDON_ITEMS.map((a) => {
-                          const off = unavailable.has(a.name);
-                          const on = u.includes(a.name);
-                          return (
-                            <button
-                              key={a.name}
-                              type="button"
-                              disabled={off}
-                              className={`addon-chip${on ? ' addon-chip-on' : ''}${off ? ' addon-chip-86' : ''}`}
-                              aria-pressed={on}
-                              aria-label={`${displayName(a.name)} for ${item.name} ${units.length > 1 ? `slice ${i + 1}` : ''}`}
-                              onClick={() => toggleAddon(item.name, i, a.name)}
-                            >
-                              {displayName(a.name)} · {off ? 'sold out' : a.price}
-                            </button>
-                          );
-                        })}
+                        <div className="addon-unit-chips">
+                          {ADDON_ITEMS.map((a) => {
+                            const off = unavailable.has(a.name);
+                            const on = u.includes(a.name);
+                            return (
+                              <button
+                                key={a.name}
+                                type="button"
+                                disabled={off}
+                                className={`addon-chip${on ? ' addon-chip-on' : ''}${off ? ' addon-chip-86' : ''}`}
+                                aria-pressed={on}
+                                aria-label={`${addonLabel(a.name, item.name)} for ${item.name} ${units.length > 1 ? `slice ${i + 1}` : ''}`}
+                                onClick={() => toggleAddon(item.name, i, a.name)}
+                              >
+                                {addonLabel(a.name, item.name)} · {off ? 'sold out' : a.price}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -116,7 +121,7 @@ function MenuList({ cart, unavailable, setQty, toggleAddon }) {
 
 function OrderSummaryPanel({
   cartLines, removedFromCart, totalCents, removeLine,
-  name, setName, contact, setContact, notes, setNotes,
+  name, setName, notes, setNotes,
   error, canPlace, placing, place,
 }) {
   return (
@@ -131,7 +136,7 @@ function OrderSummaryPanel({
               <div className="order-line">
                 <button type="button"
                   className="order-line-x"
-                  aria-label={`Remove ${l.name}${l.addons.length ? ` with ${l.addons.map(displayName).join(', ')}` : ''}`}
+                  aria-label={`Remove ${l.name}${l.addons.length ? ` with ${l.addons.map((a) => addonLabel(a, l.name)).join(', ')}` : ''}`}
                   onClick={() => removeLine(l)}
                 >
                   <X size={11} />
@@ -140,7 +145,7 @@ function OrderSummaryPanel({
                 <span>{fmtMoney(l.unitCents * l.qty)}</span>
               </div>
               {l.addons.length > 0 && (
-                <div className="order-line-addons">{l.addons.map((a) => `+ ${displayName(a)}`).join('  ·  ')}</div>
+                <div className="order-line-addons">{l.addons.map((a) => `+ ${addonLabel(a, l.name)}`).join('  ·  ')}</div>
               )}
             </div>
           ))}
@@ -160,10 +165,6 @@ function OrderSummaryPanel({
       <label className="order-field">
         <span>Name *</span>
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Who's picking up?" maxLength={60} />
-      </label>
-      <label className="order-field">
-        <span>Phone or Instagram (optional)</span>
-        <input value={contact} onChange={(e) => setContact(e.target.value)} placeholder="So we can reach you" maxLength={80} />
       </label>
       <label className="order-field">
         <span>Notes (optional)</span>
@@ -226,7 +227,6 @@ export function OrderPage({ nav }) {
   // Cart and pickup identity survive navigation and refreshes
   const [cart, setCart] = useState(readCart);
   const [name, setName] = useState(() => readJSON(WHO_KEY, {}).name || '');
-  const [contact, setContact] = useState(() => readJSON(WHO_KEY, {}).contact || '');
   const [notes, setNotes] = useState('');
   const [placing, setPlacing] = useState(false);
   const [error, setError] = useState('');
@@ -368,13 +368,13 @@ export function OrderPage({ nav }) {
       const { order: created } = await api('/api/orders', {
         method: 'POST',
         body: {
-          name, contact, notes,
+          name, notes,
           items: cartLines.map(({ name: n, qty, addons }) =>
             addons.length ? { name: n, qty, addons } : { name: n, qty }),
         },
       });
       localStorage.setItem(SAVED_KEY, created.id);
-      localStorage.setItem(WHO_KEY, JSON.stringify({ name, contact }));
+      localStorage.setItem(WHO_KEY, JSON.stringify({ name }));
       setOrder(created);
       setCart({});
       setNotes('');
@@ -410,7 +410,7 @@ export function OrderPage({ nav }) {
           <MenuList cart={cart} unavailable={unavailable} setQty={setQty} toggleAddon={toggleAddon} />
           <OrderSummaryPanel
             cartLines={cartLines} removedFromCart={removedFromCart} totalCents={totalCents} removeLine={removeLine}
-            name={name} setName={setName} contact={contact} setContact={setContact} notes={notes} setNotes={setNotes}
+            name={name} setName={setName} notes={notes} setNotes={setNotes}
             error={error} canPlace={canPlace} placing={placing} place={place}
           />
         </div>

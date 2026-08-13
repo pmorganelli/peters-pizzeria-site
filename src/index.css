@@ -619,17 +619,22 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 44px 60p
 }
 @media (hover: hover) { .slices-composer-close:hover { background: var(--cream2); color: var(--red); } }
 .slices-posted-actions { display: flex; align-items: center; justify-content: center; gap: 20px; flex-wrap: wrap; }
+.slices-picker-row { display: flex; gap: 10px; }
 .slices-picker {
   width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 10px; padding: 34px 20px; background: var(--cream);
+  gap: 10px; padding: 28px 14px; background: var(--cream);
   border: 1px dashed rgba(26,18,8,0.22); border-radius: 4px; color: var(--ink2);
-  font-family: var(--mono); font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase;
+  font-family: var(--mono); font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; text-align: center;
   transition: background 0.2s, border-color 0.2s, color 0.2s;
 }
+.slices-picker-row .slices-picker { flex: 1; }
 @media (hover: hover) {
   .slices-picker:hover { background: var(--cream2); border-color: var(--red); color: var(--red); }
 }
-.slices-picker:disabled { opacity: 0.45; cursor: not-allowed; }
+.slices-picker:disabled, .slices-picker-loading { opacity: 0.45; cursor: not-allowed; }
+@media (max-width: 380px) {
+  .slices-picker-row { flex-direction: column; }
+}
 .slices-preview { position: relative; }
 .slices-preview img { width: 100%; display: block; border-radius: 4px; object-fit: cover; }
 .slices-preview-clear {
@@ -672,6 +677,7 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 44px 60p
   padding: 60px 60px 80px; text-align: center;
   font-family: var(--serif); font-size: 17px; font-style: italic; color: rgba(254,245,239,0.35);
 }
+
 .slices-grid { padding: 40px 60px 80px; columns: 4; column-gap: 10px; }
 /* The tile is a plain wrapper, not the clickable element — a poster's delete
    button sits inside it, and a button can't nest in a button. */
@@ -812,15 +818,33 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 44px 60p
   display: flex; flex-direction: column; gap: 7px;
   padding: 2px 0 14px; border-bottom: 1px solid var(--cream2);
 }
-.addon-unit { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+/* Each slice unit gets its own card background — with 2+ slices of the same
+   item, it's otherwise unclear at a glance where one slice's add-ons end and
+   the next slice's begin. The label sits on its own line above a real grid of
+   chips (not a wrapping flex row) — flex-wrap let the label eat into the
+   first row's width while wrapped rows fell back to the left edge, so chips
+   never lined up with each other; a grid keeps every row's columns aligned
+   at any viewport width, desktop included. */
+.addon-unit {
+  display: flex; flex-direction: column; gap: 8px;
+  background: var(--cream); border-radius: 8px; padding: 10px 12px;
+}
 .addon-unit-label {
   font-family: var(--mono); font-size: 9px; font-weight: 600; letter-spacing: 1.5px;
-  text-transform: uppercase; color: var(--ink2); min-width: 56px;
+  text-transform: uppercase; color: var(--ink2);
 }
+.addon-unit-chips {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); gap: 6px;
+}
+/* Not a full pill (999px) — the "Extra X" naming makes some labels ("Extra
+   Stracciatella · +$1") too long to fit one line at this column width even
+   with a generous minmax, and a full pill wrapped to two lines reads oddly.
+   Letting it wrap instead of truncating matters here specifically: an
+   ellipsis on this chip can swallow the price, not just the tail of a name. */
 .addon-chip {
   font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.5px; text-transform: uppercase;
   color: var(--ink2); background: white; border: 1px solid rgba(26,18,8,0.2);
-  padding: 5px 11px; border-radius: 999px;
+  padding: 7px 11px; border-radius: 8px; text-align: center; line-height: 1.4;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 .addon-chip-on { background: var(--green); border-color: var(--green); color: white; }
@@ -1048,33 +1072,28 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 44px 60p
 .avail-chip-tag { font-family: var(--mono); font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--red-light); font-style: normal; }
 .avail-chip:disabled { cursor: wait; }
 
-/* Slice wall moderation */
-.mod-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
-.mod-item {
-  background: rgba(255,255,255,0.04); border: 1px solid rgba(254,245,239,0.1);
-  padding: 8px; display: flex; flex-direction: column; gap: 6px;
+/* Tonight's total + close-for-night — a footer line under the Finished list,
+   in the same price/status columns those rows use, rather than a standalone
+   panel. */
+.finished-total-row { border-top: 1px solid rgba(254,245,239,0.15); margin-top: 6px; padding-top: 12px; }
+.finished-total-label { grid-column: 1 / 4; font-family: var(--mono); font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: rgba(254,245,239,0.5); }
+.finished-total-amount { font-family: var(--mono); font-size: 15px; color: var(--gold); }
+.night-close-btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-family: var(--mono); font-size: 10px; font-weight: 500; letter-spacing: 1.5px; text-transform: uppercase;
+  background: var(--red); color: white; padding: 8px 14px; border-radius: 3px; transition: background 0.2s, opacity 0.2s;
 }
-/* Hidden posts stay legible but obviously inert — this is the takedown state */
-.mod-item-hidden { opacity: 0.42; border-style: dashed; }
-.mod-item img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
-.mod-meta { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-.mod-name { font-family: var(--serif); font-size: 14px; font-style: italic; font-weight: 700; color: var(--cream); }
-.mod-age { font-family: var(--mono); font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: rgba(254,245,239,0.4); }
-.mod-caption {
-  font-family: var(--serif); font-size: 12.5px; color: rgba(254,245,239,0.7); line-height: 1.4;
-  overflow-wrap: anywhere;
+@media (hover: hover) { .night-close-btn:hover:not(:disabled) { background: #c92f10; } }
+.night-close-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Minimal single-line entry point to the past-nights archive page — deliberately
+   not a data-bearing panel, so it costs nothing to render every poll. */
+.nights-archive-link {
+  display: inline-flex; align-items: center; gap: 7px; margin-top: 20px;
+  font-family: var(--mono); font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase;
+  color: rgba(254,245,239,0.5); transition: color 0.15s;
 }
-.mod-actions { display: flex; gap: 6px; margin-top: auto; }
-.mod-btn {
-  flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 5px;
-  padding: 7px 6px; border: 1px solid rgba(254,245,239,0.22); color: rgba(254,245,239,0.8);
-  font-family: var(--mono); font-size: 9.5px; letter-spacing: 1px; text-transform: uppercase;
-  transition: background 0.2s, border-color 0.2s, color 0.2s;
-}
-@media (hover: hover) { .mod-btn:hover { background: rgba(254,245,239,0.1); color: var(--cream); } }
-@media (hover: hover) { .mod-btn-danger:hover { background: rgba(224,54,22,0.18); border-color: var(--red-light); color: var(--red-light); } }
-.mod-btn-armed { background: var(--red); border-color: var(--red); color: white; }
-.mod-btn:disabled { cursor: wait; opacity: 0.5; }
+@media (hover: hover) { .nights-archive-link:hover { color: var(--gold); } }
 
 .fire-panel { padding: 20px 24px; background: rgba(200,147,58,0.07); border: 1px solid rgba(200,147,58,0.35); margin-bottom: 28px; }
 .fire-panel-label { display: inline-flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 10px; font-weight: 500; letter-spacing: 2.5px; text-transform: uppercase; color: var(--gold); margin-bottom: 12px; }
@@ -1119,6 +1138,38 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 44px 60p
 .finished-status { font-family: var(--mono); font-size: 9.5px; letter-spacing: 1.5px; text-transform: uppercase; }
 .finished-done { color: var(--green-light); }
 .finished-cancelled { color: var(--red-light); }
+
+/* ── PAST NIGHTS ARCHIVE ────────────────────────────────────────────── */
+.nights-back {
+  display: inline-flex; align-items: center; gap: 6px; margin-bottom: 10px;
+  color: rgba(254,245,239,0.5); border-bottom-color: rgba(254,245,239,0.3);
+}
+@media (hover: hover) { .nights-back:hover { color: var(--cream); border-bottom-color: var(--cream); } }
+.nights-list { display: flex; flex-direction: column; }
+.nights-list-item { border-bottom: 1px solid rgba(254,245,239,0.08); }
+.nights-list-row {
+  width: 100%; display: grid; grid-template-columns: 18px 170px 1fr auto; gap: 14px; align-items: center;
+  padding: 13px 6px; font-family: var(--serif); font-size: 14px; color: rgba(254,245,239,0.75); text-align: left;
+  transition: background 0.15s;
+}
+@media (hover: hover) { .nights-list-row:hover { background: rgba(255,255,255,0.03); } }
+.nights-list-row svg { color: rgba(254,245,239,0.35); flex-shrink: 0; }
+.nights-list-date { font-family: var(--serif); font-weight: 700; font-style: italic; color: var(--cream); }
+.nights-list-sub { font-size: 13px; color: rgba(254,245,239,0.45); }
+.nights-list-total { font-family: var(--mono); font-size: 15px; color: var(--gold); }
+.nights-detail { padding: 2px 6px 18px 32px; display: flex; flex-direction: column; }
+.nights-detail .finished-row { padding: 7px 4px; }
+.nights-detail-empty { font-family: var(--serif); font-size: 13.5px; color: rgba(254,245,239,0.4); padding: 8px 0 14px; }
+@media (max-width: 768px) {
+  .nights-list-row { grid-template-columns: 16px 1fr auto; row-gap: 4px; }
+  .nights-list-sub { grid-column: 2 / -1; }
+  /* Pinned explicitly rather than left to auto-placement: with the sub line
+     wrapped onto its own row below, an auto-placed total could land in
+     whichever cell the algorithm finds first instead of staying next to the
+     date on row 1. */
+  .nights-list-total { grid-column: 3; grid-row: 1; }
+  .nights-detail { padding-left: 22px; }
+}
 
 /* ── LIGHTBOX ───────────────────────────────────────────────────────── */
 /* width/height auto override the UA dialog's fit-content sizing so inset: 0
@@ -1300,6 +1351,10 @@ body, .story-section, .home-latest, .menu-page, .blog-page, .article-page {
   .order-stepper button { width: 40px; height: 40px; }
   .order-row-price { grid-column: 1; grid-row: 2; }
   .order-row .order-stepper, .order-row .order-add-btn { grid-column: 2; grid-row: 1 / 3; justify-self: end; }
+  /* A narrower floor keeps two chips per row on phone-width screens instead
+     of the grid collapsing to a single column — chips still wrap to two
+     lines rather than truncate when a label doesn't fit at this width. */
+  .addon-unit-chips { grid-template-columns: repeat(auto-fill, minmax(138px, 1fr)); }
   .confirm-wrap { padding: 28px 20px 64px; }
   .confirm-card { padding: 26px 22px; }
   .confirm-code-row { flex-direction: column; align-items: flex-start; gap: 10px; }
@@ -1314,6 +1369,9 @@ body, .story-section, .home-latest, .menu-page, .blog-page, .article-page {
   .board-col { min-height: 0; }
   .finished-row { grid-template-columns: 52px 1fr auto auto; }
   .finished-items { grid-column: 1 / -1; }
+  /* The label/amount/button trio doesn't fit the mobile grid columns above —
+     stack them instead of fighting the 4-column template. */
+  .finished-total-row { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
 }
 
 @media (max-width: 480px) {
