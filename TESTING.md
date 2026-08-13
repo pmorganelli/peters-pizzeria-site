@@ -88,4 +88,26 @@ the part worth poking by hand — the handler itself is covered in
 
 - [ ] Full order → admin board → status advance → pickup flow, once, in a
       real browser.
-- [ ] `npm run doctor` (react-doctor) has no new findings.
+- [ ] `npm run doctor` (react-doctor) has no findings beyond the four known
+      ones below. The gate is *no new findings*, not a zero score.
+
+### Known react-doctor baseline (4 findings, all reviewed)
+
+Each was read in context and left deliberately. Re-confirm rather than
+re-investigate; if one of these changes shape, that's worth a look.
+
+- `effect-needs-cleanup` — `SlicesPage.jsx:284`. **False positive.** The
+  cleanup on the effect's last line calls `stop()`, which clears the
+  interval, and removes the visibility listener. The rule can't follow the
+  indirection through `stop()`. (react-doctor 0.9.x no longer reports it.)
+- `no-noninteractive-element-interactions` — `Lightbox.jsx:51`. **False
+  positive.** The handler is on a native `<dialog>`, and it's the
+  click-outside-to-close backdrop; Esc and arrow keys are already handled.
+- `no-array-index-as-key` — `OrderPage.jsx:88`. **Deliberate**, and already
+  carries an `eslint-disable-next-line` the doctor doesn't honor. Add-on
+  units are positional ("Slice 1", "Slice 2") with no stable per-unit id —
+  the index *is* the identity.
+- `no-flush-sync` — `App.jsx:109`. **Deliberate**, drives the 260 ms
+  directional page transition. The rule's concern is the View Transitions
+  API, which this app doesn't use. Changing it is a behavior change and
+  belongs in its own PR, not bundled with a feature.
