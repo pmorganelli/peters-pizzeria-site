@@ -457,7 +457,7 @@ export function SlicesPage({ nav, openLightbox }) {
                     aria-label={armedReport === s.id ? 'Confirm takedown request' : 'Request that this photo be taken down'}
                     title="Ask us to take this photo down"
                   >
-                    {armedReport === s.id ? <>Send request?</> : <Flag size={13} />}
+                    {armedReport === s.id ? <>Request to take down?</> : <Flag size={13} />}
                   </button>
                 )
               )}

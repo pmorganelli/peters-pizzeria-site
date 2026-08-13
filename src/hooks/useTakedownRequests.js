@@ -18,6 +18,11 @@ export function useTakedownRequests({ epoch, onAuthError }) {
   const [reports, setReports] = useState([]);
   const [busySliceId, setBusySliceId] = useState(null);
   const [error, setError] = useState('');
+  // The poll swallows a failed reports fetch so it can't blank the order
+  // board — but "the endpoint is broken" then looks exactly like "nobody has
+  // reported anything", forever and silently. This is the difference, so a
+  // request can't go unseen because the fetch was quietly failing.
+  const [unavailable, setUnavailable] = useState(false);
 
   const resolve = useCallback(async (report, action) => {
     setBusySliceId(report.sliceId);
@@ -44,5 +49,5 @@ export function useTakedownRequests({ epoch, onAuthError }) {
   const takeDown = useCallback((report) => resolve(report, 'takeDown'), [resolve]);
   const dismiss = useCallback((report) => resolve(report, 'dismiss'), [resolve]);
 
-  return { reports, setReports, busySliceId, error, takeDown, dismiss };
+  return { reports, setReports, busySliceId, error, takeDown, dismiss, unavailable, setUnavailable };
 }

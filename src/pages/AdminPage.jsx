@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Archive, Check, Flame, LogOut, Moon, RotateCcw, Store, UtensilsCrossed, X } from 'lucide-react';
 import { Footer } from '../components/Footer';
-import { ReportsPanel } from '../components/ReportsPanel';
+import { ReportsPanel, TakedownAlert } from '../components/ReportsPanel';
 import { useTakedownRequests } from '../hooks/useTakedownRequests';
+import { useBoardTitle } from '../hooks/useBoardTitle';
 import { MENU_DATA } from '../data/menu';
 import { api } from '../utils/api';
 import { DAY_NAMES, addonLabel, displayName, fmtMoney, fmtTime, formatOrderItems, ageLabel, orderLineKey } from '../utils/orders';
@@ -10,7 +11,6 @@ import { DAY_NAMES, addonLabel, displayName, fmtMoney, fmtTime, formatOrderItems
 const POLL_MS = 5000;
 const PIZZA_CATEGORY = MENU_DATA[0].category;
 const ADDON_CATEGORY = MENU_DATA[1].category;
-const BASE_TITLE = document.title;
 
 const COLUMNS = [
   { status: 'new', title: 'New', action: 'Start firing', next: 'firing', Icon: Flame },
@@ -296,6 +296,7 @@ export function AdminPage({ nav }) {
   // time round.
   const {
     reports, setReports, busySliceId: reportBusyId, error: reportError, takeDown, dismiss,
+    unavailable: reportsUnavailable, setUnavailable: setReportsUnavailable,
   } = useTakedownRequests({ epoch, onAuthError: sessionExpired });
 
   const load = useCallback(async () => {
@@ -309,12 +310,15 @@ export function AdminPage({ nav }) {
         // requests are a side feature, and a failure fetching them must not
         // blank the order board mid-service. A 401 still comes through the
         // two calls above, so an expired session is caught either way.
-        api('/api/reports').catch(() => ({ reports: [] })),
+        // `reports: null` is the sentinel for "this fetch failed" — distinct
+        // from an empty queue, which is the overwhelmingly common case.
+        api('/api/reports').catch(() => ({ reports: null })),
       ]);
       if (epoch.current !== snapshot) return; // a mutation superseded this poll
       setOrders(list);
       setStoreInfo(status);
-      setReports(reportData.reports);
+      setReportsUnavailable(reportData.reports === null);
+      if (reportData.reports !== null) setReports(reportData.reports);
       // Seed the schedule editor once; don't clobber in-progress edits on poll
       if (!draftSeeded.current && status.hours) {
         draftSeeded.current = true;
@@ -323,7 +327,7 @@ export function AdminPage({ nav }) {
     } catch (err) {
       if (err.status === 401) logout('Session expired — log in again.');
     }
-  }, [authed, logout, setReports]);
+  }, [authed, logout, setReports, setReportsUnavailable]);
 
   const saveStore = async (next) => {
     setSavingStore(true);
@@ -437,12 +441,10 @@ export function AdminPage({ nav }) {
     };
   }, [orders]);
 
-  // Surface the queue in the tab title so new orders are visible from any tab
-  useEffect(() => {
-    const waiting = orders ? orders.filter((o) => o.status === 'new').length : 0;
-    document.title = waiting > 0 ? `(${waiting}) New order${waiting === 1 ? '' : 's'} — Peter's Pizzeria` : BASE_TITLE;
-    return () => { document.title = BASE_TITLE; };
-  }, [orders]);
+  useBoardTitle({
+    waiting: orders ? orders.filter((o) => o.status === 'new').length : 0,
+    takedowns: reports.length,
+  });
 
   const finished = orders
     ? orders.filter((o) => o.status === 'done' || o.status === 'cancelled').sort((a, b) => a.createdAt - b.createdAt)
@@ -474,6 +476,7 @@ export function AdminPage({ nav }) {
           <h1 className="admin-title">Order <em>board.</em></h1>
         </div>
         <div className="admin-head-right">
+          <TakedownAlert count={reports.length} unavailable={reportsUnavailable} />
           <span className="admin-live"><span className="pulse-dot" aria-hidden="true" /> Live · refreshes every 5s</span>
           <button type="button" className="admin-logout" onClick={() => logout()}><LogOut size={12} /> Log out</button>
         </div>

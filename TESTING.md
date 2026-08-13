@@ -54,6 +54,15 @@ Run `npm run dev` + `npm run dev:api` with a real `BLOB_READ_WRITE_TOKEN` in
 - [ ] From a browser that has never posted (or a private window), flag a
       photo and confirm the panel appears at the top of the admin board
       within one 5s poll — and that it was *not* there before.
+- [ ] With the board **scrolled down to the order columns**, have someone
+      flag a photo: the header alert should appear and pulse without you
+      scrolling, and clicking it should jump to the panel. This is the case
+      the panel alone doesn't cover.
+- [ ] With the board in a **background tab**, flag a photo and confirm the
+      tab title picks up the `⚑`.
+- [ ] The flag button is hidden for admins, so send the test request from a
+      logged-out browser or private window — reporting from the same browser
+      you're logged into as admin will show a delete button, not a flag.
 - [ ] Confirm the flag button does **not** appear on your own photo, or on
       any photo while logged in as admin (both already show delete instead).
 - [ ] "Keep it" removes the row but leaves the photo on the wall; reload
