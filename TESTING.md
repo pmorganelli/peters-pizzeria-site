@@ -19,9 +19,11 @@ Run `npm run dev` + `npm run dev:api` with a real `BLOB_READ_WRITE_TOKEN` in
 - [ ] Full journey: place a real order → note the pickup code → open Slice
       Status once the order is `ready`/`done` → tap the CTA → composer opens
       prefilled with the code/name → post a photo → it appears on `/slices`.
-- [ ] Post a real photo from a phone camera via the "Take or choose a photo"
-      button on iOS Safari and Android Chrome (`capture="environment"` should
-      open the camera app directly, not a file picker).
+- [ ] Tap "Take a photo or choose from library" on iOS Safari and Android
+      Chrome and confirm the native sheet offers *both* the camera and the
+      photo library. There's no `capture` attribute on the input specifically
+      so the OS shows both — if only a file browser appears, that's the
+      regression to catch.
 - [ ] Post a HEIC photo straight from an iPhone photo library (not the
       camera). If the browser doesn't transcode it to JPEG before it reaches
       `downscaleImage()`, confirm what error the customer actually sees —
@@ -46,6 +48,22 @@ Run `npm run dev` + `npm run dev:api` with a real `BLOB_READ_WRITE_TOKEN` in
       ago (or edit an order's timestamp in Redis for a staging check) and
       confirm the generic "did not match" message — not a different message
       that would hint the code was once valid.
+
+## Takedown requests (`api/reports.js`, admin `ReportsPanel`)
+
+- [ ] From a browser that has never posted (or a private window), flag a
+      photo and confirm the panel appears at the top of the admin board
+      within one 5s poll — and that it was *not* there before.
+- [ ] Confirm the flag button does **not** appear on your own photo, or on
+      any photo while logged in as admin (both already show delete instead).
+- [ ] "Keep it" removes the row but leaves the photo on the wall; reload
+      both pages and confirm it stays that way.
+- [ ] "Take it down" removes the row *and* the photo, and the Blob URL 404s.
+- [ ] Flag the same photo from two different browsers and confirm the panel
+      reads "2 people asked" rather than showing two rows.
+- [ ] On a phone, confirm the flag button is visible without hovering (the
+      desktop styling reveals it on hover; `@media (hover: none)` should pin
+      it visible on touch).
 
 ## Past nights archive (`NightsArchivePage.jsx`, `api/nights.js`)
 

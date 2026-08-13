@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Archive, Check, Flame, LogOut, Moon, RotateCcw, Store, UtensilsCrossed, X } from 'lucide-react';
+import { Archive, Check, Flag, Flame, LogOut, Moon, RotateCcw, Store, UtensilsCrossed, X } from 'lucide-react';
 import { Footer } from '../components/Footer';
 import { MENU_DATA } from '../data/menu';
 import { api } from '../utils/api';
@@ -194,6 +194,46 @@ function AvailabilityPanel({ unavailableSet, savingStore, toggleItem }) {
   );
 }
 
+// Renders nothing at all when there's nothing to review — the board is a
+// working surface during service and an empty "0 requests" panel would be
+// noise on every shift. It only exists on the screen when someone has asked
+// for a photo to come down.
+function ReportsPanel({ reports, busySliceId, takeDown, dismiss, error }) {
+  if (!reports.length) return null;
+  return (
+    <div className="reports-panel">
+      <div className="reports-panel-label">
+        <Flag size={13} /> Takedown requests
+        <span className="reports-count">{reports.length}</span>
+      </div>
+      {error && <div className="order-error admin-store-error" role="alert">{error}</div>}
+      <div className="reports-list">
+        {reports.map((r) => (
+          <div key={r.sliceId} className="reports-row">
+            <img className="reports-thumb" src={r.slice.url} alt={r.slice.caption || 'Reported photo'} />
+            <div className="reports-meta">
+              <div className="reports-who">
+                {r.slice.name || 'Anonymous'}
+                {r.count > 1 && <span className="reports-multi">{r.count} people asked</span>}
+              </div>
+              {r.slice.caption && <div className="reports-caption">{r.slice.caption}</div>}
+              <div className="reports-age">Requested {ageLabel(r.lastAt)}</div>
+            </div>
+            <div className="reports-actions">
+              <button type="button" className="reports-take-down" disabled={busySliceId === r.sliceId} onClick={() => takeDown(r)}>
+                Take it down
+              </button>
+              <button type="button" className="reports-keep" disabled={busySliceId === r.sliceId} onClick={() => dismiss(r)}>
+                Keep it
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function Board({ orders, advance, cancel }) {
   return (
     <div className="board">
@@ -262,6 +302,9 @@ export function AdminPage({ nav }) {
   const [savingStore, setSavingStore] = useState(false);
   const [storeError, setStoreError] = useState('');
   const [closingNight, setClosingNight] = useState(false);
+  const [reports, setReports] = useState([]);
+  const [reportBusyId, setReportBusyId] = useState(null);
+  const [reportError, setReportError] = useState('');
   const draftSeeded = useRef(false);
   // Bumped by every mutation (advance, 86 toggle, hours save). A poll snapshot
   // taken before a mutation is stale — applying it would visually revert the
@@ -287,13 +330,19 @@ export function AdminPage({ nav }) {
     if (!authed) return;
     const snapshot = epoch.current;
     try {
-      const [{ orders: list }, status] = await Promise.all([
+      const [{ orders: list }, status, reportData] = await Promise.all([
         api('/api/orders'),
         api('/api/store'),
+        // Swallowed rather than awaited alongside the others: takedown
+        // requests are a side feature, and a failure fetching them must not
+        // blank the order board mid-service. A 401 still comes through the
+        // two calls above, so an expired session is caught either way.
+        api('/api/reports').catch(() => ({ reports: [] })),
       ]);
       if (epoch.current !== snapshot) return; // a mutation superseded this poll
       setOrders(list);
       setStoreInfo(status);
+      setReports(reportData.reports);
       // Seed the schedule editor once; don't clobber in-progress edits on poll
       if (!draftSeeded.current && status.hours) {
         draftSeeded.current = true;
@@ -303,6 +352,30 @@ export function AdminPage({ nav }) {
       if (err.status === 401) logout('Session expired — log in again.');
     }
   }, [authed, logout]);
+
+  // Both resolutions clear the row optimistically and bump the epoch, so the
+  // 5s poll already in flight can't re-add the request that was just handled.
+  const resolveReport = async (report, action) => {
+    setReportBusyId(report.sliceId);
+    setReportError('');
+    epoch.current += 1;
+    try {
+      if (action === 'takeDown') {
+        // Deleting the photo clears its report server-side too, so there's no
+        // second call to make here.
+        await api(`/api/slices?id=${encodeURIComponent(report.sliceId)}`, { method: 'DELETE' });
+      } else {
+        await api(`/api/reports?sliceId=${encodeURIComponent(report.sliceId)}`, { method: 'DELETE' });
+      }
+      epoch.current += 1;
+      setReports((list) => list.filter((r) => r.sliceId !== report.sliceId));
+    } catch (err) {
+      if (err.status === 401) logout('Session expired — log in again.');
+      else setReportError(err.message || 'Could not handle that request — try again.');
+    } finally {
+      setReportBusyId(null);
+    }
+  };
 
   const saveStore = async (next) => {
     setSavingStore(true);
@@ -460,6 +533,18 @@ export function AdminPage({ nav }) {
 
       <div className="admin-body">
       {storeError && <div className="order-error admin-store-error" role="alert">{storeError}</div>}
+
+      {/* First thing on the board when it exists, nothing at all when it
+          doesn't — someone asking for their photo to come down shouldn't be
+          buried under the storefront controls. */}
+      <ReportsPanel
+        reports={reports}
+        busySliceId={reportBusyId}
+        error={reportError}
+        takeDown={(r) => resolveReport(r, 'takeDown')}
+        dismiss={(r) => resolveReport(r, 'dismiss')}
+      />
+
       {storeInfo && (
         <StorePanel
           storeInfo={storeInfo} savingStore={savingStore}
