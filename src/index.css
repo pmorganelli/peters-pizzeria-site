@@ -1147,6 +1147,19 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 44px 60p
 @media (hover: hover) { .nights-back:hover { color: var(--cream); border-bottom-color: var(--cream); } }
 .nights-list { display: flex; flex-direction: column; }
 .nights-list-item { border-bottom: 1px solid rgba(254,245,239,0.08); }
+.nights-list-head { display: flex; align-items: stretch; }
+/* min-width: 0 so the row keeps shrinking past its content instead of pushing
+   the delete button off the right edge on a narrow screen. */
+.nights-list-head .nights-list-row { flex: 1; min-width: 0; }
+.nights-delete {
+  flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px;
+  font-family: var(--serif); font-size: 12.5px; white-space: nowrap;
+  color: rgba(254,245,239,0.25); transition: color 0.15s, background 0.15s;
+}
+@media (hover: hover) { .nights-delete:hover { color: var(--red); background: rgba(255,255,255,0.03); } }
+/* Armed state is loud on purpose — the next click is unrecoverable. */
+.nights-delete-armed { color: var(--red-light); font-weight: 700; background: rgba(224,54,22,0.14); }
+.nights-delete:disabled { opacity: 0.5; cursor: default; }
 .nights-list-row {
   width: 100%; display: grid; grid-template-columns: 18px 170px 1fr auto; gap: 14px; align-items: center;
   padding: 13px 6px; font-family: var(--serif); font-size: 14px; color: rgba(254,245,239,0.75); text-align: left;

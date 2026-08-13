@@ -47,6 +47,25 @@ Run `npm run dev` + `npm run dev:api` with a real `BLOB_READ_WRITE_TOKEN` in
       confirm the generic "did not match" message — not a different message
       that would hint the code was once valid.
 
+## Past nights archive (`NightsArchivePage.jsx`, `api/nights.js`)
+
+Deleting a night is permanent and there's no undo, so the guard around it is
+the part worth poking by hand — the handler itself is covered in
+`api/nights.test.js`.
+
+- [ ] Arm a night's delete button (first click), then click elsewhere on the
+      page and confirm it disarms rather than staying primed for a stray
+      second click later.
+- [ ] Delete an expanded night and confirm the detail panel closes with it
+      instead of leaving an orphaned open row.
+- [ ] Two-tab check: open the archive in two tabs, delete a night in one,
+      then delete the same night in the other — the second should surface the
+      "no longer in the archive" error and resync the list, not fail silently.
+- [ ] Narrow phone width: confirm the delete button stays on-screen and the
+      date/total row doesn't push it off the right edge.
+- [ ] Before opening for real: close a test night, confirm it appears with the
+      right total, delete it, and confirm the archive reads empty.
+
 ## General regression pass (any change touching ordering/admin)
 
 - [ ] Full order → admin board → status advance → pickup flow, once, in a

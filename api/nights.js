@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
-import { send, isAdmin } from './_lib/util.js';
+import { send, isAdmin, readQuery } from './_lib/util.js';
 import { listOrders, clearOrders } from './_lib/store.js';
-import { createNight, listNights } from './_lib/nights.js';
+import { createNight, listNights, getNight, deleteNight } from './_lib/nights.js';
 
 function makeId() {
   return `n${crypto.randomBytes(8).toString('hex')}`;
@@ -14,6 +14,7 @@ export default async function handler(req, res) {
     if (!isAdmin(req)) return send(res, 401, { error: 'Admin login required' });
     if (req.method === 'GET') return await read(req, res);
     if (req.method === 'POST') return await close(req, res);
+    if (req.method === 'DELETE') return await remove(req, res);
     return send(res, 405, { error: 'Method not allowed' });
   } catch (err) {
     console.error('nights api error:', err);
@@ -68,4 +69,29 @@ async function close(req, res) {
   // otherwise be deleted without ever being archived. See clearOrders().
   await clearOrders(orders.map((o) => o.id));
   return send(res, 201, { night });
+}
+
+// DELETE /api/nights?id=… — erase one archived night for good.
+//
+// The use case this exists for is the trial run: nights closed while testing
+// the board before opening, which would otherwise sit in the revenue history
+// forever inflating the totals. It's a full delete rather than a "hidden"
+// flag because a hidden-but-counted night is exactly the confusion this is
+// meant to remove.
+//
+// No rate limit: unlike slice deletion this is behind the admin cookie with no
+// device-token path, so there's nothing to brute-force — a caller who can
+// reach it can already close and clear the live board.
+async function remove(req, res) {
+  const { id } = readQuery(req);
+  if (!id) return send(res, 400, { error: 'Invalid id' });
+
+  // Read before delete so a stale archive page (or a second tab that already
+  // deleted this night) gets a 404 it can act on, rather than a cheerful 200
+  // for a record that was never there.
+  const night = await getNight(id);
+  if (!night) return send(res, 404, { error: 'That night is no longer in the archive.' });
+
+  await deleteNight(id);
+  return send(res, 200, { ok: true });
 }
