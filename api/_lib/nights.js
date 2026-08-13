@@ -39,3 +39,27 @@ export async function listNights() {
   const rows = await redis.mget(...ids.map((id) => `pp:night:${id}`));
   return rows.filter(Boolean);
 }
+
+export async function getNight(id) {
+  if (!hasRedisEnv()) return memory.get(id) ?? null;
+  return (await redisClient().get(`pp:night:${id}`)) ?? null;
+}
+
+// Permanently drop a night from the archive. There is no soft-delete and no
+// undo: the orders behind this record were wiped when the night closed, so
+// this record *is* the data. That's deliberate — the reason to reach for this
+// is a test night that never should have been in the books, and a "deleted"
+// night still sitting in the totals would defeat the point. The two-tap arm on
+// the archive page is the only guard, so callers must be sure.
+export async function deleteNight(id) {
+  if (!hasRedisEnv()) return memory.delete(id);
+  const redis = redisClient();
+  // Index entry first: a crash between the two calls leaves an unreferenced
+  // record (invisible, harmless) rather than an index id whose record is gone
+  // — listNights() tolerates the latter via filter(Boolean), but only because
+  // expiry already produces it; an id that never resolves is still noise on
+  // every read for as long as the index holds it.
+  await redis.lrem(INDEX_KEY, 0, id);
+  await redis.del(`pp:night:${id}`);
+  return true;
+}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, ChevronDown, ChevronRight } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ChevronRight, Trash2 } from 'lucide-react';
 import { Footer } from '../components/Footer';
 import { api } from '../utils/api';
 import { fmtMoney, formatOrderItems } from '../utils/orders';
@@ -26,6 +26,11 @@ export function NightsArchivePage({ nav }) {
   const [nights, setNights] = useState(null);
   const [error, setError] = useState('');
   const [expandedId, setExpandedId] = useState(null);
+  // Two taps to delete, same as the community-wall takedown: the first arms,
+  // the second commits. A confirm() dialog would block the page, and this is
+  // rare enough that an armed button sitting there is no burden.
+  const [armedId, setArmedId] = useState(null);
+  const [busyId, setBusyId] = useState(null);
 
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
@@ -47,6 +52,29 @@ export function NightsArchivePage({ nav }) {
       .then((d) => setNights(d.nights))
       .catch((err) => setError(err.message || 'Could not load past nights.'));
   }, [authed]);
+
+  // Deleting a night is irreversible — the orders behind it were wiped when it
+  // closed, so this record is the last copy. Worth it for clearing out test
+  // nights before opening; there is nothing to restore afterward.
+  const removeNight = async (night) => {
+    if (armedId !== night.id) { setArmedId(night.id); return; }
+    setArmedId(null);
+    setBusyId(night.id);
+    setError('');
+    try {
+      await api(`/api/nights?id=${encodeURIComponent(night.id)}`, { method: 'DELETE' });
+      setNights((list) => list.filter((n) => n.id !== night.id));
+      // A deleted night can't stay expanded underneath itself.
+      setExpandedId((id) => (id === night.id ? null : id));
+    } catch (err) {
+      setError(err.message || 'Could not delete that night — try again.');
+      // Resync rather than guess at what the server kept: a 404 here means
+      // another tab already deleted it, and the row should go anyway.
+      api('/api/nights').then((d) => setNights(d.nights)).catch(() => {});
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   if (authed === null || (authed && nights === null)) {
     return (
@@ -78,20 +106,40 @@ export function NightsArchivePage({ nav }) {
           <div className="nights-list">
             {nights.map((n) => {
               const open = expandedId === n.id;
+              const armed = armedId === n.id;
+              const busy = busyId === n.id;
+              const label = fmtNightDate(n.closedAt);
               return (
                 <div key={n.id} className="nights-list-item">
-                  <button type="button"
-                    className="nights-list-row"
-                    onClick={() => setExpandedId(open ? null : n.id)}
-                    aria-expanded={open}
-                  >
-                    {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                    <span className="nights-list-date">{fmtNightDate(n.closedAt)}</span>
-                    <span className="nights-list-sub">
-                      {n.doneCount} picked up{n.cancelledCount > 0 ? `, ${n.cancelledCount} cancelled` : ''}
-                    </span>
-                    <span className="nights-list-total">{fmtMoney(n.totalCents)}</span>
-                  </button>
+                  {/* The expand toggle and the delete button are siblings, not
+                      nested — a button inside a button is invalid HTML and the
+                      inner one's clicks would also toggle the row. */}
+                  <div className="nights-list-head">
+                    <button type="button"
+                      className="nights-list-row"
+                      onClick={() => setExpandedId(open ? null : n.id)}
+                      aria-expanded={open}
+                    >
+                      {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                      <span className="nights-list-date">{label}</span>
+                      <span className="nights-list-sub">
+                        {n.doneCount} picked up{n.cancelledCount > 0 ? `, ${n.cancelledCount} cancelled` : ''}
+                      </span>
+                      <span className="nights-list-total">{fmtMoney(n.totalCents)}</span>
+                    </button>
+                    <button type="button"
+                      className={`nights-delete${armed ? ' nights-delete-armed' : ''}`}
+                      onClick={() => removeNight(n)}
+                      // Clicking away disarms, so a half-pressed delete never
+                      // sits waiting for an accidental second click later.
+                      onBlur={() => setArmedId((id) => (id === n.id ? null : id))}
+                      disabled={busy}
+                      aria-label={armed ? `Confirm delete of ${label}` : `Delete ${label}`}
+                      title={armed ? 'Permanent — click again to confirm' : 'Delete this night'}
+                    >
+                      {busy ? 'Deleting…' : armed ? 'Delete for good?' : <Trash2 size={14} />}
+                    </button>
+                  </div>
                   {open && (
                     <div className="nights-detail">
                       {(n.orders ?? []).length === 0 ? (
