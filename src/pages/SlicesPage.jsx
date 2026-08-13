@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { ArrowRight, Camera, Image as ImageIcon, ImagePlus, Trash2, User, UserX, X } from 'lucide-react';
+import { ArrowRight, Camera, Flag, ImagePlus, Trash2, User, UserX, X } from 'lucide-react';
 import { Footer } from '../components/Footer';
 import { LineReveal } from '../components/LineReveal';
 import { api } from '../utils/api';
@@ -24,7 +24,6 @@ function SliceComposer({ code, setCode, name, onPosted, onClose }) {
   const [anon, setAnon] = useState(false);
   const [form, dispatch] = useReducer(formReducer, EMPTY_FORM);
   const { photo, caption, preparing, posting, error, posted } = form;
-  const cameraRef = useRef(null);
   const libraryRef = useRef(null);
 
   const pickFile = async (e) => {
@@ -111,29 +110,19 @@ function SliceComposer({ code, setCode, name, onPosted, onClose }) {
       ) : preparing ? (
         <div className="slices-picker slices-picker-loading">Getting it ready…</div>
       ) : (
-        <div className="slices-picker-row">
-          <button type="button" className="slices-picker" onClick={() => cameraRef.current?.click()}>
-            <Camera size={20} strokeWidth={1.5} /> Take a photo
-          </button>
-          <button type="button" className="slices-picker" onClick={() => libraryRef.current?.click()}>
-            <ImageIcon size={20} strokeWidth={1.5} /> Choose from library
-          </button>
-        </div>
+        <button type="button" className="slices-picker" onClick={() => libraryRef.current?.click()}>
+          <Camera size={20} strokeWidth={1.5} /> Take a photo or choose from library
+        </button>
       )}
 
-      {/* Two separate inputs rather than one: `capture` hands off straight to
-          the OS camera app (no getUserMedia, so Permissions-Policy camera=()
-          doesn't block it) — exactly what a "take a photo" button should do,
-          but it also means the OS never offers the library as a choice
-          alongside it. A second, capture-less input is the library picker. */}
-      <input
-        ref={cameraRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        onChange={pickFile}
-        hidden
-      />
+      {/* One input, and deliberately no `capture` attribute. `capture` hands
+          off straight to the OS camera app, which is why this used to need a
+          second button — with it set, the OS never offers the library as a
+          choice at all. Without it, mobile Safari and Chrome both open their
+          native sheet listing Take Photo *and* Photo Library, which is the
+          same choice the two buttons offered, made by the OS instead of by
+          us. Don't re-add `capture` to "make the camera button work" — it
+          would silently remove the library option again. */}
       <input
         ref={libraryRef}
         type="file"
@@ -218,6 +207,11 @@ export function SlicesPage({ nav, openLightbox }) {
   const [mine, setMine] = useState(readMine);
   const [armedDelete, setArmedDelete] = useState(null);
   const [busyId, setBusyId] = useState(null);
+  // Takedown requests this device has already sent, so the button can settle
+  // into a "requested" state instead of inviting the same tap again. Purely
+  // cosmetic — the server dedupes by device hash regardless of what's here.
+  const [reported, setReported] = useState(() => new Set());
+  const [armedReport, setArmedReport] = useState(null);
   // Separate from the composer's own error, which only renders inside the open
   // form. Deleting your own photo happens from the wall with the composer shut,
   // so a failure there needs somewhere of its own to show up.
@@ -344,6 +338,25 @@ export function SlicesPage({ nav, openLightbox }) {
     }
   };
 
+  // Anyone can ask for a photo to come down — including the person *in* it,
+  // who has no pickup code and no device token for a post they didn't make.
+  // Two taps like the delete button, since the first tap is easy to hit by
+  // accident on a phone-sized tile.
+  const requestTakedown = async (slice) => {
+    if (armedReport !== slice.id) { setArmedReport(slice.id); return; }
+    setArmedReport(null);
+    setBusyId(slice.id);
+    setWallError('');
+    try {
+      await api('/api/reports', { method: 'POST', body: { sliceId: slice.id, device: deviceToken() } });
+      setReported((prev) => new Set(prev).add(slice.id));
+    } catch (err) {
+      setWallError(err.message || 'Could not send that request — try again.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const urls = useMemo(() => slices.map((s) => s.url), [slices]);
   // Parallel to `urls` — the lightbox shows the poster and caption alongside
   // the enlarged photo. Ages are computed here rather than in the lightbox so
@@ -427,6 +440,26 @@ export function SlicesPage({ nav, openLightbox }) {
                 >
                   {armedDelete === s.id ? <>Delete?</> : <Trash2 size={13} />}
                 </button>
+              )}
+              {/* Not shown to the poster or an admin — both already have a
+                  delete button on this tile, and asking yourself to review
+                  your own photo is a dead end. */}
+              {!mine.has(s.id) && !isAdmin && (
+                reported.has(s.id) ? (
+                  <span className="slices-item-report slices-item-report-done">Requested</span>
+                ) : (
+                  <button
+                    type="button"
+                    className={`slices-item-report${armedReport === s.id ? ' slices-item-report-armed' : ''}`}
+                    disabled={busyId === s.id}
+                    onClick={() => requestTakedown(s)}
+                    onBlur={() => setArmedReport((cur) => (cur === s.id ? null : cur))}
+                    aria-label={armedReport === s.id ? 'Confirm takedown request' : 'Request that this photo be taken down'}
+                    title="Ask us to take this photo down"
+                  >
+                    {armedReport === s.id ? <>Send request?</> : <Flag size={13} />}
+                  </button>
+                )
               )}
             </div>
           ))}

@@ -619,22 +619,20 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 44px 60p
 }
 @media (hover: hover) { .slices-composer-close:hover { background: var(--cream2); color: var(--red); } }
 .slices-posted-actions { display: flex; align-items: center; justify-content: center; gap: 20px; flex-wrap: wrap; }
-.slices-picker-row { display: flex; gap: 10px; }
 .slices-picker {
   width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 10px; padding: 28px 14px; background: var(--cream);
   border: 1px dashed rgba(26,18,8,0.22); border-radius: 4px; color: var(--ink2);
   font-family: var(--mono); font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; text-align: center;
+  /* The label is one line on a phone but wraps on the narrowest screens —
+     balanced so it breaks into two even lines instead of orphaning a word. */
+  text-wrap: balance;
   transition: background 0.2s, border-color 0.2s, color 0.2s;
 }
-.slices-picker-row .slices-picker { flex: 1; }
 @media (hover: hover) {
   .slices-picker:hover { background: var(--cream2); border-color: var(--red); color: var(--red); }
 }
 .slices-picker:disabled, .slices-picker-loading { opacity: 0.45; cursor: not-allowed; }
-@media (max-width: 380px) {
-  .slices-picker-row { flex-direction: column; }
-}
 .slices-preview { position: relative; }
 .slices-preview img { width: 100%; display: block; border-radius: 4px; object-fit: cover; }
 .slices-preview-clear {
@@ -700,6 +698,25 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 44px 60p
 @media (hover: hover) { .slices-item-delete:hover { background: var(--red); color: white; } }
 .slices-item-delete-armed { background: var(--red); color: white; }
 .slices-item-delete:disabled { opacity: 0.5; cursor: wait; }
+/* Same corner as the delete button — they're mutually exclusive on any given
+   tile (the poster and an admin get delete, everyone else gets report), so
+   they never collide. Dimmer at rest than delete: this is a rare action and
+   shouldn't compete with the photo. */
+.slices-item-report {
+  position: absolute; top: 8px; right: 8px; min-width: 30px; height: 30px; padding: 0 9px;
+  border-radius: 15px; background: rgba(26,18,8,0.42); color: rgba(254,245,239,0.6);
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  font-family: var(--mono); font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase;
+  opacity: 0; transition: background 0.2s, color 0.2s, opacity 0.2s;
+}
+/* Revealed on hover on a mouse, but always visible on touch — a phone has no
+   hover, and a control that only appears on hover is invisible there. */
+.slices-item:hover .slices-item-report, .slices-item-report:focus-visible { opacity: 1; }
+@media (hover: none) { .slices-item-report { opacity: 1; } }
+@media (hover: hover) { .slices-item-report:hover { background: var(--red); color: white; } }
+.slices-item-report-armed { opacity: 1; background: var(--red); color: white; }
+.slices-item-report-done { opacity: 1; background: rgba(26,18,8,0.66); color: rgba(254,245,239,0.7); }
+.slices-item-report:disabled { opacity: 0.5; cursor: wait; }
 .slices-item img { width: 100%; display: block; transition: transform 0.5s cubic-bezier(.22,1,.36,1); filter: brightness(0.92); }
 @media (hover: hover) { .slices-item:hover img { transform: scale(1.04); filter: brightness(1); } }
 .slices-item-meta {
@@ -1103,6 +1120,37 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 44px 60p
 .fire-chip-dim { opacity: 0.55; font-size: 15px; }
 .fire-sub { font-family: var(--mono); font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: rgba(254,245,239,0.45); margin-top: 12px; }
 .fire-empty { font-family: var(--serif); font-size: 15px; color: rgba(254,245,239,0.55); }
+/* Red rather than the fire panel's gold: this is the one thing on the board
+   that isn't part of normal service and shouldn't read as routine. */
+.reports-panel { padding: 20px 24px; background: rgba(224,54,22,0.07); border: 1px solid rgba(224,54,22,0.4); margin-bottom: 28px; }
+.reports-panel-label { display: inline-flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 10px; font-weight: 500; letter-spacing: 2.5px; text-transform: uppercase; color: var(--red-light); margin-bottom: 14px; }
+.reports-count { font-family: var(--mono); font-size: 10px; background: var(--red); color: white; border-radius: 9px; padding: 2px 8px; letter-spacing: 1px; }
+.reports-list { display: flex; flex-direction: column; gap: 14px; }
+.reports-row { display: flex; align-items: center; gap: 14px; }
+.reports-thumb { width: 58px; height: 58px; object-fit: cover; border-radius: 3px; flex-shrink: 0; }
+.reports-meta { flex: 1; min-width: 0; }
+.reports-who { font-family: var(--serif); font-size: 15px; color: var(--cream); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.reports-multi { font-family: var(--mono); font-size: 9.5px; letter-spacing: 1px; text-transform: uppercase; color: var(--red-light); border: 1px solid rgba(224,54,22,0.4); padding: 2px 7px; }
+.reports-caption { font-family: var(--serif); font-size: 13px; color: rgba(254,245,239,0.55); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reports-age { font-family: var(--mono); font-size: 9.5px; letter-spacing: 1.5px; text-transform: uppercase; color: rgba(254,245,239,0.35); margin-top: 3px; }
+.reports-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.reports-take-down, .reports-keep {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase;
+  padding: 9px 14px; border: 1px solid; transition: background 0.15s, color 0.15s;
+}
+.reports-take-down { border-color: var(--red); color: var(--red-light); }
+@media (hover: hover) { .reports-take-down:hover { background: var(--red); color: white; } }
+.reports-keep { border-color: rgba(254,245,239,0.25); color: rgba(254,245,239,0.6); }
+@media (hover: hover) { .reports-keep:hover { border-color: var(--cream); color: var(--cream); } }
+.reports-take-down:disabled, .reports-keep:disabled { opacity: 0.45; cursor: wait; }
+@media (max-width: 768px) {
+  /* The two buttons need the full width on a phone; letting them wrap under
+     the thumbnail keeps the labels readable instead of squeezing them. */
+  .reports-row { flex-wrap: wrap; }
+  .reports-meta { flex-basis: calc(100% - 72px); }
+  .reports-actions { width: 100%; }
+  .reports-take-down, .reports-keep { flex: 1; }
+}
 .admin-loading { font-family: var(--mono); font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: rgba(254,245,239,0.4); padding: 40px 0; text-align: center; }
 .board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; align-items: start; }
 .board-col { background: rgba(255,255,255,0.03); border: 1px solid rgba(254,245,239,0.08); padding: 16px; min-height: 200px; }

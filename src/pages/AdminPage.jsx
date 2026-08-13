@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Archive, Check, Flame, LogOut, Moon, RotateCcw, Store, UtensilsCrossed, X } from 'lucide-react';
 import { Footer } from '../components/Footer';
+import { ReportsPanel } from '../components/ReportsPanel';
+import { useTakedownRequests } from '../hooks/useTakedownRequests';
 import { MENU_DATA } from '../data/menu';
 import { api } from '../utils/api';
 import { DAY_NAMES, addonLabel, displayName, fmtMoney, fmtTime, formatOrderItems, ageLabel, orderLineKey } from '../utils/orders';
@@ -283,17 +285,36 @@ export function AdminPage({ nav }) {
     setAuthed(false);
   }, []);
 
+  // Stable identity so the hook's resolve callback isn't rebuilt every render.
+  const sessionExpired = useCallback(() => logout('Session expired — log in again.'), [logout]);
+
+  // Owns the queue and the two resolve actions; the list itself is fed from
+  // the poll below rather than fetched separately. See the hook for why.
+  // Destructured rather than held as one object so `load` can depend on the
+  // setter alone — a `takedowns` object would be a new identity every render,
+  // and depending on it would rebuild `load` and restart the 5s poll each
+  // time round.
+  const {
+    reports, setReports, busySliceId: reportBusyId, error: reportError, takeDown, dismiss,
+  } = useTakedownRequests({ epoch, onAuthError: sessionExpired });
+
   const load = useCallback(async () => {
     if (!authed) return;
     const snapshot = epoch.current;
     try {
-      const [{ orders: list }, status] = await Promise.all([
+      const [{ orders: list }, status, reportData] = await Promise.all([
         api('/api/orders'),
         api('/api/store'),
+        // Swallowed rather than awaited alongside the others: takedown
+        // requests are a side feature, and a failure fetching them must not
+        // blank the order board mid-service. A 401 still comes through the
+        // two calls above, so an expired session is caught either way.
+        api('/api/reports').catch(() => ({ reports: [] })),
       ]);
       if (epoch.current !== snapshot) return; // a mutation superseded this poll
       setOrders(list);
       setStoreInfo(status);
+      setReports(reportData.reports);
       // Seed the schedule editor once; don't clobber in-progress edits on poll
       if (!draftSeeded.current && status.hours) {
         draftSeeded.current = true;
@@ -302,7 +323,7 @@ export function AdminPage({ nav }) {
     } catch (err) {
       if (err.status === 401) logout('Session expired — log in again.');
     }
-  }, [authed, logout]);
+  }, [authed, logout, setReports]);
 
   const saveStore = async (next) => {
     setSavingStore(true);
@@ -460,6 +481,18 @@ export function AdminPage({ nav }) {
 
       <div className="admin-body">
       {storeError && <div className="order-error admin-store-error" role="alert">{storeError}</div>}
+
+      {/* First thing on the board when it exists, nothing at all when it
+          doesn't — someone asking for their photo to come down shouldn't be
+          buried under the storefront controls. */}
+      <ReportsPanel
+        reports={reports}
+        busySliceId={reportBusyId}
+        error={reportError}
+        takeDown={takeDown}
+        dismiss={dismiss}
+      />
+
       {storeInfo && (
         <StorePanel
           storeInfo={storeInfo} savingStore={savingStore}

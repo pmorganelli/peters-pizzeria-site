@@ -6,6 +6,7 @@ import {
   createSlice, getSlice, listSlices, setSliceHidden, deleteSlice,
   claimSliceQuota, releaseSliceQuota,
 } from './_lib/slices.js';
+import { deleteReport } from './_lib/reports.js';
 
 const MAX_PER_ORDER = 3;
 
@@ -348,6 +349,11 @@ async function remove(req, res) {
     }
   }
   await deleteSlice(id);
+  // Taking the photo down resolves any takedown request against it — leaving
+  // the report would keep the request sitting on the admin board pointing at
+  // a photo that no longer exists, which GET /api/reports would then have to
+  // filter out on every poll.
+  await deleteReport(id);
   // Deliberately no releaseSliceQuota() here: the per-order limit counts photos
   // posted, not photos currently live. Giving the slot back would turn
   // post-delete-repeat into an unlimited upload channel.

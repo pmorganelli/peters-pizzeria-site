@@ -22,6 +22,7 @@ export function resetEnv() {
   globalThis.__ppSliceStore?.clear();
   globalThis.__ppSliceQuota?.clear();
   globalThis.__ppNightStore?.clear();
+  globalThis.__ppReportStore?.clear();
   globalThis.__ppRate?.clear();
   delete globalThis.__ppSettings;
 }
