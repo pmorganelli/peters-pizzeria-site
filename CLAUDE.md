@@ -54,7 +54,7 @@ Global lightbox state (`lbPhotos`, `lbIndex`, `lbOpen`) lives in `App.jsx`. Any 
 Animations run on GSAP (`gsap` + `@gsap/react`, all plugins free since the Webflow acquisition):
 
 - `useScrollReveal` stamps the `reveal` class and drives the rise-in with a ScrollTrigger tween per element (`once: true`); on complete it adds `revealed` and clears inline styles so CSS hover transforms still work. `reveal-delay-N` classes are stagger markers read by the hook — they carry no CSS. Each page uses a fresh instance of the hook (component unmounts on page change).
-- `LineReveal.jsx` uses the SplitText plugin (`type: 'lines'`, masked, `autoSplit`) for staggered per-line title reveals — article titles, blog hero sub.
+- `LineReveal.jsx` uses the SplitText plugin (`type: 'lines'`, masked, `autoSplit`) for staggered per-line title reveals. It carries every page headline that isn't the home hero: the article title, the Slice Status title, and the hero title + sub on menu, blog, and gallery — those five heroes are meant to read as one entrance, so a new hero headline gets a `LineReveal` rather than a bare `<h1>`. Content arrives either as `text` (a plain string, which doubles as the re-split dependency) or as **children** when the headline carries markup (`<br>`, `<em>` — all three hero titles do). JSX children are a fresh object every render, so a `children` caller must also pass a stable `splitKey`; without it `revertOnUpdate` re-splits and replays the reveal on every unrelated re-render (the menu page re-renders when the 86 list lands).
 - Home and blog hero backgrounds have a scrubbed ScrollTrigger parallax (`HomePage.jsx` / `BlogPage.jsx`); their CSS `inset` extends past the top so the drift never exposes an edge.
 - Every GSAP effect is skipped under `prefers-reduced-motion` (the CSS reduced-motion block makes `.reveal` content visible).
 
@@ -70,10 +70,29 @@ UI icons (arrows, chevrons, close, at-sign) come from `lucide-react`. Note: Luci
 - Tailwind CSS is present and available for utilities; the Tailwind config maps `text-red`, `bg-cream`, etc. to CSS custom properties so both systems stay in sync.
 - Never remove the CSS custom property block at the top of `index.css` — it is the single source of truth for all brand values.
 
+### Typography
+
+Two faces, loaded together from one Google Fonts request in `index.html`:
+
+- **`--serif` = Fraunces** — display and body. It's variable on `opsz`, `SOFT` and `WONK` as well as weight. `body` sets `font-optical-sizing: auto` (so the browser picks the text cut at 18px and the display cut at 100px on its own) plus `'SOFT' 25, 'WONK' 0`; the display selector list right below it re-declares `'SOFT' 45, 'WONK' 1`. **WONK is the point of the face** — swashed alternates that look great at hero sizes and noisy in a paragraph, which is why it's opt-in per selector rather than global. Adding a new display heading means adding it to that selector list, or it silently renders in the plain cut.
+- **`--ui` = Inter** — every uppercase label, button, price, and bit of meta. A serif can't do small-caps UI at 10–11px; this is the job Garamond was failing at. (`--ui` was called `--mono` back when it held DM Mono.)
+
+Uppercase tracking runs on two tokens, `--track-eyebrow` (0.14em, section eyebrows/panel titles/tags) and `--track-label` (0.11em, buttons/meta/chips/sub-lines) — em, not px, so tracking scales with the label instead of drifting tight as type grows. Don't hand-write a px `letter-spacing` on uppercase text; pick a token. No uppercase label goes below 10px.
+
+Eyebrow labels (`.section-label`, `.hero-label`, `.article-tag`, `.article-next-label`) used to lead with a decorative dash, which anchored them and let them sit well away from their title. With the dash gone they read as stray text floating above the heading, so **proximity does the anchoring instead** — a ~9px gap and weight 600, tight enough that label + title parse as one block. Don't loosen that margin back out unless you give the label some other anchor.
+
+`--gold-on-photo` (#E89B4F) is a lighter, warmer gold for type sitting on photography; the base `--gold` reads fine on the ink backgrounds it's used on elsewhere but lands in the same warm brown as the crust on the hero image. `.hero-label` also carries a text-shadow — that, not the lighter color, is what actually holds it against a bright spot in the photo.
+
+Because both faces set wider than the ones they replaced, short fixed strings ("Order Now", "See the Menu") carry `white-space: nowrap` — they wrapped to three lines on a phone without it. The nav wordmark hides below 430px (not 380px) for the same reason.
+
+Vertical rhythm uses `--gutter` / `--space-xl` / `--space-lg` / `--space-md`, all `clamp()`. Sections differ by weight — story is `xl`, standard content `lg`, strips `md` — instead of the flat 100px/80px they all used to share. The clamps also replace the mobile padding overrides those sections used to need, so don't re-add a `@media` padding rule for a section that already uses a space token.
+
+`StudioPage.jsx`'s share card draws to canvas, which takes the font shorthand only — no variation settings — so the card gets Fraunces' plain (non-WONK) cut. Its `TITLE_FONT`/`MONO_FONT` constants are a separate copy of the type choices; update them alongside the CSS.
+
 ## Data
 
 - `src/data/menu.js` — menu categories and items (update prices/items here); an item's optional `special: '<tag>'` field puts it on the homepage specials strip
-- `src/data/posts.js` — blog posts array + `ALL_PHOTOS` array for the gallery
+- `src/data/posts.js` — blog posts array + `ALL_PHOTOS` array for the gallery. `.blog-grid` uses `auto-fit` with a **capped** track (`minmax(320px, 400px)`) plus `justify-content: center`, not `auto-fill` + `1fr` — auto-fill keeps empty tracks alive, which left a single post pinned to column 1 with two ghost columns beside it. Any short row (one post, or the leftovers of a four-post grid) now centres.
 
 Both are plain JS arrays — no API calls. To add a post, append to `BLOG_POSTS`. To add gallery photos, append paths to `ALL_PHOTOS`.
 

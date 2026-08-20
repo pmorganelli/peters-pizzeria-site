@@ -52,7 +52,6 @@ export function Lightbox({ photos, index, onClose, onPrev, onNext, captions }) {
       ref={dialogRef}
       className={`lb-overlay${caption ? ' lb-has-caption' : ''}`}
       aria-label="Photo lightbox"
-      onClick={onClose}
       onCancel={(e) => { e.preventDefault(); onClose(); }}
       onTouchStart={(e) => { touchX.current = e.touches[0]?.clientX ?? null; }}
       onTouchEnd={(e) => {
@@ -67,7 +66,25 @@ export function Lightbox({ photos, index, onClose, onPrev, onNext, captions }) {
         else if (dx < -50) onNext();
       }}
     >
-      <button type="button" className="lb-close" aria-label="Close lightbox" onClick={(e) => { e.stopPropagation(); onClose(); }}><X size={13} /> close</button>
+      {/* Click-anywhere-to-dismiss is a real button covering the dialog rather
+          than an onClick on the <dialog> itself: a handler there is invisible
+          to keyboard and screen-reader users, who can't "click the backdrop".
+          It sits behind every other child (first in source order, and they're
+          either absolutely positioned or painted later), so tapping the photo,
+          the caption or the arrows lands on those, not on this — which is why
+          none of them need stopPropagation any more.
+          Not focusable and hidden from assistive tech on purpose: it would
+          otherwise be a second, viewport-sized "Close lightbox" control
+          duplicating the visible one below. Escape (onCancel) and that button
+          are the accessible ways out. */}
+      <button
+        type="button"
+        className="lb-backdrop"
+        tabIndex={-1}
+        aria-hidden="true"
+        onClick={onClose}
+      />
+      <button type="button" className="lb-close" aria-label="Close lightbox" onClick={onClose}><X size={13} /> close</button>
       <img
         key={photos[index]}
         className="lb-img"
@@ -75,13 +92,9 @@ export function Lightbox({ photos, index, onClose, onPrev, onNext, captions }) {
         srcSet={`${webSrc(photos[index])} 1600w, ${photos[index]} 3600w`}
         sizes="(max-width: 768px) 96vw, 88vw"
         alt="Enlarged view"
-        onClick={(e) => e.stopPropagation()}
       />
-      {/* stopPropagation throughout the bottom furniture: it sits where a thumb
-          naturally rests on phones, and a tap must not bubble to the dialog's
-          onClick and close the lightbox. */}
       {caption && (
-        <div className="lb-caption" onClick={(e) => e.stopPropagation()}>
+        <div className="lb-caption">
           {caption.name && <span className="lb-caption-name">{caption.name}</span>}
           {caption.caption && <span className="lb-caption-text">{caption.caption}</span>}
           {caption.age && <span className="lb-caption-age">{caption.age}</span>}
@@ -89,9 +102,9 @@ export function Lightbox({ photos, index, onClose, onPrev, onNext, captions }) {
       )}
       {photos.length > 1 && (
         <>
-          <button type="button" className="lb-arrow lb-prev" aria-label="Previous photo" onClick={(e) => { e.stopPropagation(); onPrev(); }}><ArrowLeft size={20} strokeWidth={1.5} /></button>
-          <button type="button" className="lb-arrow lb-next" aria-label="Next photo" onClick={(e) => { e.stopPropagation(); onNext(); }}><ArrowRight size={20} strokeWidth={1.5} /></button>
-          <div className="lb-counter" onClick={(e) => e.stopPropagation()}>{index + 1} / {photos.length}</div>
+          <button type="button" className="lb-arrow lb-prev" aria-label="Previous photo" onClick={onPrev}><ArrowLeft size={20} strokeWidth={1.5} /></button>
+          <button type="button" className="lb-arrow lb-next" aria-label="Next photo" onClick={onNext}><ArrowRight size={20} strokeWidth={1.5} /></button>
+          <div className="lb-counter">{index + 1} / {photos.length}</div>
         </>
       )}
     </dialog>

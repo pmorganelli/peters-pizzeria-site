@@ -35,7 +35,9 @@ export function BlogPage({ nav, openArticle }) {
         <div className="section-label" style={{ color: 'var(--gold)', position: 'relative', zIndex: 1 }}>
           Blog
         </div>
-        <h1 className="blog-hero-title">Recipes, stories,<br /><em>&amp; inspirations.</em></h1>
+        <LineReveal as="h1" className="blog-hero-title" splitKey="blog-hero">
+          Recipes, stories,<br /><em>&amp; inspirations.</em>
+        </LineReveal>
         <LineReveal
           as="p"
           className="blog-hero-sub"

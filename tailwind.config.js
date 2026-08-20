@@ -15,8 +15,8 @@ export default {
         ink2:       'var(--ink2)',
       },
       fontFamily: {
-        serif: ['EB Garamond', 'Georgia', 'serif'],
-        mono:  ['DM Mono', 'monospace'],
+        serif: ['Fraunces', 'Georgia', 'serif'],
+        ui:    ['Inter', 'system-ui', 'sans-serif'],
       },
     },
   },

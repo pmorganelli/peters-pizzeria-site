@@ -4,6 +4,7 @@ import { useGSAP } from '@gsap/react';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { ArrowRight } from 'lucide-react';
 import { Footer } from '../components/Footer';
+import { LineReveal } from '../components/LineReveal';
 import { useScrollReveal } from '../hooks/useScrollReveal';
 import { MENU_DATA } from '../data/menu';
 import { api } from '../utils/api';
@@ -44,8 +45,14 @@ export function MenuPage({ nav }) {
       <div className="menu-hero">
         <div className="menu-hero-bg" />
         <div className="section-label" style={{ color: 'var(--gold)', position: 'relative', zIndex: 1 }}>Menu</div>
-        <h1 className="menu-hero-title">Dough on Wednesday.<br /><em>Pizzas fresh on Saturday.</em></h1>
-        <p className="menu-hero-sub">72-hour ferment · Ooni fired at 900°F · Pizza steels at 550°F</p>
+        <LineReveal as="h1" className="menu-hero-title" splitKey="menu-hero">
+          Dough on Wednesday.<br /><em>Pizzas fresh on Saturday.</em>
+        </LineReveal>
+        <LineReveal
+          as="p"
+          className="menu-hero-sub"
+          text="72-hour ferment · Ooni fired at 900°F · Pizza steels at 550°F"
+        />
       </div>
 
       <div className="menu-body">
@@ -84,8 +91,10 @@ export function MenuPage({ nav }) {
             </div>
           </div>
           <div className="menu-quote">
-            &ldquo;Can you save me a slice?&rdquo; — Jonah Pflaster
-            <span className="menu-quote-alt">&ldquo;really f*cking good&rdquo; — Harrison Tun</span>
+            &ldquo;Can you save me a slice?&rdquo; <span className="menu-quote-by">— Jonah Pflaster</span>
+            <span className="menu-quote-alt">
+              &ldquo;really f*cking good&rdquo; <span className="menu-quote-by">— Harrison Tun</span>
+            </span>
           </div>
           <button type="button"
             className="btn-primary"

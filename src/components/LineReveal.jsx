@@ -9,7 +9,11 @@ gsap.registerPlugin(useGSAP, SplitText);
 // and reveals each line with a staggered rise behind a mask. autoSplit waits for
 // the webfont and re-splits on resize; under reduced motion the text renders
 // plain, so the content is never lost.
-export function LineReveal({ text, className, as: Tag = 'div', stagger = 90 }) {
+// Content can come in as `text` (a plain string) or as `children` when the
+// headline carries markup (<br>, <em>). JSX children are a fresh object every
+// render, so they can't be what decides when to re-split — pass a stable
+// `splitKey` alongside them; a plain string is its own key.
+export function LineReveal({ text, children, className, as: Tag = 'div', stagger = 90, splitKey }) {
   const ref = useRef(null);
 
   useGSAP(() => {
@@ -29,7 +33,7 @@ export function LineReveal({ text, className, as: Tag = 'div', stagger = 90 }) {
           stagger: stagger / 1000,
         }),
     });
-  }, { dependencies: [text, stagger], revertOnUpdate: true, scope: ref });
+  }, { dependencies: [splitKey ?? text, stagger], revertOnUpdate: true, scope: ref });
 
-  return <Tag ref={ref} className={[className, 'line-reveal'].filter(Boolean).join(' ')}>{text}</Tag>;
+  return <Tag ref={ref} className={[className, 'line-reveal'].filter(Boolean).join(' ')}>{children ?? text}</Tag>;
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Footer } from '../components/Footer';
+import { LineReveal } from '../components/LineReveal';
 import { ALL_PHOTOS } from '../data/posts';
 import { PHOTO_RATIOS } from '../data/photoDims';
 import { thumbSrc } from '../utils/photos';
@@ -15,10 +16,14 @@ export function GalleryPage({ nav, openLightbox }) {
     <div className="gallery-page">
       <div className="gallery-hero">
         <div className="section-label" style={{ color: 'var(--gold)' }}>Gallery</div>
-        <h1 className="gallery-hero-title">From the<br /><em>kitchen &amp; beyond.</em></h1>
-        <p className="gallery-hero-sub">
-          {ALL_PHOTOS.length} photos · Tap to enlarge · Swipe to browse
-        </p>
+        <LineReveal as="h1" className="gallery-hero-title" splitKey="gallery-hero">
+          From the<br /><em>kitchen &amp; beyond.</em>
+        </LineReveal>
+        <LineReveal
+          as="p"
+          className="gallery-hero-sub"
+          text={`${ALL_PHOTOS.length} photos · Tap to enlarge · Swipe to browse`}
+        />
       </div>
 
       <div className="gallery-grid">

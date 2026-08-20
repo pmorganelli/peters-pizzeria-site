@@ -8,9 +8,13 @@ import { prepareWithSegments, layoutWithLines } from '@chenglou/pretext';
 const W = 1080;
 const H = 1350; // 4:5, Instagram portrait
 const PAD_X = 80;
-const TITLE_FONT = 'italic 800 76px "EB Garamond", Georgia, serif';
+// Canvas takes the font shorthand only — no font-variation-settings, so the
+// share card gets Fraunces' default (non-WONK) cut rather than the display cut
+// the page uses. Close enough at 76px, and the alternative is drawing the glyphs
+// by hand. The label face matches the site's UI face.
+const TITLE_FONT = 'italic 700 76px "Fraunces", Georgia, serif';
 const TITLE_LINE_H = 88;
-const MONO_FONT = '600 27px "EB Garamond", Georgia, serif';
+const MONO_FONT = '600 27px "Inter", system-ui, sans-serif';
 
 async function drawCard(canvas, { photo, title, tag }, isStale) {
   const ctx = canvas.getContext('2d');
