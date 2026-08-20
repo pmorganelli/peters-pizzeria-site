@@ -309,7 +309,12 @@ nav.nav-dark.scrolled .nav-hamburger span { background: var(--ink); }
 
 /* ── STORY ─────────────────────────────────────────────────────────── */
 .story-section { background: var(--cream); padding: var(--space-xl) var(--gutter); }
-.story-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 72px; align-items: start; margin-top: 56px; }
+/* minmax(0, 1fr), not 1fr: a bare 1fr floors at the track's min-content width,
+   and .story-stat's four-across row (~525px of unshrinkable flex items) claimed
+   that whole floor for the text column — squeezing the photo track down to 90px
+   at 769px and 320px at 1024px, i.e. every tablet and small-laptop width. The
+   explicit 0 minimum lets both tracks stay honestly equal. */
+.story-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(36px, 4vw, 72px); align-items: start; margin-top: 56px; }
 .story-photo-stack { position: relative; }
 /* Natural aspect ratio — the full photo is always visible, never cropped */
 .story-photo-main { width: 100%; height: auto; display: block; }
@@ -318,7 +323,10 @@ nav.nav-dark.scrolled .nav-hamburger span { background: var(--ink); }
   border: 4px solid var(--cream); display: block;
 }
 .story-text p { font-family: var(--serif); font-size: 18px; line-height: 1.8; color: var(--ink2); margin-bottom: 18px; }
-.story-stat { display: flex; gap: 44px; margin-top: 40px; padding-top: 32px; border-top: 2px solid var(--green); }
+/* Grid rather than flex: flex items default to min-width:auto, so this row
+   could never be narrower than its content and pushed that width up into the
+   grid track above. minmax(0, …) cells shrink instead. */
+.story-stat { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(20px, 2.4vw, 44px); margin-top: 40px; padding-top: 32px; border-top: 2px solid var(--green); }
 .stat-num { font-family: var(--serif); font-size: 52px; font-weight: 700; font-style: italic; color: var(--red); line-height: 1; }
 .stat-label { font-family: var(--ui); font-size: 10px; letter-spacing: var(--track-label); text-transform: uppercase; color: var(--ink2); margin-top: 4px; }
 
@@ -1395,6 +1403,13 @@ body, .story-section, .home-latest, .menu-page, .blog-page, .article-page {
   /* No horizontal overhang once the layout tightens — the -24px corner accent
      would poke past the viewport edge (masked only by body overflow-x:hidden) */
   .story-photo-inset-btn { right: 0; }
+  /* Two columns below this width leave the text under ~380px — readable, but
+     the photo half is the part that suffers. Stack instead, and cap the photo
+     so a full-bleed team shot doesn't dwarf the copy on an iPad. */
+  .story-grid { grid-template-columns: minmax(0, 1fr); gap: 36px; }
+  .story-photo-stack { max-width: 560px; }
+  /* Full-width text column here — the four stats fit on one line again */
+  .story-stat { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 
 /* Nav switches to the hamburger earlier than the page layouts (1080px, not
@@ -1535,6 +1550,12 @@ body, .story-section, .home-latest, .menu-page, .blog-page, .article-page {
   /* The label/amount/button trio doesn't fit the mobile grid columns above —
      stack them instead of fighting the 4-column template. */
   .finished-total-row { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+}
+
+/* Below this the two-column text track can't hold four stats without the
+   52px numerals colliding — they stay 2x2. */
+@media (min-width: 1400px) {
+  .story-stat { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 
 @media (max-width: 480px) {

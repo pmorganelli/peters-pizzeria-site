@@ -9,7 +9,7 @@ import { useScrollReveal } from '../hooks/useScrollReveal';
 import { POSTS_BY_DATE } from '../data/posts';
 import { MENU_DATA } from '../data/menu';
 import { api } from '../utils/api';
-import { thumbSrc, webSrc } from '../utils/photos';
+import { responsiveImg } from '../utils/photos';
 
 gsap.registerPlugin(useGSAP, ScrollTrigger);
 
@@ -105,10 +105,20 @@ export function HomePage({ nav, openArticle, openLightbox }) {
         <div className="story-grid">
           <div ref={ref(1)} className="reveal reveal-delay-1 story-photo-stack">
             <button type="button" className="story-photo-btn" onClick={() => openLightbox(STORY_PHOTOS, 0)} aria-label="View team photo">
-              <img className="story-photo-main" src={webSrc('/photos/team.jpg')} alt="The team" loading="lazy" decoding="async" />
+              <img
+                className="story-photo-main"
+                /* Stacked and capped at 560px below 900px (see .story-photo-stack), half the grid above it */
+                {...responsiveImg('/photos/team.jpg', '(max-width: 900px) min(560px, 92vw), 44vw', [320, 640, 960, 1280, 1600])}
+                alt="The team" loading="lazy" decoding="async"
+              />
             </button>
             <button type="button" className="story-photo-btn story-photo-inset-btn" onClick={() => openLightbox(STORY_PHOTOS, 1)} aria-label="View crew photo">
-              <img className="story-photo-inset" src={thumbSrc('/photos/hug1.jpg')} alt="The crew" loading="lazy" decoding="async" />
+              <img
+                className="story-photo-inset"
+                /* 34% of the stack it's pinned to — never large, whatever the viewport */
+                {...responsiveImg('/photos/hug1.jpg', '(max-width: 900px) 190px, 15vw', [320, 640, 960])}
+                alt="The crew" loading="lazy" decoding="async"
+              />
             </button>
           </div>
 
@@ -132,7 +142,7 @@ export function HomePage({ nav, openArticle, openLightbox }) {
       <div className="photo-strip">
         {STRIP_ITEMS.map((p, i) => (
           <button type="button" key={p.src} className="photo-strip-item" onClick={() => openLightbox(STRIP_SRCS, i)} aria-label={p.alt}>
-            <img src={thumbSrc(p.src)} alt={p.alt} loading="lazy" decoding="async" />
+            <img {...responsiveImg(p.src, '(max-width: 768px) 50vw, 25vw', [320, 640, 960, 1280])} alt={p.alt} loading="lazy" decoding="async" />
           </button>
         ))}
       </div>
@@ -193,7 +203,7 @@ export function HomePage({ nav, openArticle, openLightbox }) {
               aria-label={`Read: ${post.title}`}
             >
               <div className="blog-card-img">
-                <img src={thumbSrc(post.img)} alt={post.title} loading="lazy" decoding="async" />
+                <img {...responsiveImg(post.img, '(max-width: 768px) 92vw, (max-width: 1100px) 46vw, 340px', [320, 640, 960, 1280])} alt={post.title} loading="lazy" decoding="async" />
                 <div className="blog-card-tag">{post.tag}</div>
               </div>
               <div className="blog-card-body">
@@ -241,13 +251,13 @@ export function HomePage({ nav, openArticle, openLightbox }) {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           <button type="button" className="photo-btn" onClick={() => openLightbox(COMMUNITY_PHOTOS, 0)} aria-label="View kitchen photo">
-            <img src={thumbSrc('/photos/img_1082.jpeg')} alt="Kitchen" loading="lazy" decoding="async" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block' }} />
+            <img {...responsiveImg('/photos/img_1082.jpeg', '(max-width: 768px) 46vw, 22vw', [320, 640, 960, 1280])} alt="Kitchen" loading="lazy" decoding="async" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block' }} />
           </button>
           <button type="button" className="photo-btn" onClick={() => openLightbox(COMMUNITY_PHOTOS, 1)} aria-label="View team photo">
-            <img src={thumbSrc('/photos/img_6789.jpeg')} alt="Team" loading="lazy" decoding="async" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block' }} />
+            <img {...responsiveImg('/photos/img_6789.jpeg', '(max-width: 768px) 46vw, 22vw', [320, 640, 960, 1280])} alt="Team" loading="lazy" decoding="async" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block' }} />
           </button>
           <button type="button" className="photo-btn" onClick={() => openLightbox(COMMUNITY_PHOTOS, 2)} aria-label="View pizza photo" style={{ gridColumn: '1/-1' }}>
-            <img src={webSrc('/photos/img_1098.jpeg')} alt="Pizza" loading="lazy" decoding="async" style={{ width: '100%', aspectRatio: '3/2', objectFit: 'cover', display: 'block' }} />
+            <img {...responsiveImg('/photos/img_1098.jpeg', '(max-width: 768px) 92vw, 44vw', [320, 640, 960, 1280, 1600])} alt="Pizza" loading="lazy" decoding="async" style={{ width: '100%', aspectRatio: '3/2', objectFit: 'cover', display: 'block' }} />
           </button>
         </div>
       </section>

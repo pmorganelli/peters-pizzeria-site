@@ -2,16 +2,19 @@ import { useEffect } from 'react';
 import { ChevronLeft, ArrowRight } from 'lucide-react';
 import { Footer } from '../components/Footer';
 import { POSTS_BY_DATE } from '../data/posts';
-import { thumbSrc, webSrc } from '../utils/photos';
+import { responsiveImg } from '../utils/photos';
 import { LineReveal } from '../components/LineReveal';
 
-function ArticleFigure({ img, heading, index, ratio = '4/3' }) {
+// `sizes` is a required-in-practice prop rather than a default: this figure
+// renders at 46% of the body column when floated and at the full column when
+// stacked, and guessing one for the other picks a candidate ~2x off.
+function ArticleFigure({ img, heading, index, ratio = '4/3', sizes }) {
   const src = typeof img === 'string' ? img : img.src;
   const caption = typeof img === 'string' ? null : img.caption;
   return (
     <figure style={{ margin: 0 }}>
       <img
-        src={webSrc(src)}
+        {...responsiveImg(src, sizes, [320, 640, 960, 1280])}
         alt={caption || `${heading} photo ${index + 1}`}
         loading="lazy"
         decoding="async"
@@ -65,7 +68,7 @@ export function ArticlePage({ article, nav }) {
       {article.img && (
         <div className="article-hero-img">
           <img
-            src={webSrc(article.img)}
+            {...responsiveImg(article.img, '(max-width: 768px) calc(100vw - 40px), 600px', [320, 640, 960, 1280])}
             alt={article.title}
             decoding="async"
             style={{ width: '100%', aspectRatio: '16/9', maxHeight: 400, objectFit: 'cover', display: 'block' }}
@@ -85,14 +88,26 @@ export function ArticlePage({ article, nav }) {
             {/* Magazine treatment: a lone figure floats right and the text wraps around it */}
             {s.images && s.images.length === 1 && (
               <div className="article-fig-float">
-                <ArticleFigure img={s.images[0]} heading={s.heading} index={0} ratio="4/5" />
+                <ArticleFigure
+                  img={s.images[0]}
+                  heading={s.heading}
+                  index={0}
+                  ratio="4/5"
+                  sizes="(max-width: 768px) calc(100vw - 40px), (max-width: 900px) 600px, 276px"
+                />
               </div>
             )}
             {s.body && <p>{s.body}</p>}
             {s.images && s.images.length > 1 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 20, margin: '16px 0 28px' }}>
                 {s.images.map((img, j) => (
-                  <ArticleFigure key={j} img={img} heading={s.heading} index={j} />
+                  <ArticleFigure
+                    key={j}
+                    img={img}
+                    heading={s.heading}
+                    index={j}
+                    sizes="(max-width: 768px) calc(100vw - 40px), 600px"
+                  />
                 ))}
               </div>
             )}
@@ -112,7 +127,7 @@ export function ArticlePage({ article, nav }) {
         <div className="article-next">
           <div className="article-next-label">Read next</div>
           <button type="button" className="article-next-card" onClick={() => nav('article', next)} aria-label={`Read next: ${next.title}`}>
-            <img src={thumbSrc(next.img)} alt="" loading="lazy" decoding="async" />
+            <img {...responsiveImg(next.img, '(max-width: 768px) 96px, 150px', [320, 640])} alt="" loading="lazy" decoding="async" />
             <div>
               <div className="article-next-meta">{next.tag} · {next.date}</div>
               <div className="article-next-title">{next.title}</div>

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
   OPTIMIZER_WIDTHS,
@@ -9,7 +9,9 @@ import {
   staticSrc,
   optimizedUrl,
   buildSrcSet,
+  photoSrc,
   photoSrcSet,
+  responsiveImg,
 } from './photos';
 
 // The Image Optimization API rejects any `w` or `q` not listed in vercel.json,
@@ -112,5 +114,84 @@ describe('photoSrcSet without an optimizer', () => {
     // identical URLs labelled 320w/640w/960w would make the browser infer a
     // density and lay the image out at a fraction of its real size.
     expect(photoSrcSet('/photos/team.jpg', [320, 640, 960])).toBeUndefined();
+  });
+});
+
+describe('responsiveImg', () => {
+  // These assertions only mean anything on the optimizer path, and the helpers
+  // decide that from the hostname — so stand up a non-local `window` for this
+  // block. Without it srcSet is omitted and `src` carries no `w` to check.
+  beforeEach(() => {
+    globalThis.window = { location: { hostname: 'peterspizzeria.com' } };
+  });
+  afterEach(() => {
+    delete globalThis.window;
+  });
+
+  const widthOf = (url) => Number(new URL(url, 'https://x').searchParams.get('w'));
+
+  it('passes the slot description through as sizes', () => {
+    const { sizes } = responsiveImg('/photos/team.jpg', '(max-width: 768px) 50vw, 25vw', [320, 640]);
+    expect(sizes).toBe('(max-width: 768px) 50vw, 25vw');
+  });
+
+  it('offers every requested width as a candidate', () => {
+    const { srcSet } = responsiveImg('/photos/team.jpg', '25vw', [320, 640, 960]);
+    expect(srcSet.split(', ').map((c) => widthOf(c.split(' ')[0]))).toEqual([320, 640, 960]);
+  });
+
+  it('picks its fallback from the requested widths', () => {
+    const { src } = responsiveImg('/photos/team.jpg', '25vw', [320, 640, 960]);
+    expect(widthOf(src)).toBe(640);
+  });
+
+  it('never falls back to a width the optimizer would reject', () => {
+    // 800 is not in OPTIMIZER_WIDTHS. buildSrcSet drops it from the candidate
+    // list, but `src` is a separate URL that skips that filter — and a bad `w`
+    // is a production-only 400, invisible in dev, in tests and in the build.
+    const { src, srcSet } = responsiveImg('/photos/team.jpg', '25vw', [800]);
+    expect(srcSet).toBe('');
+    expect(OPTIMIZER_WIDTHS).toContain(widthOf(src));
+  });
+
+  it('carries the requested quality onto the fallback too', () => {
+    const { src } = responsiveImg('/photos/team.jpg', '25vw', [640], LIGHTBOX_QUALITY);
+    expect(new URL(src, 'https://x').searchParams.get('q')).toBe(String(LIGHTBOX_QUALITY));
+  });
+});
+
+describe('off-site photos bypass the optimizer', () => {
+  // The Lightbox is shared: the gallery hands it app paths, the community wall
+  // hands it absolute Blob URLs. Wrapping a Blob URL in /_vercel/image is a 400
+  // in production (no images.remotePatterns) and silently fine in dev, so this
+  // is the only place the bug is catchable.
+  const BLOB = 'https://abc123.public.blob.vercel-storage.com/slices/xyz.jpg';
+
+  beforeEach(() => {
+    globalThis.window = { location: { hostname: 'peterspizzeria.com' } };
+  });
+  afterEach(() => {
+    delete globalThis.window;
+  });
+
+  it('serves a Blob URL untouched rather than routing it through /_vercel/image', () => {
+    expect(photoSrc(BLOB, 1280, LIGHTBOX_QUALITY)).toBe(BLOB);
+    expect(photoSrc(BLOB, 1280, LIGHTBOX_QUALITY)).not.toContain('/_vercel/image');
+  });
+
+  it('offers no srcset for an off-site image', () => {
+    expect(photoSrcSet(BLOB, [960, 1280], LIGHTBOX_QUALITY)).toBeUndefined();
+  });
+
+  it('still optimizes app photo paths on the same code path', () => {
+    // Guards against "fixing" the above by disabling the optimizer outright.
+    expect(photoSrc('/photos/team.jpg', 1280)).toContain('/_vercel/image');
+    expect(photoSrcSet('/photos/team.jpg', [960, 1280])).toContain('/_vercel/image');
+  });
+
+  it('carries the bypass through responsiveImg', () => {
+    const { src, srcSet } = responsiveImg(BLOB, '88vw', [960, 1280]);
+    expect(src).toBe(BLOB);
+    expect(srcSet).toBeUndefined();
   });
 });

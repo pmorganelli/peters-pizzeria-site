@@ -5,7 +5,7 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { Footer } from '../components/Footer';
 import { useScrollReveal } from '../hooks/useScrollReveal';
 import { POSTS_BY_DATE } from '../data/posts';
-import { thumbSrc } from '../utils/photos';
+import { responsiveImg } from '../utils/photos';
 import { LineReveal } from '../components/LineReveal';
 
 gsap.registerPlugin(useGSAP, ScrollTrigger);
@@ -56,7 +56,8 @@ export function BlogPage({ nav, openArticle }) {
               aria-label={`Read: ${post.title}`}
             >
               <div className="blog-card-img">
-                <img src={thumbSrc(post.img)} alt={post.title} loading="lazy" decoding="async" />
+                {/* .blog-grid tracks are minmax(320px, 400px), so a card never exceeds 400 */}
+                <img {...responsiveImg(post.img, '(max-width: 768px) 92vw, 400px', [320, 640, 960, 1280])} alt={post.title} loading="lazy" decoding="async" />
                 <div className="blog-card-tag">{post.tag}</div>
               </div>
               <div className="blog-card-body">

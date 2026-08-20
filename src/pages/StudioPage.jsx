@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Download } from 'lucide-react';
 import { Footer } from '../components/Footer';
 import { BLOG_POSTS, ALL_PHOTOS } from '../data/posts';
-import { thumbSrc, webSrc } from '../utils/photos';
+import { responsiveImg, webSrc } from '../utils/photos';
 import { prepareWithSegments, layoutWithLines } from '@chenglou/pretext';
 
 const W = 1080;
@@ -164,7 +164,8 @@ export function StudioPage({ nav }) {
                 onClick={() => setPhoto(src)}
                 aria-label="Use this photo"
               >
-                <img src={thumbSrc(src)} alt="" loading="lazy" decoding="async" />
+                {/* .studio-photos tracks are minmax(72px, 1fr) — these are tiny pickers */}
+                <img {...responsiveImg(src, '110px', [320, 640])} alt="" loading="lazy" decoding="async" />
               </button>
             ))}
           </div>

@@ -2,6 +2,16 @@ import { useEffect, useRef } from 'react';
 import { X, ArrowLeft, ArrowRight } from 'lucide-react';
 import { photoSrc, photoSrcSet, LIGHTBOX_QUALITY } from '../utils/photos';
 
+// The candidate list and the `sizes` hint are shared by the rendered <img> and
+// the neighbour prefetch below, because the two MUST resolve to the same URL.
+// They didn't: the prefetch hardcoded the 1280 candidate while `sizes` sends a
+// DPR-2 iPad to 1600 and a laptop to 2048, so every arrow press threw away the
+// warmed image and started a fresh download. Change these together or not at all.
+const LB_WIDTHS = [960, 1280, 1600, 2048];
+const LB_SIZES = '(max-width: 768px) 96vw, 88vw';
+// Only ever used where srcSet is unavailable (localhost has no optimizer).
+const LB_FALLBACK_WIDTH = 1280;
+
 // `captions` is optional and parallel to `photos` — the community wall passes
 // one, the gallery doesn't. Each entry is { name, caption, age } or null.
 export function Lightbox({ photos, index, onClose, onPrev, onNext, captions }) {
@@ -38,12 +48,23 @@ export function Lightbox({ photos, index, onClose, onPrev, onNext, captions }) {
     return () => { document.body.style.overflow = prev; };
   }, []);
 
-  // Warm the browser cache with the neighbors so arrow/swipe feels instant
+  // Warm the browser cache with the neighbors so arrow/swipe feels instant.
+  // srcset/sizes are set (and set *before* src, which is what triggers
+  // selection) so the prefetch resolves to the exact candidate the <img> below
+  // will ask for. decode() then takes the JPEG/AVIF decode off the interaction
+  // too — on a tablet that's the difference between a swap and a visible stall.
+  // Deliberately no abort on cleanup: a half-downloaded neighbour is progress
+  // worth keeping when someone arrows quickly through the set.
   useEffect(() => {
     if (photos.length < 2) return;
     [1, -1].forEach((d) => {
+      const src = photos[(index + d + photos.length) % photos.length];
       const im = new Image();
-      im.src = photoSrc(photos[(index + d + photos.length) % photos.length], 1280, LIGHTBOX_QUALITY);
+      im.sizes = LB_SIZES;
+      const set = photoSrcSet(src, LB_WIDTHS, LIGHTBOX_QUALITY);
+      if (set) im.srcset = set;
+      im.src = photoSrc(src, LB_FALLBACK_WIDTH, LIGHTBOX_QUALITY);
+      im.decode?.().catch(() => {});
     });
   }, [index, photos]);
 
@@ -88,15 +109,23 @@ export function Lightbox({ photos, index, onClose, onPrev, onNext, captions }) {
       {/* This used to offer the untouched camera original as a 3-4 MB candidate.
           Now every candidate is a transform of photos/large/, served as AVIF
           where the browser takes it, at a slightly higher quality than the rest
-          of the site because this is the one image someone is actually
-          studying. A phone (96vw of ~390px at DPR 3 ≈ 1123px) lands on 1280;
-          a retina laptop at 88vw takes 2048. */}
+          of the site because this is the one image someone is actually studying.
+          No `key` here on purpose. Keying on the photo tore the <img> down and
+          built a new one on every step, so each navigation started from an
+          element with nothing decoded — a blank frame even when the bytes were
+          already cached, plus the entrance animation replaying on every arrow
+          press instead of once when the lightbox opens. Reusing the element
+          lets a prefetched neighbour swap in immediately, and keeps the
+          outgoing photo on screen (rather than blank) if it isn't ready yet. */}
       <img
-        key={photos[index]}
         className="lb-img"
-        src={photoSrc(photos[index], 1280, LIGHTBOX_QUALITY)}
-        srcSet={photoSrcSet(photos[index], [960, 1280, 1600, 2048], LIGHTBOX_QUALITY)}
-        sizes="(max-width: 768px) 96vw, 88vw"
+        src={photoSrc(photos[index], LB_FALLBACK_WIDTH, LIGHTBOX_QUALITY)}
+        srcSet={photoSrcSet(photos[index], LB_WIDTHS, LIGHTBOX_QUALITY)}
+        sizes={LB_SIZES}
+        /* Lowercase: React 18 doesn't recognise the camelCase spelling and
+           warns rather than forwarding it (React 19 adds fetchPriority). */
+        fetchpriority="high"
+        decoding="sync"
         alt="Enlarged view"
       />
       {caption && (

@@ -35,6 +35,17 @@ export const staticSrc = (src) => src.replace('/photos/', '/photos/static/');
 
 export const sourceSrc = (src) => src.replace('/photos/', `/photos/${SOURCE_TIER}/`);
 
+// Only paths this app ships can go through the optimizer. The Lightbox is
+// shared between the gallery (app photos) and the community wall (absolute
+// Vercel Blob URLs), and a Blob URL came out the other side as
+// /_vercel/image?url=https%3A%2F%2F… — which the API rejects with a 400 unless
+// the host is in images.remotePatterns, and nothing is. That's a production-only
+// failure: localhost skips the optimizer entirely, so the wall's lightbox looked
+// fine in dev and served broken images live. Wall uploads are already downscaled
+// to <=1600px in the browser before upload, so passing them straight through
+// costs nothing and keeps the allow-list as narrow as it is.
+export const isOptimizable = (src) => typeof src === 'string' && src.startsWith('/photos/');
+
 // /_vercel/image exists only on Vercel. On localhost — `vite dev` and
 // `vite preview` alike — fall back to the source file so the site still works
 // with no network and no platform. Hostname rather than import.meta.env.PROD:
@@ -52,6 +63,7 @@ export function optimizedUrl(source, width, quality = DEFAULT_QUALITY) {
 // One photo at one width. `src` is the plain '/photos/name.jpg' path used
 // everywhere in the app — the tier is this module's business, not the caller's.
 export function photoSrc(src, width, quality = DEFAULT_QUALITY) {
+  if (!isOptimizable(src)) return src;
   const source = sourceSrc(src);
   return optimizerAvailable() ? optimizedUrl(source, width, quality) : source;
 }
@@ -67,6 +79,8 @@ export function buildSrcSet(src, widths, quality = DEFAULT_QUALITY) {
 }
 
 export function photoSrcSet(src, widths, quality = DEFAULT_QUALITY) {
+  // Nothing to offer for an off-site image — `src` carries it on its own.
+  if (!isOptimizable(src)) return undefined;
   // With no optimizer every candidate is the same file under a different width
   // descriptor, and the browser believes the descriptors: it picks one, divides
   // the real width by the density it inferred, and reports (and lays out) the
@@ -75,7 +89,35 @@ export function photoSrcSet(src, widths, quality = DEFAULT_QUALITY) {
   return optimizerAvailable() ? buildSrcSet(src, widths, quality) : undefined;
 }
 
-// Fixed-width shorthands for the many places that just need one sensible size.
+// Props for an <img> whose rendered width depends on the viewport. A single
+// fixed width is wrong in both directions at once: `webSrc` pushed a 1600px
+// file into a 320px card on a phone (most of "the photos are slow on my
+// device"), while `thumbSrc` handed a 640px file to a full-bleed card on a
+// DPR-3 screen that wanted ~1050 and rendered it soft. `sizes` describes the
+// slot the image lands in and the browser picks the candidate per device.
+//
+// `sizes` must describe the *rendered CSS width*, so it has to be kept in step
+// with the layout rules in index.css — if a breakpoint or a max-width moves,
+// the matching sizes string moves with it or the browser silently picks the
+// wrong tier. The `src` fallback is a mid candidate, only reached by a browser
+// with no srcset support and on localhost (where photoSrc ignores width).
+export function responsiveImg(src, sizes, widths, quality = DEFAULT_QUALITY) {
+  // buildSrcSet filters illegal widths out of the candidate list, but `src` is
+  // a separate URL that skips that filter — an unlisted width here would 400 in
+  // production for exactly the browsers falling back to it. Pick the fallback
+  // from the filtered list, not the caller's.
+  const legal = widths.filter((w) => OPTIMIZER_WIDTHS.includes(w));
+  const fallback = legal.length
+    ? legal[Math.floor(legal.length / 2)]
+    : OPTIMIZER_WIDTHS[Math.floor(OPTIMIZER_WIDTHS.length / 2)];
+  return {
+    src: photoSrc(src, fallback, quality),
+    srcSet: photoSrcSet(src, widths, quality),
+    sizes,
+  };
+}
+
+// Fixed-width shorthands for the few places whose size genuinely doesn't vary.
 // Names kept from the old tier system so call sites didn't all have to change.
 export const thumbSrc = (src) => photoSrc(src, 640);
 export const webSrc   = (src) => photoSrc(src, 1600);

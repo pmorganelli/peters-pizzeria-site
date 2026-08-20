@@ -8,7 +8,7 @@ import { LineReveal } from '../components/LineReveal';
 import { useScrollReveal } from '../hooks/useScrollReveal';
 import { MENU_DATA } from '../data/menu';
 import { api } from '../utils/api';
-import { webSrc } from '../utils/photos';
+import { responsiveImg } from '../utils/photos';
 
 gsap.registerPlugin(useGSAP, ScrollTrigger);
 
@@ -56,7 +56,7 @@ export function MenuPage({ nav }) {
       </div>
 
       <div className="menu-body">
-        <img src={webSrc('/photos/menu-board.jpg')} alt="Saturday Slices board" className="menu-board-photo" loading="lazy" decoding="async" />
+        <img {...responsiveImg('/photos/menu-board.jpg', '(max-width: 768px) calc(100vw - 40px), 560px', [320, 640, 960, 1280])} alt="Saturday Slices board" className="menu-board-photo" loading="lazy" decoding="async" />
 
         {MENU_DATA.map((section, si) => (
           <div key={section.category} ref={ref(si)} className="reveal">
