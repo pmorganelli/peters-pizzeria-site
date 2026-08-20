@@ -83,7 +83,6 @@ function OrderCard({ order, column, onAdvance, onCancel }) {
       {order.notes && <div className="oc-notes">“{order.notes}”</div>}
       <div className="oc-meta">
         <span>{fmtMoney(order.totalCents)}</span>
-        {order.contact && <span className="oc-contact">{order.contact}</span>}
       </div>
       <div className="oc-actions">
         <button type="button" className="oc-advance" onClick={() => onAdvance(order, column.next)}>

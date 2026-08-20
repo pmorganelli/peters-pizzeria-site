@@ -1,0 +1,5 @@
+# Finder droppings. .gitignore keeps them out of the repo, but `vercel deploy`
+# uploads the working directory, not the git index — without this they ship to
+# production and are fetchable at /.DS_Store.
+.DS_Store
+**/.DS_Store

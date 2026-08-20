@@ -8,6 +8,7 @@ import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { DERIVATIVE_TIERS } from '../src/utils/photos.js';
 
 // EXIF orientation values 5–8 mean the image is stored rotated ±90° and the
 // browser displays it with width/height swapped. sips reports only the stored
@@ -43,7 +44,10 @@ function isTransposed(path) {
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const photosDir = join(root, 'photos');
 const IMG_RE = /\.(jpe?g|png)$/i;
-const SKIP_DIRS = new Set(['thumbs', 'web']);
+// Shared with the app so a newly added tier can't quietly get walked as if it
+// were a folder of originals — which would fill PHOTO_RATIOS with one entry per
+// derivative, all keyed by paths the gallery never asks about.
+const SKIP_DIRS = new Set(DERIVATIVE_TIERS);
 
 function* walk(dir, rel = '') {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {

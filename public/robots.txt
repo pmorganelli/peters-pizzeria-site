@@ -1,0 +1,10 @@
+# Peter's Pizzeria
+User-agent: *
+Allow: /
+
+# Staff-only. Password-protected server-side either way — this just keeps them
+# out of search results.
+Disallow: /admin
+Disallow: /studio
+
+Sitemap: https://peters-pizzeria-site.vercel.app/sitemap.xml

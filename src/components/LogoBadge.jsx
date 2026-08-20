@@ -1,4 +1,4 @@
-import { thumbSrc } from '../utils/photos';
+import { staticSrc } from '../utils/photos';
 
 // The real pizzeria logo, cropped to a circular badge. The thumb derivative
 // (640px) is plenty for every size this renders at, and one file serves the
@@ -6,7 +6,7 @@ import { thumbSrc } from '../utils/photos';
 export function LogoBadge({ size = 52 }) {
   return (
     <img
-      src={thumbSrc('/photos/peterspizzerialogo.jpg')}
+      src={staticSrc('/photos/peterspizzerialogo.jpg')}
       alt=""
       width={size}
       height={size}

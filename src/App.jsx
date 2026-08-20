@@ -3,6 +3,7 @@ import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { Nav }         from './components/Nav';
 import { Lightbox }    from './components/Lightbox';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { HomePage }    from './pages/HomePage';
 import { MenuPage }    from './pages/MenuPage';
 import { BlogPage }    from './pages/BlogPage';
@@ -14,19 +15,29 @@ import { StatusPage }  from './pages/StatusPage';
 import { SlicesPage }  from './pages/SlicesPage';
 import { AdminPage }   from './pages/AdminPage';
 import { NightsArchivePage } from './pages/NightsArchivePage';
+import { routeFromPath, pathForRoute, titleForRoute } from './utils/routes';
 
 gsap.registerPlugin(ScrollTrigger);
 
 const TRANSITION_MS = 260;
-const VALID_PAGES = ['home', 'menu', 'blog', 'gallery', 'studio', 'order', 'status', 'slices', 'admin', 'nights'];
+
+// Where the app starts is whatever the address bar says. An unrecognised path
+// falls back to home and gets rewritten to '/' on mount, so a typo'd or dead
+// link doesn't leave a lie in the URL bar.
+const readRoute = () => routeFromPath(window.location.pathname) || { page: 'home', article: null };
+
+// Called once per committed swap. The pathname check keeps a re-navigation to
+// the address we're already at from stacking a duplicate Back entry.
+function writeHistory(page, article, mode) {
+  if (mode === 'none') return;
+  const url = pathForRoute(page, article);
+  if (mode === 'replace') window.history.replaceState(null, '', url);
+  else if (url !== window.location.pathname) window.history.pushState(null, '', url);
+}
 
 export default function App() {
-  const [page,    setPage]    = useState(() => {
-    const saved = localStorage.getItem('pp_page2');
-    if (saved === 'article') return 'blog';
-    return VALID_PAGES.includes(saved) ? saved : 'home';
-  });
-  const [article, setArticle] = useState(null);
+  const [page,    setPage]    = useState(() => readRoute().page);
+  const [article, setArticle] = useState(() => readRoute().article);
   const [lbPhotos, setLbPhotos] = useState([]);
   const [lbIndex,  setLbIndex]  = useState(0);
   const [lbOpen,   setLbOpen]   = useState(false);
@@ -63,7 +74,29 @@ export default function App() {
   const pageNow = useRef(page);
   useLayoutEffect(() => { pageNow.current = page; }, [page]);
 
-  useEffect(() => { localStorage.setItem('pp_page2', page); }, [page]);
+  // The URL replaced pp_page2 as the restore mechanism. The old key is cleared
+  // once so a returning visitor isn't carrying dead state around forever.
+  useEffect(() => {
+    localStorage.removeItem('pp_page2');
+    // Every page scrolls itself to top on mount, so letting the browser also
+    // restore a remembered offset on Back just makes the two fight.
+    if ('scrollRestoration' in window.history) window.history.scrollRestoration = 'manual';
+    // Canonicalise: '/menuu' rendered home, so the bar should say '/' too.
+    const canonical = pathForRoute(page, article);
+    if (canonical !== window.location.pathname) {
+      window.history.replaceState(null, '', canonical + window.location.search);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // The tab title doubles as the label on each history entry. Skipped on the
+  // two admin pages: useBoardTitle owns the title there, and it only rewrites
+  // on a count change, so clobbering it here could leave the wrong title up
+  // until the next new order.
+  useEffect(() => {
+    if (page === 'admin' || page === 'nights') return;
+    document.title = titleForRoute(page, article);
+  }, [page, article]);
 
   // Second half of nav()'s swap: the new page is now committed to the DOM
   // (that's what a layout effect guarantees — it runs after React's mutation
@@ -134,7 +167,12 @@ export default function App() {
     };
   }, [navTick]);
 
-  const nav = useCallback((newPage, newArticle = null) => {
+  // `opts.history` decides what the address bar does once the swap commits:
+  //   'push'    (default) — a normal navigation, adds a Back entry
+  //   'replace' — a redirect the visitor shouldn't have to Back through
+  //   'none'    — we're *responding* to Back/Forward; the entry already exists
+  const nav = useCallback((newPage, newArticle = null, opts = {}) => {
+    const historyMode = opts.history || 'push';
     const el = wrapRef.current;
     // Swap already asked for but not yet committed: `page` state is the new
     // page even though pageNow (synced in a passive effect) still reads the
@@ -176,6 +214,7 @@ export default function App() {
       el.style.transform = '';
       if (newArticle) setArticle(newArticle);
       setPage(newPage);
+      writeHistory(newPage, newArticle, historyMode);
       return;
     }
     const transition = `opacity ${TRANSITION_MS}ms ease, transform ${TRANSITION_MS}ms ease`;
@@ -202,7 +241,7 @@ export default function App() {
     el.style.transition = transition;
     el.style.opacity = '0';
     el.style.transform = 'translateY(-14px)';
-    pending.current = { page: newPage, article: newArticle };
+    pending.current = { page: newPage, article: newArticle, history: historyMode };
     navTimer.current = setTimeout(() => {
       // Park the (invisible) wrapper below its resting spot before the swap…
       el.style.transition = 'none';
@@ -213,9 +252,25 @@ export default function App() {
       if (pending.current.article) setArticle(pending.current.article);
       setPage(pending.current.page);
       setNavTick((n) => n + 1);
+      // The URL moves with the swap rather than with the tap. Tapping back to
+      // the page you're leaving mid-fade cancels this timer and takes the
+      // reverse-fade path above, which never navigated — so pushing at the tap
+      // would leave the bar pointing at a page that was never shown.
+      writeHistory(pending.current.page, pending.current.article, pending.current.history);
       navTimer.current = null;
     }, TRANSITION_MS);
   }, []);
+
+  // Back/Forward: the browser has already moved the entry, so re-run the same
+  // transition with the history write suppressed.
+  useEffect(() => {
+    const onPopState = () => {
+      const { page: p, article: a } = readRoute();
+      nav(p, a, { history: 'none' });
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [nav]);
 
   const openArticle  = useCallback((post) => nav('article', post), [nav]);
   // `captions` is optional — only the community wall passes one.
@@ -229,11 +284,19 @@ export default function App() {
 
   return (
     <>
+      {/* First thing in the tab order: a keyboard user shouldn't have to walk
+          the whole nav on every page. Visible only while focused. */}
+      <a className="skip-link" href="#main">Skip to content</a>
       <Nav page={page} nav={nav} />
 
       {/* Transition styles are applied imperatively in nav() — no style prop,
-          so React re-renders never clobber them. */}
-      <div ref={wrapRef}>
+          so React re-renders never clobber them. tabIndex lets the skip link
+          move focus here, which a plain <main> can't receive. */}
+      <main id="main" tabIndex={-1} ref={wrapRef}>
+        {/* Keyed by what's actually rendered — page alone would keep a crashed
+            article's boundary in place when you open the next article, since
+            `page` never leaves 'article'. */}
+        <ErrorBoundary key={`${page}:${article?.id ?? ''}`} onGoHome={() => nav('home')}>
         {page === 'home'    && <HomePage    {...pageProps} />}
         {page === 'menu'    && <MenuPage    nav={nav} />}
         {page === 'blog'    && <BlogPage    nav={nav} openArticle={openArticle} />}
@@ -245,7 +308,8 @@ export default function App() {
         {page === 'slices'  && <SlicesPage  nav={nav} openLightbox={openLightbox} />}
         {page === 'admin'   && <AdminPage   nav={nav} />}
         {page === 'nights'  && <NightsArchivePage nav={nav} />}
-      </div>
+        </ErrorBoundary>
+      </main>
 
       {lbOpen && (
         <Lightbox

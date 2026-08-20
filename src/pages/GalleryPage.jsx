@@ -3,7 +3,7 @@ import { Footer } from '../components/Footer';
 import { LineReveal } from '../components/LineReveal';
 import { ALL_PHOTOS } from '../data/posts';
 import { PHOTO_RATIOS } from '../data/photoDims';
-import { thumbSrc } from '../utils/photos';
+import { photoSrc, photoSrcSet } from '../utils/photos';
 
 export function GalleryPage({ nav, openLightbox }) {
   const [failed, setFailed] = useState(new Set());
@@ -35,7 +35,13 @@ export function GalleryPage({ nav, openLightbox }) {
             aria-label={`View photo ${i + 1}`}
           >
             <img
-              src={thumbSrc(src)}
+              src={photoSrc(src, 640)}
+              /* 4 masonry columns above 1080px, 2 below — so a tile is about a
+                 quarter or a half of the viewport. Letting the browser choose
+                 means a phone pulls a ~320px image where it used to take the
+                 640px one built for desktop. */
+              srcSet={photoSrcSet(src, [320, 640, 960])}
+              sizes="(max-width: 1080px) 50vw, 25vw"
               alt={`Peter's Pizzeria — view ${i + 1}`}
               loading="lazy"
               decoding="async"

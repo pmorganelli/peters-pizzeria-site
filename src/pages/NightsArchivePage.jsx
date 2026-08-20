@@ -39,10 +39,13 @@ export function NightsArchivePage({ nav }) {
     api('/api/login')
       .then((d) => {
         if (cancelled) return;
-        if (!d.authenticated) { nav('admin'); return; }
+        // history: 'replace' — this is a bounce, not a navigation. Pushing it
+        // would leave /admin/nights sitting in the Back history, so Back would
+        // land here and bounce again.
+        if (!d.authenticated) { nav('admin', null, { history: 'replace' }); return; }
         setAuthed(true);
       })
-      .catch(() => { if (!cancelled) nav('admin'); });
+      .catch(() => { if (!cancelled) nav('admin', null, { history: 'replace' }); });
     return () => { cancelled = true; };
   }, [nav]);
 

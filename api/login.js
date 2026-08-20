@@ -1,4 +1,4 @@
-import { readBody, send, checkPassword, adminToken, devMode, clientIp, isAdmin, setAuthCookie, clearAuthCookie } from './_lib/util.js';
+import { readBody, send, checkPassword, adminConfigured, mintAdminToken, devMode, clientIp, isAdmin, setAuthCookie, clearAuthCookie } from './_lib/util.js';
 import { rateLimit } from './_lib/store.js';
 
 export default async function handler(req, res) {
@@ -23,7 +23,7 @@ async function login(req, res) {
   let body;
   try { body = await readBody(req); } catch { return send(res, 400, { error: 'Invalid JSON' }); }
 
-  if (!adminToken()) {
+  if (!adminConfigured()) {
     // Redis is configured but no ADMIN_PASSWORD — refuse rather than fall back
     // to a guessable default in production.
     return send(res, 503, { error: 'Admin login is not configured. Set the ADMIN_PASSWORD environment variable in Vercel.' });
@@ -32,7 +32,9 @@ async function login(req, res) {
     return send(res, 401, { error: 'Wrong password' });
   }
   // The token never reaches the response body or client-side JS — only this
-  // HttpOnly cookie, which the browser resends automatically and no script can read.
-  setAuthCookie(res, adminToken());
+  // HttpOnly cookie, which the browser resends automatically and no script can
+  // read. Minted fresh per login so each session carries its own issue time and
+  // expires on its own schedule.
+  setAuthCookie(res, mintAdminToken());
   return send(res, 200, { devMode: devMode() });
 }

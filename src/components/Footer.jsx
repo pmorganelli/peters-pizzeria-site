@@ -12,7 +12,9 @@ const PAGES = [
 
 export function Footer({ nav }) {
   return (
-    <footer>
+    // role is explicit because the page wrappers now live inside <main>, and a
+    // <footer> nested in main is not a contentinfo landmark on its own.
+    <footer role="contentinfo">
       <div className="footer-top">
         <div className="footer-brand">
           <div className="footer-logo-wrap">

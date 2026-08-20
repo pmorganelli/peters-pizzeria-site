@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { X, ArrowLeft, ArrowRight } from 'lucide-react';
-import { webSrc } from '../utils/photos';
+import { photoSrc, photoSrcSet, LIGHTBOX_QUALITY } from '../utils/photos';
 
 // `captions` is optional and parallel to `photos` — the community wall passes
 // one, the gallery doesn't. Each entry is { name, caption, age } or null.
@@ -43,7 +43,7 @@ export function Lightbox({ photos, index, onClose, onPrev, onNext, captions }) {
     if (photos.length < 2) return;
     [1, -1].forEach((d) => {
       const im = new Image();
-      im.src = webSrc(photos[(index + d + photos.length) % photos.length]);
+      im.src = photoSrc(photos[(index + d + photos.length) % photos.length], 1280, LIGHTBOX_QUALITY);
     });
   }, [index, photos]);
 
@@ -85,11 +85,17 @@ export function Lightbox({ photos, index, onClose, onPrev, onNext, captions }) {
         onClick={onClose}
       />
       <button type="button" className="lb-close" aria-label="Close lightbox" onClick={onClose}><X size={13} /> close</button>
+      {/* This used to offer the untouched camera original as a 3-4 MB candidate.
+          Now every candidate is a transform of photos/large/, served as AVIF
+          where the browser takes it, at a slightly higher quality than the rest
+          of the site because this is the one image someone is actually
+          studying. A phone (96vw of ~390px at DPR 3 ≈ 1123px) lands on 1280;
+          a retina laptop at 88vw takes 2048. */}
       <img
         key={photos[index]}
         className="lb-img"
-        src={webSrc(photos[index])}
-        srcSet={`${webSrc(photos[index])} 1600w, ${photos[index]} 3600w`}
+        src={photoSrc(photos[index], 1280, LIGHTBOX_QUALITY)}
+        srcSet={photoSrcSet(photos[index], [960, 1280, 1600, 2048], LIGHTBOX_QUALITY)}
         sizes="(max-width: 768px) 96vw, 88vw"
         alt="Enlarged view"
       />

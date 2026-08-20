@@ -1,6 +1,10 @@
 export const BLOG_POSTS = [
   {
     id: 1,
+    // The URL this post lives at: /blog/<slug>. Optional — a post without one
+    // falls back to a slugified title, which works but gets long. Once a post
+    // is shared, treat its slug as permanent: changing it breaks every link.
+    slug: 'how-bambino-inspired-me',
     tag: 'Inspiration',
     date: 'April 19, 2026',
     title: 'How Bambino and their Vito Slice Inspired Me from Dublin, Ireland',

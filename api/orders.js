@@ -104,7 +104,6 @@ async function create(req, res) {
   try { body = await readBody(req); } catch { return send(res, 400, { error: 'Invalid JSON' }); }
 
   const name = clean(body.name, 60);
-  const contact = clean(body.contact, 80);
   const notes = clean(body.notes, 280);
   if (name.length < 2) return send(res, 400, { error: 'Please tell us your name so we can find you at pickup.' });
 
@@ -132,7 +131,6 @@ async function create(req, res) {
     id: makeId(),
     code,
     name,
-    contact,
     notes,
     items,
     totalCents,
@@ -146,6 +144,10 @@ async function create(req, res) {
 
 // Public responses never include contact/notes — the status UI doesn't show
 // them, and the `find` lookup means typing a name can reach someone else's order.
+// `contact` is no longer collected or stored (no UI has asked for it in a long
+// time), but it stays in this destructure deliberately: orders written before
+// the field was dropped can still be live in Redis for up to 3 days, and this
+// is the only thing standing between one of those and a public response.
 const publicOrder = ({ contact, notes, ...rest }) => rest;
 
 const ACTIVE = new Set(['new', 'firing', 'ready']);

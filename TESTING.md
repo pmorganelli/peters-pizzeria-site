@@ -100,6 +100,34 @@ the part worth poking by hand — the handler itself is covered in
 - [ ] `npm run doctor` (react-doctor) has no findings beyond the four known
       ones below. The gate is *no new findings*, not a zero score.
 
+## Photos and Image Optimization
+
+Every `<img>` goes through `/_vercel/image`, **which only exists on Vercel** —
+`vite dev` and `vite preview` fall back to the plain `photos/large/` file (see
+`optimizerAvailable()` in `src/utils/photos.js`). So none of this can be
+verified locally; check it on a preview deployment after any change to
+`vercel.json`'s `images` block, `OPTIMIZER_WIDTHS`, or the src helpers.
+
+- [ ] Gallery, home, blog, article and menu photos all load — a `w` or `q` that
+      isn't allow-listed in `vercel.json` returns an error, not an image, and
+      only in production. (`photos.test.js` guards the lists against drift, but
+      it can't catch a `localPatterns` regex that fails to match.)
+- [ ] DevTools → Network → a gallery image is served as `image/avif` (or webp
+      on Safari), not `image/jpeg`.
+- [ ] The chosen width tracks the viewport: a phone-sized window pulls a 320 or
+      640 candidate, a retina desktop pulls 960+. `naturalWidth` matching the
+      full 2400px source means the srcset isn't being honored.
+- [ ] Lightbox at full screen on a retina display pulls the 2048 candidate.
+- [ ] The three hero backgrounds and the nav logo still load — they're
+      **deliberately not optimized**, served straight from `photos/static/`, and
+      they're the first thing to break if that tier stops being deployed.
+- [ ] Transformation count in the Vercel dashboard after a browse is in the
+      hundreds, not thousands. Every unique (image, width, quality, format) is
+      one transformation; a `sizes` attribute that resolves to many distinct
+      widths would multiply that.
+- [ ] Share card (`/studio`) still renders — it draws an optimized URL into a
+      canvas, so a cross-origin change there would taint it and break export.
+
 ### Known react-doctor baseline (4 findings, all reviewed)
 
 Each was read in context and left deliberately. Re-confirm rather than
@@ -116,7 +144,7 @@ re-investigate; if one of these changes shape, that's worth a look.
   carries an `eslint-disable-next-line` the doctor doesn't honor. Add-on
   units are positional ("Slice 1", "Slice 2") with no stable per-unit id —
   the index *is* the identity.
-- `no-flush-sync` — `App.jsx:109`. **Deliberate**, drives the 260 ms
-  directional page transition. The rule's concern is the View Transitions
-  API, which this app doesn't use. Changing it is a behavior change and
-  belongs in its own PR, not bundled with a feature.
+- ~~`no-flush-sync` — `App.jsx:109`~~. **Resolved.** The `flushSync()` that
+  drove the 260 ms page transition is now a `useLayoutEffect`, which gets the
+  same commit-before-paint ordering without opting the update out of concurrent
+  rendering. Baseline is 3 findings, not 4, if this is the only one that went.

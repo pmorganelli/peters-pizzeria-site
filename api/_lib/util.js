@@ -58,10 +58,60 @@ function adminSecret() {
   return process.env.ADMIN_PASSWORD || (devMode() ? 'admin' : null);
 }
 
-export function adminToken() {
+// Bumping this label invalidates every outstanding session at once — the one
+// global logout available without storing session state server-side.
+const TOKEN_VERSION = 'pp-admin-v2';
+
+// How long a session stays valid, enforced *server-side*. The cookie's Max-Age
+// is only a hint to the browser; this is the check that actually matters.
+export const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+
+// A little tolerance for clock skew between the machine that minted a token and
+// the one verifying it — a token stamped slightly in the future is a clock
+// difference, not an attack (the signature covers the timestamp, so a forged
+// one can't verify anyway).
+const CLOCK_SKEW_MS = 5 * 60 * 1000;
+
+export function adminConfigured() {
+  return adminSecret() !== null;
+}
+
+function signToken(issuedAt) {
   const secret = adminSecret();
   if (!secret) return null;
-  return crypto.createHmac('sha256', secret).update('pp-admin-v1').digest('hex');
+  return crypto.createHmac('sha256', secret).update(`${TOKEN_VERSION}|${issuedAt}`).digest('hex');
+}
+
+// `<issuedAt>.<hmac>`. The timestamp is inside the signed message, so it can't
+// be edited without invalidating the signature — which is what lets the server
+// expire a session it never stored.
+export function mintAdminToken(now = Date.now()) {
+  const signature = signToken(now);
+  return signature && `${now}.${signature}`;
+}
+
+// Returns the issuedAt of a valid token, or null. Split out from isAdmin() so
+// the expiry rules can be tested without building a request.
+export function verifyAdminToken(token, now = Date.now()) {
+  if (typeof token !== 'string') return null;
+  const dot = token.indexOf('.');
+  if (dot === -1) return null;
+  const issuedAt = Number(token.slice(0, dot));
+  if (!Number.isSafeInteger(issuedAt)) return null;
+
+  // Verify the signature before trusting the timestamp for anything.
+  const expected = signToken(issuedAt);
+  if (!expected) return null;
+  const provided = Buffer.from(token.slice(dot + 1));
+  const expectedBuf = Buffer.from(expected);
+  // Compare byte lengths, not string lengths — a multibyte value with the right
+  // character count would make timingSafeEqual throw.
+  if (provided.length !== expectedBuf.length) return null;
+  if (!crypto.timingSafeEqual(provided, expectedBuf)) return null;
+
+  if (issuedAt > now + CLOCK_SKEW_MS) return null;
+  if (now - issuedAt > SESSION_MAX_AGE_MS) return null;
+  return issuedAt;
 }
 
 export function checkPassword(password) {
@@ -75,7 +125,9 @@ export function checkPassword(password) {
 // The token lives in an HttpOnly cookie — client-side JS (and any XSS on the
 // page) can never read it, only the browser automatically resending it to us.
 const COOKIE_NAME = 'pp_admin';
-const COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
+// Derived from the server-side rule so the browser drops the cookie at the same
+// moment the server stops honouring it, instead of the two dates drifting apart.
+const COOKIE_MAX_AGE = Math.floor(SESSION_MAX_AGE_MS / 1000);
 
 function parseCookies(req) {
   const header = req.headers.cookie || '';
@@ -102,12 +154,5 @@ export function clearAuthCookie(res) {
 }
 
 export function isAdmin(req) {
-  const token = adminToken();
-  if (!token) return false;
-  const provided = Buffer.from(parseCookies(req)[COOKIE_NAME] || '');
-  const expected = Buffer.from(token);
-  // Compare byte lengths, not string lengths — a multibyte cookie value with
-  // the right character count would make timingSafeEqual throw.
-  if (provided.length !== expected.length) return false;
-  return crypto.timingSafeEqual(provided, expected);
+  return verifyAdminToken(parseCookies(req)[COOKIE_NAME] || '') !== null;
 }

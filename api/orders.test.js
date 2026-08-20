@@ -3,7 +3,7 @@ import ordersHandler from './orders.js';
 import loginHandler from './login.js';
 import { startServer, call } from '../tests/helpers/server.js';
 import { resetEnv } from '../tests/helpers/env.js';
-import { openStore, adminCookie } from '../tests/helpers/fixtures.js';
+import { openStore, adminCookie, insertOrder } from '../tests/helpers/fixtures.js';
 
 let server;
 let base;
@@ -85,5 +85,39 @@ describe('PATCH /api/orders?id= — status transitions', () => {
     });
     expect(status).toBe(409);
     expect(body.error).toMatch(/already cancelled/i);
+  });
+});
+
+describe('PII in public order reads', () => {
+  it('never returns contact or notes on a public lookup', async () => {
+    // `contact` is no longer collected, but an order written before it was
+    // dropped can still be live in the store for its 3-day TTL — and the
+    // scrubbing in publicOrder() is the only thing keeping it server-side.
+    const legacy = await insertOrder({ contact: '555-0100', notes: 'ring the doorbell' });
+
+    const byId = await call(base, `/api/orders?id=${legacy.id}`);
+    expect(byId.status).toBe(200);
+    expect(byId.body.order.contact).toBeUndefined();
+    expect(byId.body.order.notes).toBeUndefined();
+
+    const byCode = await call(base, `/api/orders?find=${legacy.code}`);
+    expect(byCode.status).toBe(200);
+    expect(byCode.body.order.contact).toBeUndefined();
+    expect(byCode.body.order.notes).toBeUndefined();
+  });
+
+  it('does not store a contact field even when one is posted', async () => {
+    const created = await call(base, '/api/orders', {
+      method: 'POST',
+      body: { name: 'Casey', contact: '555-0199', items: [{ name: 'Cheese Slice', qty: 1 }] },
+    });
+    expect(created.status).toBe(201);
+
+    // Read it back through the admin board, which is the one surface that does
+    // see contact/notes — so an empty value here means it was never stored.
+    const cookie = await adminCookie(base);
+    const board = await call(base, '/api/orders', { headers: { Cookie: cookie } });
+    const mine = board.body.orders.find((o) => o.id === created.body.order.id);
+    expect(mine.contact).toBeUndefined();
   });
 });
