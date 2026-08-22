@@ -22,7 +22,7 @@ export function Footer({ nav }) {
             <div className="footer-wordmark">Peter&apos;s Pizzeria</div>
           </div>
           <div className="footer-tagline">
-            A student-run pizzeria handmade with love and community as its core values. Fired every Saturday.
+            A student-run pizzeria handmade with love and community as its core values. Fired every other Saturday.
           </div>
         </div>
 

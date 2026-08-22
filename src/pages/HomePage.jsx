@@ -75,7 +75,7 @@ export function HomePage({ nav, openArticle, openLightbox }) {
         <h1 className="hero-title">Handmade<br />with <em>love.</em></h1>
         <p className="hero-sub">
           A student-run pizzeria from the heart of Somerville. Twelve passionate students,
-          one shared kitchen, and a 72-hour ferment.
+          one kitchen, a 72-hour ferment, and a love for community.
         </p>
         <div className="hero-ctas">
           <button type="button" className="btn-primary" onClick={() => nav('menu')}>See the Menu</button>
@@ -124,9 +124,9 @@ export function HomePage({ nav, openArticle, openLightbox }) {
 
           <div className="story-text">
             <div className="reveal reveal-delay-2" ref={ref(2)}>
-              <p>We started Peter&apos;s Pizzeria junior year — a few friends stayed up until three in the morning with an idea: build community.</p>
-              <p>Now there are over a dozen of us, united by the same obsession: making the best pizza in Somerville. We ferment our dough 72 hours, fire it in an Ooni at 900°F for Neapolitan style pizzas, and Pizza Steels at 550°F for New York style pizzas.</p>
-              <p>We sell out every week. We learn something new every time. And we&apos;re just getting started.</p>
+              <p>We started Peter&apos;s Pizzeria junior year. A few friends stayed up until three in the morning with an idea: build community for Tufts and make great, affordable pizza.</p>
+              <p>Now there are over a dozen of us, united by the same obsession of expanding our student business. We ferment our dough for three days, fire it in an Ooni at 900°F for Neapolitan style pizzas, and Pizza Steels at 550°F for New York style pizzas.</p>
+              <p>We sell out every single week, usually in about an hour. ~12 pizzas per night, come try it for yourself!</p>
               <div className="story-stat">
                 <div><div className="stat-num">12</div><div className="stat-label">Students</div></div>
                 <div><div className="stat-num">72h</div><div className="stat-label">Dough Ferment</div></div>
@@ -230,7 +230,7 @@ export function HomePage({ nav, openArticle, openLightbox }) {
           <p style={{ fontFamily: 'var(--serif)', fontSize: 18, color: 'rgba(254,245,239,0.7)', lineHeight: 1.75 }}>
             Every Saturday night is more than a meal. It&apos;s our passion. The people yearn for community at Tufts, and we provide it.
             We pride ourselves on affordable pizza, great community, and some of the best slices you&apos;ll ever have.
-            Come find us — follow{' '}
+            Come find us: follow{' '}
             <a
               href="https://instagram.com/peterspizzeria_"
               target="_blank"

@@ -136,8 +136,8 @@ export function StatusPage({ nav }) {
             <div className="order-closed-icon" aria-hidden="true"><Pizza size={20} /></div>
             <h2 className="confirm-title">Let&apos;s find <em>your slices.</em></h2>
             <p className="order-closed-sub">
-              Enter the pickup code from your confirmation — or just the name the order is
-              under — and we&apos;ll track it live from &ldquo;received&rdquo; to &ldquo;ready for pickup.&rdquo;
+              Enter the pickup code from your confirmation or the name the order is
+              under. We&apos;ll track it for you live until it&apos;s ready for pickup!
             </p>
             {lookupForm}
             <div className="confirm-fineprint">
