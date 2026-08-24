@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useEffectEvent, useRef } from 'react';
 import { X, ArrowLeft, ArrowRight } from 'lucide-react';
 import { photoSrc, photoSrcSet, LIGHTBOX_QUALITY } from '../utils/photos';
 
@@ -32,14 +32,21 @@ export function Lightbox({ photos, index, onClose, onPrev, onNext, captions }) {
     return () => dialog?.close();
   }, []);
 
+  // onPrev/onNext arrive as fresh closures on every render of the parent, so
+  // listing them as deps tore the keydown listener down and rebuilt it on each
+  // one. useEffectEvent (stable in React 19.2) reads the latest callback at
+  // call time without participating in the dependency list, so the listener is
+  // attached once for the life of the lightbox.
+  const onKey = useEffectEvent((e) => {
+    if (e.key === 'ArrowLeft')  { e.preventDefault(); onPrev(); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); onNext(); }
+  });
+
   useEffect(() => {
-    const onKey = (e) => {
-      if (e.key === 'ArrowLeft')  { e.preventDefault(); onPrev(); }
-      if (e.key === 'ArrowRight') { e.preventDefault(); onNext(); }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onPrev, onNext]);
+    const handler = (e) => onKey(e);
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   // Lock the page behind the overlay while the lightbox is open
   useEffect(() => {
@@ -122,9 +129,9 @@ export function Lightbox({ photos, index, onClose, onPrev, onNext, captions }) {
         src={photoSrc(photos[index], LB_FALLBACK_WIDTH, LIGHTBOX_QUALITY)}
         srcSet={photoSrcSet(photos[index], LB_WIDTHS, LIGHTBOX_QUALITY)}
         sizes={LB_SIZES}
-        /* Lowercase: React 18 doesn't recognise the camelCase spelling and
-           warns rather than forwarding it (React 19 adds fetchPriority). */
-        fetchpriority="high"
+        /* camelCase since the React 19 upgrade — 18 dropped this spelling with
+           a warning, which is why it used to be written `fetchpriority`. */
+        fetchPriority="high"
         decoding="sync"
         alt="Enlarged view"
       />

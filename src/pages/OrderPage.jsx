@@ -84,7 +84,15 @@ function MenuList({ cart, unavailable, setQty, toggleAddon }) {
                 {showAddons && (
                   <div className="addon-units">
                     {units.map((u, i) => (
+                      // The index *is* the identity here. A unit is one slice of
+                      // this item, distinguished only by its position ("Slice 2"
+                      // is literally rendered from `i`), and the stepper only
+                      // appends or truncates at the end — units are never
+                      // reordered or spliced from the middle. Giving them
+                      // synthetic ids would change the persisted `pp_cart:v2`
+                      // shape and need a migration, for no behavioural gain.
                       // eslint-disable-next-line react/no-array-index-key
+                      // react-doctor-disable-next-line no-array-index-as-key
                       <div key={i} className="addon-unit">
                         <span className="addon-unit-label">{units.length > 1 ? `Slice ${i + 1}` : 'Add-ons'}</span>
                         <div className="addon-unit-chips">
@@ -98,10 +106,11 @@ function MenuList({ cart, unavailable, setQty, toggleAddon }) {
                                 disabled={off}
                                 className={`addon-chip${on ? ' addon-chip-on' : ''}${off ? ' addon-chip-86' : ''}`}
                                 aria-pressed={on}
-                                aria-label={`${addonLabel(a.name, item.name)} for ${item.name} ${units.length > 1 ? `slice ${i + 1}` : ''}`}
+                                aria-label={`${addonLabel(a.name, item.name)}, ${off ? 'sold out' : a.price}, for ${item.name} ${units.length > 1 ? `slice ${i + 1}` : ''}`}
                                 onClick={() => toggleAddon(item.name, i, a.name)}
                               >
-                                {addonLabel(a.name, item.name)} · {off ? 'sold out' : a.price}
+                                <span className="addon-chip-name">{addonLabel(a.name, item.name)}</span>
+                                <span className="addon-chip-price">{off ? 'Sold out' : a.price}</span>
                               </button>
                             );
                           })}

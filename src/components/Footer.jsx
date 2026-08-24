@@ -12,8 +12,11 @@ const PAGES = [
 
 export function Footer({ nav }) {
   return (
-    // role is explicit because the page wrappers now live inside <main>, and a
-    // <footer> nested in main is not a contentinfo landmark on its own.
+    // NOT redundant, despite how it reads: this <footer> renders inside <main>
+    // (see the ErrorBoundary/landmark note in CLAUDE.md), and a nested <footer>
+    // is not a contentinfo landmark on its own. Dropping the role to satisfy
+    // the rule would remove the landmark screen readers navigate to.
+    // react-doctor-disable-next-line no-redundant-roles
     <footer role="contentinfo">
       <div className="footer-top">
         <div className="footer-brand">

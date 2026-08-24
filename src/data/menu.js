@@ -26,7 +26,7 @@ export const MENU_DATA = [
       { name: '+ Stracciatella',             desc: 'Creamy fresh burrata filling',                        price: '+$1',  keyword: 'stracciatella' },
       { name: '+ Hot Honey',                 desc: "Mike's Hot Honey",                                    price: '+50¢', keyword: 'hot honey'     },
       { name: '+ Extra Parm',                desc: 'An extra generous amount',                            price: '+50¢', keyword: 'parm'          },
-      { name: '+ Extra Basil',               desc: 'An extra generous amount',                            price: 'Free', keyword: 'basil'         },
+      { name: '+ Extra Basil',               desc: 'An extra generous amount',                            price: '+50¢', keyword: 'basil'         },
     ],
   },
   {

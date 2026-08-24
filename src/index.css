@@ -919,21 +919,47 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 44px 60p
   font-family: var(--ui); font-size: 10px; font-weight: 600; letter-spacing: var(--track-label);
   text-transform: uppercase; color: var(--ink2);
 }
+/* 2×2 at every width, as a fixed count rather than `auto-fill`. auto-fill
+   derives the count from a width floor, so the row silently became 5, 3, or 1
+   chips depending on the viewport and the add-on block read as a different
+   shape on every device.
+   Two columns rather than four across, because the column this sits in is
+   narrower than it looks: `.order-grid` is max-width 1100 with a 360px summary
+   sidebar and a 48px gap, so the menu column tops out at 572px and the chip
+   grid at ~548px. Four across there is ~130px per chip, and "Extra
+   Stracciatella" needs ~137px of text at this size — so the widest label wraps
+   on *desktop*, where there appears to be plenty of room. Two columns give
+   ~270px on desktop and ~175px on a phone: one line for every label on both,
+   and the same shape on every device.
+   `minmax(0, 1fr)` rather than `1fr` — a bare `1fr` floors each track at its
+   content's min-content width, which one long label would push past the
+   container, stealing width from its neighbour. */
 .addon-unit-chips {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); gap: 6px;
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px;
 }
-/* Not a full pill (999px) — the "Extra X" naming makes some labels ("Extra
-   Stracciatella · +$1") too long to fit one line at this column width even
-   with a generous minmax, and a full pill wrapped to two lines reads oddly.
-   Letting it wrap instead of truncating matters here specifically: an
-   ellipsis on this chip can swallow the price, not just the tail of a name. */
+/* Not a full pill (999px) — a wrapped label in a full pill reads oddly, and
+   letting it wrap instead of truncating matters here specifically: an ellipsis
+   on this chip can swallow the price, not just the tail of a name.
+   Name and price are stacked rather than joined by a middot: at a quarter of
+   the row the one-line run doesn't fit, and the break landed between the dot
+   and the price, leaving "Extra Stracciatella ·" dangling. Stacking is
+   deterministic at every width and costs no height — grid rows already stretch
+   to the tallest chip in the row. */
 .addon-chip {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
   font-family: var(--ui); font-size: 10px; letter-spacing: var(--track-label); text-transform: uppercase;
   color: var(--ink2); background: white; border: 1px solid rgba(26,18,8,0.2);
-  padding: 7px 11px; border-radius: 8px; text-align: center; line-height: 1.4;
+  padding: 7px 8px; border-radius: 8px; text-align: center; line-height: 1.3;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
+/* Balance so a label that has to wrap splits evenly rather than dropping a
+   single orphan word; ignored by browsers without support. */
+.addon-chip-name { text-wrap: balance; }
+/* The price is the shortest run in the chip and reads as one token — it must
+   never wrap or split from its sign. */
+.addon-chip-price { font-weight: 500; white-space: nowrap; opacity: 0.55; }
 .addon-chip-on { background: var(--green); border-color: var(--green); color: white; }
+.addon-chip-on .addon-chip-price { opacity: 0.85; }
 @media (hover: hover) {
   .addon-chip:hover { border-color: var(--green); color: var(--green); }
   .addon-chip-on:hover { background: var(--green-light); border-color: var(--green-light); color: white; }
@@ -1529,10 +1555,10 @@ body, .story-section, .home-latest, .menu-page, .blog-page, .article-page {
   .order-stepper button { width: 40px; height: 40px; }
   .order-row-price { grid-column: 1; grid-row: 2; }
   .order-row .order-stepper, .order-row .order-add-btn { grid-column: 2; grid-row: 1 / 3; justify-self: end; }
-  /* A narrower floor keeps two chips per row on phone-width screens instead
-     of the grid collapsing to a single column — chips still wrap to two
-     lines rather than truncate when a label doesn't fit at this width. */
-  .addon-unit-chips { grid-template-columns: repeat(auto-fill, minmax(138px, 1fr)); }
+  /* The grid stays 2×2 here — only the padding changes, to bring a
+     single-line chip up to a ~44px touch target now that this is a finger
+     and not a cursor. */
+  .addon-chip { padding: 9px 8px; }
   .confirm-wrap { padding: 28px 20px 64px; }
   .confirm-card { padding: 26px 22px; }
   .confirm-code-row { flex-direction: column; align-items: flex-start; gap: 10px; }

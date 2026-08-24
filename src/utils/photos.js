@@ -72,9 +72,10 @@ export function photoSrc(src, width, quality = DEFAULT_QUALITY) {
 // trusted, so a typo degrades to a smaller candidate list instead of a 400.
 export function buildSrcSet(src, widths, quality = DEFAULT_QUALITY) {
   const source = sourceSrc(src);
+  // filter+map folded into one pass — flatMap drops a rejected width by
+  // returning nothing for it, so the candidate list is built in a single walk.
   return widths
-    .filter((w) => OPTIMIZER_WIDTHS.includes(w))
-    .map((w) => `${optimizedUrl(source, w, quality)} ${w}w`)
+    .flatMap((w) => (OPTIMIZER_WIDTHS.includes(w) ? [`${optimizedUrl(source, w, quality)} ${w}w`] : []))
     .join(', ');
 }
 
@@ -117,11 +118,11 @@ export function responsiveImg(src, sizes, widths, quality = DEFAULT_QUALITY) {
   };
 }
 
-// Fixed-width shorthands for the few places whose size genuinely doesn't vary.
-// Names kept from the old tier system so call sites didn't all have to change.
-export const thumbSrc = (src) => photoSrc(src, 640);
-export const webSrc   = (src) => photoSrc(src, 1600);
-export const largeSrc = (src) => photoSrc(src, 2048);
+// The one fixed-width shorthand still in use: StudioPage's canvas source,
+// which isn't a DOM image and so can't take part in responsive selection.
+// `thumbSrc` (640) and `largeSrc` (2048) sat here unused after every page image
+// moved to responsiveImg — reach for responsiveImg rather than reviving them.
+export const webSrc = (src) => photoSrc(src, 1600);
 
 // ── Upload downscaling ────────────────────────────────────────────────
 // Customer uploads are re-encoded in the browser before they're sent. This
@@ -140,6 +141,10 @@ async function loadBitmap(file) {
   } catch {
     // Older Safari doesn't accept the options bag — fall back to an <img>,
     // which browsers now orient from EXIF by default.
+    // The revoke is in the `finally` below, which the rule doesn't follow into.
+    // It has to stay there rather than move next to the createObjectURL: the
+    // <img> needs the URL alive until onload/onerror settles.
+    // react-doctor-disable-next-line no-create-object-url-without-revoke
     const url = URL.createObjectURL(file);
     try {
       const img = new Image();
