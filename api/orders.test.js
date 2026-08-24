@@ -3,7 +3,8 @@ import ordersHandler from './orders.js';
 import loginHandler from './login.js';
 import { startServer, call } from '../tests/helpers/server.js';
 import { resetEnv } from '../tests/helpers/env.js';
-import { openStore, adminCookie, insertOrder } from '../tests/helpers/fixtures.js';
+import { openStore, adminCookie, insertOrder, TEST_ITEM_NAME, CAPPED_ITEM } from '../tests/helpers/fixtures.js';
+import { DEFAULT_MAX_QTY } from '../src/utils/orders.js';
 
 let server;
 let base;
@@ -15,44 +16,50 @@ beforeEach(async () => {
   base = server.url;
 });
 
+// The capped item and its cap both come from menu.js. Naming a slice here is
+// what broke this file when one was renamed: every request 400'd as an
+// unrecognized item, which looks identical to the cap rejection these cases are
+// asserting — a false pass waiting to happen.
+const CAP = CAPPED_ITEM.maxQty;
+
 describe('POST /api/orders — per-item qty cap', () => {
-  it('accepts a Margherita line right at its 4-unit cap, rejects one over', async () => {
+  it(`accepts a ${CAPPED_ITEM.name} line right at its ${CAP}-unit cap, rejects one over`, async () => {
     const ok = await call(base, '/api/orders', {
-      method: 'POST', body: { name: 'Test', items: [{ name: 'Margherita', qty: 4 }] },
+      method: 'POST', body: { name: 'Test', items: [{ name: CAPPED_ITEM.name, qty: CAP }] },
     });
     expect(ok.status).toBe(201);
     const bad = await call(base, '/api/orders', {
-      method: 'POST', body: { name: 'Test', items: [{ name: 'Margherita', qty: 5 }] },
+      method: 'POST', body: { name: 'Test', items: [{ name: CAPPED_ITEM.name, qty: CAP + 1 }] },
     });
     expect(bad.status).toBe(400);
   });
 
   it('rejects splitting the same item across add-on combos to exceed its cap', async () => {
-    // Four separate lines, each individually at the 4-unit cap but with
-    // different add-ons so they don't merge into one line — 16 Margheritas
-    // must still be rejected, not just 4.
+    // Four separate lines, each individually at the cap but with different
+    // add-ons so they don't merge into one line — 4x the cap must still be
+    // rejected, not just one line's worth.
     const { status } = await call(base, '/api/orders', {
       method: 'POST',
       body: {
         name: 'Test',
         items: [
-          { name: 'Margherita', qty: 4 },
-          { name: 'Margherita', qty: 4, addons: ['+ Extra Basil'] },
-          { name: 'Margherita', qty: 4, addons: ['+ Extra Parm'] },
-          { name: 'Margherita', qty: 4, addons: ['+ Extra Basil', '+ Extra Parm'] },
+          { name: CAPPED_ITEM.name, qty: CAP },
+          { name: CAPPED_ITEM.name, qty: CAP, addons: ['+ Extra Basil'] },
+          { name: CAPPED_ITEM.name, qty: CAP, addons: ['+ Extra Parm'] },
+          { name: CAPPED_ITEM.name, qty: CAP, addons: ['+ Extra Basil', '+ Extra Parm'] },
         ],
       },
     });
     expect(status).toBe(400);
   });
 
-  it('applies the default 8-unit cap to an item with no explicit maxQty', async () => {
+  it(`applies the default ${DEFAULT_MAX_QTY}-unit cap to an item with no explicit maxQty`, async () => {
     const ok = await call(base, '/api/orders', {
-      method: 'POST', body: { name: 'Test', items: [{ name: 'Pepperoni', qty: 8 }] },
+      method: 'POST', body: { name: 'Test', items: [{ name: TEST_ITEM_NAME, qty: DEFAULT_MAX_QTY }] },
     });
     expect(ok.status).toBe(201);
     const bad = await call(base, '/api/orders', {
-      method: 'POST', body: { name: 'Test', items: [{ name: 'Pepperoni', qty: 9 }] },
+      method: 'POST', body: { name: 'Test', items: [{ name: TEST_ITEM_NAME, qty: DEFAULT_MAX_QTY + 1 }] },
     });
     expect(bad.status).toBe(400);
   });
@@ -60,7 +67,7 @@ describe('POST /api/orders — per-item qty cap', () => {
   it('still rejects duplicate identical name+addon lines regardless of the aggregate cap', async () => {
     const { status } = await call(base, '/api/orders', {
       method: 'POST',
-      body: { name: 'Test', items: [{ name: 'Cheese Slice', qty: 1 }, { name: 'Cheese Slice', qty: 1 }] },
+      body: { name: 'Test', items: [{ name: TEST_ITEM_NAME, qty: 1 }, { name: TEST_ITEM_NAME, qty: 1 }] },
     });
     expect(status).toBe(400);
   });
@@ -74,7 +81,7 @@ describe('PATCH /api/orders?id= — status transitions', () => {
 
   it('rejects a status transition out of a terminal state', async () => {
     const created = await call(base, '/api/orders', {
-      method: 'POST', body: { name: 'Test', items: [{ name: 'Cheese Slice', qty: 1 }] },
+      method: 'POST', body: { name: 'Test', items: [{ name: TEST_ITEM_NAME, qty: 1 }] },
     });
     const cookie = await adminCookie(base);
     await call(base, `/api/orders?id=${created.body.order.id}`, {
@@ -109,7 +116,7 @@ describe('PII in public order reads', () => {
   it('does not store a contact field even when one is posted', async () => {
     const created = await call(base, '/api/orders', {
       method: 'POST',
-      body: { name: 'Casey', contact: '555-0199', items: [{ name: 'Cheese Slice', qty: 1 }] },
+      body: { name: 'Casey', contact: '555-0199', items: [{ name: TEST_ITEM_NAME, qty: 1 }] },
     });
     expect(created.status).toBe(201);
 

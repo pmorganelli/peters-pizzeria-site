@@ -1408,6 +1408,16 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 44px 60p
    downward; the negative margin cancels the layout shift. LineReveal starts
    lines at yPercent 150 so they stay hidden inside the taller window. */
 .line-reveal > div { padding-bottom: 0.35em; margin-bottom: -0.35em; }
+/* The phone path (see LineReveal.jsx): one rise on the whole headline instead
+   of the per-line SplitText reveal. Reuses the home hero's keyframe on purpose
+   — that entrance is the one that already reads as instant on a phone, because
+   a CSS animation runs on the compositor and starts on the first painted frame
+   rather than waiting for the webfont and a synchronous line-splitting pass.
+   `both` fill mode means the end state holds even if frames are dropped, so a
+   headline can never be left invisible. */
+.line-reveal-rise {
+  animation: hero-rise 0.6s cubic-bezier(.22, 1, .36, 1) both;
+}
 
 /* ── REVEAL ANIMATIONS (driven by GSAP ScrollTrigger in useScrollReveal) ──
    .reveal is the pre-animation hidden state; GSAP tweens the element in and
