@@ -28,9 +28,9 @@ live in. Those are marked **N/A** with the reason, not quietly ticked.
 | 15 | Escape user content | ✅ |
 | 16 | Restrict file uploads | ✅ |
 | 17 | Trim API responses | ✅ |
-| 18 | Security headers | ✅ (CSP added, **not yet deployed**) |
+| 18 | Security headers | ✅ CSP live in production (verified 2026-08-24) |
 | 19 | Force HTTPS | ✅ HSTS, preload |
-| 20 | Scan dependencies | ✅ 0 vulnerabilities |
+| 20 | Scan dependencies | ✅ 0 vulnerabilities; Dependabot watches continuously |
 | 21 | Constant-time secret comparison | ✅ |
 | 22 | Webhook SSRF protection | ⬜ N/A — no outbound requests |
 | 23 | npm file checked | ✅ |
@@ -130,11 +130,15 @@ git log --all --pretty=format: --name-only | sort -u | grep -iE "^\.env|\.pem$" 
 grep -rn "dangerouslySetInnerHTML\|innerHTML" src/ api/    # expect none
 grep -rn "fetch(" api/ | grep -v test                      # expect none
 
-# 18, 19 — live headers (CSP appears only once the current branch deploys)
+# 18, 19 — live headers
 curl -sI https://peters-pizzeria-site.vercel.app/ | grep -iE "strict-transport|content-security|x-frame|x-content-type"
 
 # 20 — dependencies
 npm audit --omit=dev                                       # expect 0 vulnerabilities
+# Weekly version updates come from .github/dependabot.yml. Security updates are
+# a separate repo toggle (Settings -> Code security); the `security` group in
+# that file does nothing until it's enabled.
+gh api repos/pmorganelli/peters-pizzeria-site/automated-security-fixes -i | head -1  # expect 204
 
 # 25 — CAA (Vercel-managed for *.vercel.app; becomes yours with a custom domain)
 dig +short CAA vercel.app

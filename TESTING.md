@@ -1,11 +1,18 @@
 # Testing
 
-Automated coverage lives next to the code it tests (`*.test.js`, run via `npm test`).
-This file is the other half: a running checklist of things that can't be
-asserted cheaply in Vitest — real browser behavior, real file uploads, real
-devices — kept here so it survives across features instead of living in
-someone's head. Add to it whenever you ship something that needed manual
-poking to trust.
+Automated coverage lives next to the code it tests (`*.test.js` for handlers and
+pure logic, `*.test.jsx` for components, all run via `npm test`). This file is
+the other half: a running checklist of things that can't be asserted cheaply in
+Vitest — real browser behavior, real file uploads, real devices — kept here so
+it survives across features instead of living in someone's head. Add to it
+whenever you ship something that needed manual poking to trust.
+
+**Before adding an item, check it isn't already automated.** Components now
+render in jsdom, so routing, add-on chip behaviour, quantity caps, sold-out
+states, lightbox keyboard nav and the crash fallback are covered by the suite
+and don't need a manual pass. What jsdom can't do is *layout* — it computes no
+CSS grid, no real font metrics, no viewport — so anything about how something
+looks at a given width still belongs here.
 
 See CLAUDE.md's **Testing** section for how the automated suite is organized
 and what it deliberately doesn't cover.
@@ -93,12 +100,42 @@ the part worth poking by hand — the handler itself is covered in
 - [ ] Before opening for real: close a test night, confirm it appears with the
       right total, delete it, and confirm the archive reads empty.
 
+## Add-on chips (`OrderPage.jsx`, `.addon-unit-chips`)
+
+`OrderPage.test.jsx` covers the *behaviour* — one chip per add-on, toggling,
+per-unit independence, prices, aria-labels. None of it covers **layout**: jsdom
+computes no grid tracks and no font metrics, so everything below needs a real
+browser. The grid is a fixed `repeat(2, minmax(0, 1fr))` at every width; see
+CLAUDE.md for why two and not four.
+
+- [ ] Sweep the width from desktop down to 320px and confirm the block stays
+      2×2 the whole way — never 1 across, never 3, and never overflowing its
+      row. `body { overflow-x: hidden }` would hide an overflow, so check the
+      chip grid's own `scrollWidth` against its `clientWidth` rather than
+      trusting the eye.
+- [ ] At or below ~390px (iPhone 14/SE, most Androids) the longest label
+      ("Extra Stracciatella" on Chef's Choice) wraps to two balanced lines.
+      That's expected and accepted — all four chips stretch to the same height,
+      so the row stays aligned. What would be a bug: an ellipsis, a chip taller
+      than its neighbours, or the price splitting off its sign.
+- [ ] On a real phone, confirm a single-line chip is roughly a 44px touch
+      target and that two adjacent chips can be told apart by thumb.
+- [ ] Toggle a chip on and check the selected (green) state: white label, price
+      still legible beneath it at 0.85 opacity.
+- [ ] Check a slice whose description already names the add-on (Chef's Choice
+      has stracciatella) against one that doesn't (Cheese Slice) — the first
+      should read "Extra Stracciatella", the second just "Stracciatella".
+      That's `addonLabel()`, and it changes the longest string on the page.
+- [ ] 86 an add-on from the admin Availability panel and confirm the chip goes
+      struck-through and unclickable without changing the grid shape.
+
 ## General regression pass (any change touching ordering/admin)
 
 - [ ] Full order → admin board → status advance → pickup flow, once, in a
       real browser.
-- [ ] `npm run doctor` (react-doctor) has no findings beyond the four known
-      ones below. The gate is *no new findings*, not a zero score.
+- [ ] `npm run doctor` (react-doctor) reports **no findings at all**. The gate
+      used to be "no new findings beyond a known baseline"; the baseline is
+      empty now, so any finding is a new one.
 
 ## Photos and Image Optimization
 
@@ -128,23 +165,30 @@ verified locally; check it on a preview deployment after any change to
 - [ ] Share card (`/studio`) still renders — it draws an optimized URL into a
       canvas, so a cross-origin change there would taint it and break export.
 
-### Known react-doctor baseline (4 findings, all reviewed)
+### react-doctor baseline: zero findings
 
-Each was read in context and left deliberately. Re-confirm rather than
-re-investigate; if one of these changes shape, that's worth a look.
+The old four-finding baseline is gone — `npm run doctor` scores 100/100 with
+nothing reported. Two of the four were fixed, one stopped being reported by
+react-doctor 0.9.x, and the last is now suppressed in-line with its reasoning.
 
-- `effect-needs-cleanup` — `SlicesPage.jsx:284`. **False positive.** The
-  cleanup on the effect's last line calls `stop()`, which clears the
-  interval, and removes the visibility listener. The rule can't follow the
-  indirection through `stop()`. (react-doctor 0.9.x no longer reports it.)
-- `no-noninteractive-element-interactions` — `Lightbox.jsx:51`. **False
-  positive.** The handler is on a native `<dialog>`, and it's the
-  click-outside-to-close backdrop; Esc and arrow keys are already handled.
-- `no-array-index-as-key` — `OrderPage.jsx:88`. **Deliberate**, and already
-  carries an `eslint-disable-next-line` the doctor doesn't honor. Add-on
-  units are positional ("Slice 1", "Slice 2") with no stable per-unit id —
-  the index *is* the identity.
-- ~~`no-flush-sync` — `App.jsx:109`~~. **Resolved.** The `flushSync()` that
-  drove the 260 ms page transition is now a `useLayoutEffect`, which gets the
-  same commit-before-paint ordering without opting the update out of concurrent
-  rendering. Baseline is 3 findings, not 4, if this is the only one that went.
+Three suppressions exist in the source, each as a
+`// react-doctor-disable-next-line <rule>` **immediately above the line it
+applies to** (the directive must be the last comment before the code — put the
+explanation above it, or the suppression silently doesn't take). They were
+reviewed and the flagged code is correct as written; re-confirm rather than
+re-investigate:
+
+- `no-redundant-roles` — `Footer.jsx`. The `role="contentinfo"` is **not**
+  redundant: this `<footer>` renders inside `<main>`, and a nested `<footer>`
+  is not a contentinfo landmark on its own. Removing it to satisfy the rule
+  deletes a landmark screen readers navigate to.
+- `no-array-index-as-key` — `OrderPage.jsx`. Add-on units are positional
+  ("Slice 1", "Slice 2" are rendered *from* the index) and the stepper only
+  appends or truncates at the end, never reorders or splices. Synthetic ids
+  would change the persisted `pp_cart:v2` shape and need a migration.
+- `no-create-object-url-without-revoke` — `photos.js`. The revoke is in the
+  `finally` block the rule doesn't follow into, and it has to stay there: the
+  `<img>` needs the URL alive until `onload`/`onerror` settles.
+
+If a suppression ever stops being needed, delete it rather than leaving it —
+a stale suppression hides the next real finding on that line.
