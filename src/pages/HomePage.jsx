@@ -1,7 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { gsap } from 'gsap';
-import { useGSAP } from '@gsap/react';
-import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { ArrowRight } from 'lucide-react';
 import { Footer } from '../components/Footer';
 import { LogoBadge } from '../components/LogoBadge';
@@ -11,7 +8,6 @@ import { MENU_DATA } from '../data/menu';
 import { api } from '../utils/api';
 import { responsiveImg } from '../utils/photos';
 
-gsap.registerPlugin(useGSAP, ScrollTrigger);
 
 const STORY_PHOTOS     = ['/photos/team.jpg', '/photos/hug1.jpg', '/photos/img_6084.jpeg', '/photos/img_5976.jpeg', '/photos/img_6831.jpeg'];
 const STRIP_ITEMS      = [
@@ -48,19 +44,23 @@ export function HomePage({ nav, openArticle, openLightbox }) {
     return () => { cancelled = true; };
   }, []);
 
-  // Hero photo drifts slower than the page scroll (parallax). Desktop-only:
-  // on phones the scrubbed transform of a viewport-sized image costs more in
-  // scroll jank than the drift is worth. (Checked once per mount — a resize
-  // across the breakpoint corrects itself on the next page visit.)
-  useGSAP(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    if (window.matchMedia('(max-width: 768px)').matches) return;
-    gsap.to('.hero-img', {
-      yPercent: 10,
-      ease: 'none',
-      scrollTrigger: { trigger: '.hero', start: 'top top', end: 'bottom top', scrub: true },
-    });
-  }, { scope: pageRef });
+  // The hero photo used to drift on scroll (a scrubbed yPercent parallax).
+  // It's gone deliberately — don't add it back without reading this:
+  //
+  //  * It read as the photo zooming rather than drifting. The image is sized
+  //    with `cover` inside a box 12% taller than the hero, so sliding it
+  //    changes which crop of a scaled-up photo shows through the window, and
+  //    the eye takes that as scale, not position.
+  //  * It was unreliable. ScrollTrigger cached its start/end before the hero
+  //    had its final height, so the scrub range could collapse and the tween
+  //    would sit at progress 0 all the way down — moving on some loads and
+  //    not others, which is worse than either.
+  //  * It's a scrubbed transform on a viewport-sized image, repainting on
+  //    every scroll frame. It was already disabled below 768px for exactly
+  //    that cost; the cost is real above 768px too.
+  //
+  // With no drift, `.hero-img` is `inset: 0` — the old `-12%` top existed only
+  // to keep the drift from exposing an edge, and left the photo cropped high.
 
   return (
     <div ref={pageRef}>

@@ -10,6 +10,15 @@ npm run dev        # site at http://localhost:5173
 npm run dev:api    # order API (separate terminal) — Vite proxies /api to it
 ```
 
+The react-scan render profiler is **off by default** — it instruments every
+component and drags the dev server into single-digit FPS on animation-heavy
+pages, which looks like the site being slow when it's the profiler. Turn it on
+for a session when you actually want it:
+
+```bash
+VITE_REACT_SCAN=1 npm run dev
+```
+
 Open `http://localhost:5173` in your browser. Locally the order API keeps
 orders in memory (restart clears them) and the admin password is `admin`.
 

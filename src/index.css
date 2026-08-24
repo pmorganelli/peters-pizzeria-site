@@ -153,8 +153,10 @@ nav.nav-dark.scrolled .nav-hamburger span { background: var(--ink); }
   padding: 0 60px 80px; position: relative; overflow: hidden;
 }
 .hero-img {
-  /* top extends past the hero so the GSAP parallax drift never exposes an edge */
-  position: absolute; inset: -12% 0 0;
+  /* inset: 0, not the old -12% top. That negative top existed only so the
+     scrubbed parallax drift never exposed an edge; with the drift gone (see
+     HomePage.jsx) it just cropped the photo high for no reason. */
+  position: absolute; inset: 0;
   background: url('/photos/static/pizza-ooni.jpg') center center / cover no-repeat;
 }
 .hero-overlay {
@@ -1590,8 +1592,19 @@ body, .story-section, .home-latest, .menu-page, .blog-page, .article-page {
   .photo-strip-item { aspect-ratio: 1; }
 }
 
-/* Tiny screens: badge + wordmark + Order Now + hamburger don't all fit */
+/* The wordmark is the brand name, so it comes off the nav last, not first.
+   At the full 20px it clears the Order Now button down to ~405px and collides
+   below that — which is why this used to hide it wholesale at 430px and took
+   the name off every large phone (430px covers the iPhone 15 Plus/Pro Max,
+   412px the Pixel Pro) where it actually still fit.
+   Dropping to 17px buys ~23px and carries it comfortably to 390px — the
+   iPhone 12/13/14/15 width, and most of the Android field with it. */
 @media (max-width: 430px) {
+  .nav-logo-text { font-size: 17px; }
+}
+/* Below 390 there is genuinely no room: badge + wordmark + Order Now +
+   hamburger overlap however the type is sized, and the CTA has to win. */
+@media (max-width: 389px) {
   .nav-logo-text { display: none; }
 }
 
