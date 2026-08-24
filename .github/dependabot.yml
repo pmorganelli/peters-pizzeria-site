@@ -28,11 +28,33 @@ updates:
     # which review still happens. Grouping below keeps this well under the cap
     # in a normal week.
     open-pull-requests-limit: 5
+    # No `include: scope` — the prefixes below already carry the scope, and
+    # setting both produced titles reading "chore(deps-dev)(deps-dev): …".
     commit-message:
       prefix: "chore(deps)"
       prefix-development: "chore(deps-dev)"
-      include: scope
+    # Order matters: a dependency joins the FIRST group whose rules it matches,
+    # so the peer-locked pairs have to be declared above the catch-all
+    # minor/patch groups or they'd be swallowed by them.
     groups:
+      # These two pairs are locked together by peer ranges and are uninstallable
+      # if they move apart — `npm ci` fails with ERESOLVE before a single test
+      # runs. Both were learned the hard way on the first Dependabot run:
+      #   react 19 alone   → react-dom@18.3.1 peers on react@^18.3.1 (PR #9)
+      #   vite 8 alone     → @vitejs/plugin-react@4 peers on vite ^4|^5|^6|^7,
+      #                      and vite 8 needs plugin-react >=5.2.0 (PR #8)
+      # No `update-types` filter on either — the whole point is that majors
+      # travel together, which is exactly what the split PRs got wrong.
+      react:
+        applies-to: version-updates
+        patterns:
+          - react
+          - react-dom
+      vite:
+        applies-to: version-updates
+        patterns:
+          - vite
+          - "@vitejs/plugin-react"
       # Minor and patch bumps ride together — one PR to review, one CI run.
       # Runtime and tooling stay in separate groups because the blast radius is
       # different: a bad runtime bump ships to customers placing orders, a bad
@@ -50,9 +72,8 @@ updates:
       security:
         applies-to: security-updates
         patterns: ["*"]
-    # Majors are deliberately left ungrouped — each one gets its own PR with its
-    # own changelog to read. React 19 and Vite 7 are not a thing to skim past in
-    # a combined diff.
+    # Majors outside the pairs above are deliberately ungrouped — each one gets
+    # its own PR with its own changelog to read.
     ignore:
       # `vercel` is the local dev-API/CLI shim, not something the deployed site
       # imports, and it releases several times a week — a weekly major/minor PR
@@ -60,6 +81,16 @@ updates:
       # is a one-line manual bump whenever it's actually wanted.
       - dependency-name: vercel
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      # Tailwind 4 is a migration, not a bump, and Dependabot can't do it: the
+      # PostCSS plugin moved to its own package (`@tailwindcss/postcss`), the
+      # `@tailwind base/components/utilities` directives in src/index.css become
+      # a single `@import "tailwindcss"`, and theme config moves into CSS. The
+      # v4 PR failed the build on exactly that (PR #10) and would have been
+      # reopened every Monday to fail the same way. Minors and patches on the
+      # 3.x line still come through. Drop these two lines when someone actually
+      # wants to sit down and do the migration.
+      - dependency-name: tailwindcss
+        update-types: ["version-update:semver-major"]
     labels:
       - dependencies
 
@@ -67,7 +98,8 @@ updates:
   # Keeps the `uses:` pins in .github/workflows current (actions/checkout,
   # actions/setup-node, millionco/react-doctor). These drift quietly — a
   # deprecated runner version fails the workflow with nothing in the diff to
-  # explain it.
+  # explain it. Majors are grouped in here rather than split out: a bad action
+  # bump can only break CI, and it breaks it visibly on the PR that makes it.
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
@@ -78,7 +110,6 @@ updates:
     open-pull-requests-limit: 3
     commit-message:
       prefix: "chore(ci)"
-      include: scope
     groups:
       actions:
         applies-to: version-updates
