@@ -194,7 +194,7 @@ function OrderSummaryPanel({
         {canPlace && <ArrowRight size={14} />}
       </button>
       <div className="order-fineprint">
-        No payment needed now — Venmo or Zelle at pickup. We&apos;ll fire your slices in order.
+        Venmo Peter-Morganelli24 or Zelle at pickup. We&apos;ll fire your slices in order.
       </div>
     </div>
   );
