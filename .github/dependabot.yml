@@ -1,0 +1,87 @@
+# Dependabot — opens PRs to keep dependencies current. Every PR it raises runs
+# the Tests workflow (npm ci → npm test → npm run build) and React Doctor, so a
+# bump that breaks the build or the suite shows up red before it can be merged.
+#
+# Docs: https://docs.github.com/code-security/dependabot/dependabot-version-updates
+#
+# One thing to know before merging an npm PR here: package.json carries a large
+# `overrides` block pinning transitive packages up out of known-vulnerable
+# ranges (undici, tar, esbuild, path-to-regexp, …). Dependabot does not read or
+# maintain that block — it bumps direct dependencies only. So when it raises a
+# major bump for a package that owns pinned transitives (`vercel` and the
+# `@vercel/*` builders especially), check whether the matching override is now
+# stale: an override pinning a version *below* what the new release ships would
+# silently downgrade it. `npm ls <package>` after checking the branch out shows
+# what actually resolved.
+version: 2
+
+updates:
+  # ---------------------------------------------------------------- npm ----
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/New_York
+    # Small project, one maintainer: a handful of PRs at a time is the point at
+    # which review still happens. Grouping below keeps this well under the cap
+    # in a normal week.
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+      include: scope
+    groups:
+      # Minor and patch bumps ride together — one PR to review, one CI run.
+      # Runtime and tooling stay in separate groups because the blast radius is
+      # different: a bad runtime bump ships to customers placing orders, a bad
+      # dev bump only breaks the build in front of us.
+      runtime-minor-patch:
+        applies-to: version-updates
+        dependency-type: production
+        update-types: ["minor", "patch"]
+      tooling-minor-patch:
+        applies-to: version-updates
+        dependency-type: development
+        update-types: ["minor", "patch"]
+      # Advisories tend to arrive in clusters that share a transitive root;
+      # one PR per cluster beats five PRs that each fix a slice of it.
+      security:
+        applies-to: security-updates
+        patterns: ["*"]
+    # Majors are deliberately left ungrouped — each one gets its own PR with its
+    # own changelog to read. React 19 and Vite 7 are not a thing to skim past in
+    # a combined diff.
+    ignore:
+      # `vercel` is the local dev-API/CLI shim, not something the deployed site
+      # imports, and it releases several times a week — a weekly major/minor PR
+      # for it is pure noise. Patches still come through, and `vercel@latest`
+      # is a one-line manual bump whenever it's actually wanted.
+      - dependency-name: vercel
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+    labels:
+      - dependencies
+
+  # ----------------------------------------------------- github actions ----
+  # Keeps the `uses:` pins in .github/workflows current (actions/checkout,
+  # actions/setup-node, millionco/react-doctor). These drift quietly — a
+  # deprecated runner version fails the workflow with nothing in the diff to
+  # explain it.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/New_York
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(ci)"
+      include: scope
+    groups:
+      actions:
+        applies-to: version-updates
+        patterns: ["*"]
+    labels:
+      - dependencies
