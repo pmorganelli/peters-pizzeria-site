@@ -20,7 +20,7 @@
     "@vercel/blob": "^2.8.0",
     "gsap": "^3.15.0",
     "lucide-react": "^1.33.0",
-    "react": "^18.3.1",
+    "react": "^19.2.8",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
