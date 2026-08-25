@@ -100,6 +100,18 @@ updates:
       # wants to sit down and do the migration.
       - dependency-name: tailwindcss
         update-types: ["version-update:semver-major"]
+      # ESLint majors are held back for a peer-range reason, not a taste one:
+      # eslint-plugin-react and eslint-plugin-jsx-a11y both still cap their
+      # peer range at `^9` (see the note in eslint.config.js). A solo `eslint`
+      # major PR — which is what an ungrouped major gets — fails `npm ci` with
+      # ERESOLVE before a single test runs, the same way the split
+      # react/react-dom and vite/plugin-react PRs did. Grouping wouldn't help
+      # here: the plugins have no matching release to travel with, so the group
+      # would still bump eslint on its own. Drop these two lines once both
+      # plugins accept ESLint 10; nothing else blocks the move. Minors and
+      # patches on the 9.x line still come through.
+      - dependency-name: eslint
+        update-types: ["version-update:semver-major"]
     labels:
       - dependencies
 

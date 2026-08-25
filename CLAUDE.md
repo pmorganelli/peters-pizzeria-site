@@ -34,6 +34,23 @@ Deep links need the SPA rewrite in `vercel.json` (`/((?!api/).*)` → `/index.ht
 
 `localStorage.pp_page2` is **gone**. The URL restores the page now, and the old key actively hurt: it meant a bookmark could land you on the admin board. App clears any leftover copy once on mount.
 
+### Code splitting
+
+`studio`, `slices`, `admin` and `nights` are `React.lazy` chunks (`lazyPage` in
+`App.jsx`); everything on a first-time visitor's path stays in the main bundle.
+The `<Suspense>` sits *inside* the ErrorBoundary, so a chunk that won't download
+surfaces as the crash page rather than an unhandled rejection.
+
+**A failed chunk poisons its route for the whole session** — `React.lazy` caches
+the rejection and re-throws it on every later render. The usual cause is a
+deploy landing mid-session: the hashed filename this build asks for is gone, the
+404 hits the SPA rewrite, and `index.html` comes back as a module (so the import
+fails on MIME type, not on a missing file). `utils/chunkReload.js` grants
+**one** reload per session for this — enough to fetch the current deploy, and
+guarded so a genuinely broken chunk falls through to the crash page instead of
+reload-looping. `markChunkLoaded()` re-arms the retry on the next chunk that
+does load. Its test proves the refusal, not just the grant.
+
 ### Crash containment and landmarks
 
 `components/ErrorBoundary.jsx` wraps the rendered page inside `<main>`, keyed by `page:articleId` so navigating anywhere else mounts a fresh instance and clears the error (keying on `page` alone would strand a crashed article, since `page` never leaves `'article'`). The **nav sits outside the boundary on purpose** — it stays interactive under the fallback and is the actual way out. The fallback (`.crash-page`) is deliberately plain: no GSAP, no photos, nothing that could throw a second time.
@@ -164,15 +181,23 @@ because the repo has three environments and they must not share globals: `src/**
 gets browser + React 19 + hooks + a11y, `api/**` and `scripts/**` get Node only
 (a `window` or `localStorage` reference in a handler is a real bug, and the
 absence of browser globals there is what catches it), and tests get both.
-`npm run lint` must come back clean.
+`npm run lint` must come back clean — the script is `eslint . --max-warnings=0`,
+and the `=0` is load-bearing: five rules in the config are `'warn'`
+(`no-unused-vars`, `no-console`, `eqeqeq`, `prefer-const`,
+`react/no-array-index-key`), and plain `eslint .` exits 0 on warnings. Without
+the flag the CI lint gate can't fail, and a `console.log` dumping a customer's
+order into the production console ships green.
 
 Two settings in there are load-bearing and shouldn't be "tidied":
 
 - **ESLint is pinned to 9.x, not 10.** `eslint-plugin-react` and
   `eslint-plugin-jsx-a11y` both still cap their peer range at `^9`, and this
   repo has already been broken once by a peer split that fails `npm ci` in CI
-  before a single test runs (see Dependencies). Move to 10 when those two ship
-  support; nothing else blocks it.
+  before a single test runs (see Dependencies). `.github/dependabot.yml` ignores
+  `eslint` majors for that reason — grouping wouldn't help, since the plugins
+  have no matching release to travel with and the group would bump `eslint`
+  alone anyway. Move to 10 when those two ship support (drop the ignore then);
+  nothing else blocks it.
 - **`no-unused-vars` sets `ignoreRestSiblings: true`.** `const { contact, notes,
   ...rest } = order` is how `publicOrder`/`publicSlice`/`adminSlice` strip
   fields that must never reach a client. Those names are unused *by design*;
@@ -216,7 +241,9 @@ the parts worth knowing before touching a dependency PR:
   package and turns the `@tailwind` directives in `index.css` into an `@import`
   — a migration Dependabot can't perform, and the PR failed the build and would
   have reopened every Monday. Drop the two `ignore` lines when someone wants to
-  do it. `vercel` major/minor is ignored too, for noise: it's the local dev-API
+  do it. **`eslint` majors are ignored** for the peer-range reason in Static
+  analysis — a solo `eslint@10` PR fails `npm ci` before a test runs. `vercel`
+  major/minor is ignored too, for noise: it's the local dev-API
   shim and releases several times a week. Patches still come through.
 - Version updates come from that file; **security updates are a separate repo
   toggle** (Settings → Code security), and the `security` group is inert until

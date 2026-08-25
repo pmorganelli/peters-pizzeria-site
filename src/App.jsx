@@ -12,6 +12,7 @@ import { GalleryPage } from './pages/GalleryPage';
 import { OrderPage }   from './pages/OrderPage';
 import { StatusPage }  from './pages/StatusPage';
 import { routeFromPath, pathForRoute, titleForRoute } from './utils/routes';
+import { markChunkLoaded, shouldReloadForChunkFailure } from './utils/chunkReload';
 
 // Split out of the initial bundle. Everything above is on the path a first-time
 // visitor actually walks (home → menu/blog/gallery → order); everything below
@@ -25,7 +26,24 @@ import { routeFromPath, pathForRoute, titleForRoute } from './utils/routes';
 //
 // These are named exports, so each import is mapped onto `default` — `lazy()`
 // resolves the default export and nothing else.
-const lazyPage = (load, name) => lazy(() => load().then((m) => ({ default: m[name] })));
+//
+// The failure path matters more here than the happy one: a chunk that fails to
+// download is poisoned for the rest of the session, since React.lazy caches the
+// rejection and re-throws it on every later render. `shouldReloadForChunkFailure`
+// in utils/chunkReload.js carries the reasoning and the loop guard.
+const lazyPage = (load, name) =>
+  lazy(() =>
+    load().then(
+      (m) => {
+        markChunkLoaded();
+        return { default: m[name] };
+      },
+      (err) => {
+        if (shouldReloadForChunkFailure()) window.location.reload();
+        throw err;
+      },
+    ),
+  );
 
 const StudioPage        = lazyPage(() => import('./pages/StudioPage'), 'StudioPage');
 const SlicesPage        = lazyPage(() => import('./pages/SlicesPage'), 'SlicesPage');

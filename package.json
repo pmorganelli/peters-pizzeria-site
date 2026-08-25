@@ -12,7 +12,7 @@
     "doctor": "npx react-doctor",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings=0",
     "lint:fix": "eslint . --fix"
   },
   "dependencies": {
