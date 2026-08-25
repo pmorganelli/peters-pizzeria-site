@@ -1,0 +1,63 @@
+# CodeQL — GitHub's dataflow analysis. Where ESLint reasons about one file at a
+# time and Semgrep matches syntactic patterns, CodeQL traces values across
+# function and module boundaries, which is what catches "this request header
+# reaches this property write" in a codebase this size.
+#
+# Results land in the repository's Security tab (Code scanning alerts), not in
+# the build log — a PR run annotates changed lines, and the weekly run catches
+# alerts introduced by a query-pack update rather than by a commit.
+
+name: CodeQL
+
+on:
+  pull_request:
+  push:
+    branches: ["main"]
+  # The query packs improve independently of this repo, so a scheduled run
+  # surfaces newly-detectable issues in code nobody has touched in months.
+  schedule:
+    - cron: "0 13 * * 1"
+
+concurrency:
+  group: codeql-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze JavaScript
+    runs-on: ubuntu-latest
+    permissions:
+      # Required for CodeQL to upload its SARIF results to the Security tab.
+      security-events: write
+      contents: read
+      actions: read
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
+        with:
+          languages: javascript-typescript
+          # The test harness spins up a throwaway http server and echoes
+          # errors back to make failures readable; CodeQL rightly calls that
+          # stack-trace exposure, but none of it is deployed or reachable.
+          # Scanning it only produces alerts nobody can act on.
+          config: |
+            paths-ignore:
+              - '**/*.test.js'
+              - '**/*.test.jsx'
+              - 'tests/**'
+          # security-and-quality adds maintainability queries (dead code,
+          # unused values) on top of the default security set. It is the same
+          # suite run locally when this workflow was added, so local and CI
+          # results stay comparable.
+          queries: security-and-quality
+
+      # No build step: JavaScript is extracted directly from source, and
+      # running `npm run build` here would only add minified output for CodeQL
+      # to wade through.
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
+        with:
+          category: "/language:javascript-typescript"

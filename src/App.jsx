@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { Nav }         from './components/Nav';
@@ -9,13 +9,46 @@ import { MenuPage }    from './pages/MenuPage';
 import { BlogPage }    from './pages/BlogPage';
 import { ArticlePage } from './pages/ArticlePage';
 import { GalleryPage } from './pages/GalleryPage';
-import { StudioPage }  from './pages/StudioPage';
 import { OrderPage }   from './pages/OrderPage';
 import { StatusPage }  from './pages/StatusPage';
-import { SlicesPage }  from './pages/SlicesPage';
-import { AdminPage }   from './pages/AdminPage';
-import { NightsArchivePage } from './pages/NightsArchivePage';
 import { routeFromPath, pathForRoute, titleForRoute } from './utils/routes';
+import { markChunkLoaded, shouldReloadForChunkFailure } from './utils/chunkReload';
+
+// Split out of the initial bundle. Everything above is on the path a first-time
+// visitor actually walks (home → menu/blog/gallery → order); everything below
+// is either staff-only or a detour, and together it was 42% of the JS every
+// visitor downloaded before seeing a single pizza:
+//
+//   slices  ~35 KB gz — the community wall, one nav click off the landing path
+//   studio  ~17 KB gz — the share-card canvas generator, which has no UI entry
+//                       point at all (see CLAUDE.md, Routing)
+//   admin   ~13 KB gz — the order board and the nights archive, staff-only
+//
+// These are named exports, so each import is mapped onto `default` — `lazy()`
+// resolves the default export and nothing else.
+//
+// The failure path matters more here than the happy one: a chunk that fails to
+// download is poisoned for the rest of the session, since React.lazy caches the
+// rejection and re-throws it on every later render. `shouldReloadForChunkFailure`
+// in utils/chunkReload.js carries the reasoning and the loop guard.
+const lazyPage = (load, name) =>
+  lazy(() =>
+    load().then(
+      (m) => {
+        markChunkLoaded();
+        return { default: m[name] };
+      },
+      (err) => {
+        if (shouldReloadForChunkFailure()) window.location.reload();
+        throw err;
+      },
+    ),
+  );
+
+const StudioPage        = lazyPage(() => import('./pages/StudioPage'), 'StudioPage');
+const SlicesPage        = lazyPage(() => import('./pages/SlicesPage'), 'SlicesPage');
+const AdminPage         = lazyPage(() => import('./pages/AdminPage'), 'AdminPage');
+const NightsArchivePage = lazyPage(() => import('./pages/NightsArchivePage'), 'NightsArchivePage');
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -296,7 +329,30 @@ export default function App() {
         {/* Keyed by what's actually rendered — page alone would keep a crashed
             article's boundary in place when you open the next article, since
             `page` never leaves 'article'. */}
-        <ErrorBoundary key={`${page}:${article?.id ?? ''}`} onGoHome={() => nav('home')}>
+        {/* The escape hatch is a real document navigation, not nav('home').
+            React.lazy memoizes its import promise *including the rejection*
+            (verified against React 19.2.8: the loader is called once and every
+            later render re-throws the cached error). A client-side hop to home
+            would clear this boundary but leave the failed module poisoned, so
+            tapping that route again would crash again for the rest of the
+            session. Reloading rebuilds the module registry — and fetches the
+            current deploy, which is usually what fixed it.
+
+            The disguised case: a chunk from a superseded deploy 404s, that URL
+            matches the SPA rewrite in vercel.json, and the browser gets
+            index.html back as a module — so the import fails on MIME type
+            rather than on a missing file. Same recovery either way. */}
+        <ErrorBoundary
+          key={`${page}:${article?.id ?? ''}`}
+          onGoHome={() => window.location.assign(pathForRoute('home'))}
+        >
+        {/* Suspense sits inside the boundary so a chunk that fails to download
+            (deploy mid-session, flaky network) surfaces as the crash page
+            rather than an unhandled rejection. Recovery has to be a reload —
+            see the note on onGoHome below. The fallback reserves height for
+            the same reason .order-gate does: a zero-height fallback would
+            collapse the page under the footer for the length of the fetch. */}
+        <Suspense fallback={<div className="route-loading" aria-busy="true" />}>
         {page === 'home'    && <HomePage    {...pageProps} />}
         {page === 'menu'    && <MenuPage    nav={nav} />}
         {page === 'blog'    && <BlogPage    nav={nav} openArticle={openArticle} />}
@@ -308,6 +364,7 @@ export default function App() {
         {page === 'slices'  && <SlicesPage  nav={nav} openLightbox={openLightbox} />}
         {page === 'admin'   && <AdminPage   nav={nav} />}
         {page === 'nights'  && <NightsArchivePage nav={nav} />}
+        </Suspense>
         </ErrorBoundary>
       </main>
 

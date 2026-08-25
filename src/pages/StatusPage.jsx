@@ -35,7 +35,13 @@ export function StatusPage({ nav }) {
   // id (not the order object) so a poll result doesn't re-arm the interval.
   const settled = order && (order.status === 'done' || order.status === 'cancelled');
   useEffect(() => {
-    if (!trackedId || settled) { setLoading(false); return undefined; }
+    // No setLoading(false) here on purpose. `loading` is only ever set true by
+    // the useState initializer, and that happens exactly when SAVED_KEY exists
+    // — which means trackedId is truthy and `order` is still null, so the
+    // first run always takes the fetch path below and clears it in .finally().
+    // By the time `settled` can be true, that has already run. The call this
+    // replaces could never change the value; it just cost a render pass.
+    if (!trackedId || settled) return undefined;
     let cancelled = false;
     const fetchOrder = () =>
       api(`/api/orders?id=${encodeURIComponent(trackedId)}`)

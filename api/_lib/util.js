@@ -114,6 +114,29 @@ export function verifyAdminToken(token, now = Date.now()) {
   return issuedAt;
 }
 
+// Static analysis (CodeQL js/insufficient-password-hash) flags the SHA-256
+// below as "a password hash with insufficient computational effort", and it is
+// worth writing down why that finding does not apply here rather than
+// re-deciding it every scan.
+//
+// Nothing here is a stored credential digest. The secret is an env var held in
+// plaintext, and neither digest is written to disk, logged, or returned — both
+// are local variables that die with the call. The hashing exists solely to
+// give `timingSafeEqual` two equal-length buffers, since it throws on a length
+// mismatch and comparing the raw strings would leak length and prefix through
+// timing. There is no hash for an attacker to steal and grind offline, which
+// is the entire threat model that slow KDFs (scrypt, argon2) defend against.
+//
+// A KDF would only add cost to *online* guessing, which is already bounded by
+// the 8-attempts-per-IP-per-5-minutes limit on the login route, and it would
+// bill real CPU time on every login for that marginal gain. If the admin
+// secret ever becomes a stored, per-user hash, this must become scrypt — that
+// is the change that would make the finding real.
+//
+// Note for whoever triages this next: inline `// codeql[...]` comments do NOT
+// suppress anything (tried it — the CLI ignores them and the alert comes back
+// unmarked). Code scanning alerts are dismissed in the repository's Security
+// tab, with this paragraph as the reason.
 export function checkPassword(password) {
   const secret = adminSecret();
   if (!secret || typeof password !== 'string') return false;
@@ -131,11 +154,28 @@ const COOKIE_MAX_AGE = Math.floor(SESSION_MAX_AGE_MS / 1000);
 
 function parseCookies(req) {
   const header = req.headers.cookie || '';
-  const out = {};
+  // Null-prototype: cookie names are attacker-controlled, and this object is
+  // then indexed by name. On a plain `{}` that means a request can reach
+  // inherited members — `parseCookies(req).constructor` returns a function
+  // whether or not such a cookie was sent — and `__proto__` becomes a write
+  // target rather than a key. Neither is exploitable as the lookups stand
+  // today (they use a fixed literal name, and assigning a string to
+  // `__proto__` is a silent no-op), but the object has no business inheriting
+  // anything, and this closes the class rather than relying on every future
+  // caller to index it safely.
+  const out = Object.create(null);
   for (const part of header.split(';')) {
     const i = part.indexOf('=');
     if (i === -1) continue;
-    // A malformed %-escape in any cookie must not throw — skip that cookie
+    // A malformed %-escape in any cookie must not throw — skip that cookie.
+    //
+    // CodeQL reports js/remote-property-injection on this write because the
+    // property name comes from a request header. That is unavoidable in a
+    // cookie parser — keying by the name the client sent is the entire job —
+    // and the two things that make the pattern dangerous are both absent:
+    // `out` has a null prototype (so there is nothing to pollute and nothing
+    // inherited to collide with), and every read of this map uses a fixed
+    // literal name rather than another piece of user input.
     try { out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim()); } catch { /* ignore */ }
   }
   return out;

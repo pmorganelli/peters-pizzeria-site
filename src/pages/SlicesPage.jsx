@@ -295,6 +295,10 @@ export function SlicesPage({ nav, openLightbox }) {
       if (document.hidden) stop();
       else { load(); start(); }
     };
+    // Same as the admin board: `load` awaits the fetch before setting
+    // anything, so this schedules work rather than updating state during the
+    // effect. The rule can't see through the async boundary to prove it.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
     if (!document.hidden) start();
     document.addEventListener('visibilitychange', onVisibility);

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, mockFetch } from '../tests/helpers/dom.jsx';
 import App from './App';
 import { PAGE_PATHS, PAGE_TITLES, postSlug } from './utils/routes';
@@ -54,6 +54,15 @@ describe('App routing', () => {
       const { unmount } = visit(path);
       await waitFor(() => expect(document.querySelector('main')).toBeTruthy());
       expect(document.title).toBe(PAGE_TITLES[page]);
+      // The page itself has to have rendered — not just the shell. Studio and
+      // slices are lazy (App.jsx splits them out of the initial bundle), so
+      // until their chunk resolves `main` holds the Suspense fallback and
+      // App has already set the title. Asserting only on those two would pass
+      // against the fallback and prove nothing about the route.
+      await waitFor(() => {
+        expect(document.querySelector('main .route-loading')).toBeNull();
+        expect(document.querySelector('main > *')).toBeTruthy();
+      });
       unmount();
     }
   });

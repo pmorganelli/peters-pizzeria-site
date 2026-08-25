@@ -91,8 +91,8 @@ function MenuList({ cart, unavailable, setQty, toggleAddon }) {
                       // reordered or spliced from the middle. Giving them
                       // synthetic ids would change the persisted `pp_cart:v2`
                       // shape and need a migration, for no behavioural gain.
-                      // eslint-disable-next-line react/no-array-index-key
                       // react-doctor-disable-next-line no-array-index-as-key
+                      // eslint-disable-next-line react/no-array-index-key
                       <div key={i} className="addon-unit">
                         <span className="addon-unit-label">{units.length > 1 ? `Slice ${i + 1}` : 'Add-ons'}</span>
                         <div className="addon-unit-chips">
@@ -410,20 +410,35 @@ export function OrderPage({ nav }) {
         <p className="order-sub">Saturdays 7pm til sellout · Pay via Venmo or Zelle at pickup</p>
       </div>
 
-      {loadingSaved || store === null ? null : order ? (
-        <OrderStatusCard order={order} onNewOrder={newOrder} nav={nav} />
-      ) : !store.open ? (
-        <ClosedCard store={store} nav={nav} />
-      ) : (
-        <div className="order-grid">
-          <MenuList cart={cart} unavailable={unavailable} setQty={setQty} toggleAddon={toggleAddon} />
-          <OrderSummaryPanel
-            cartLines={cartLines} removedFromCart={removedFromCart} totalCents={totalCents} removeLine={removeLine}
-            name={name} setName={setName} notes={notes} setNotes={setNotes}
-            error={error} canPlace={canPlace} placing={placing} place={place}
-          />
-        </div>
-      )}
+      {/* Everything below the header is gated on two async checks (the saved
+          order in localStorage, the store's open/closed status over the
+          network). Rendering nothing while they settle painted the footer
+          directly under the title, then shoved it down a full page when the
+          menu arrived — a 0.70 CLS, the worst score on the site.
+
+          The wrapper reserves that space up front instead. It stays in place
+          for *every* branch, not just the pending one, which is the part that
+          matters: the closed card is a few hundred pixels and the open menu is
+          several screens, so a reservation that only applied while loading
+          would just trade a downward jump for an upward one when the short
+          branch won. Sized to push the footer below the fold, so whichever
+          branch lands, nothing already on screen moves. */}
+      <div className="order-gate" aria-busy={loadingSaved || store === null}>
+        {loadingSaved || store === null ? null : order ? (
+          <OrderStatusCard order={order} onNewOrder={newOrder} nav={nav} />
+        ) : !store.open ? (
+          <ClosedCard store={store} nav={nav} />
+        ) : (
+          <div className="order-grid">
+            <MenuList cart={cart} unavailable={unavailable} setQty={setQty} toggleAddon={toggleAddon} />
+            <OrderSummaryPanel
+              cartLines={cartLines} removedFromCart={removedFromCart} totalCents={totalCents} removeLine={removeLine}
+              name={name} setName={setName} notes={notes} setNotes={setNotes}
+              error={error} canPlace={canPlace} placing={placing} place={place}
+            />
+          </div>
+        )}
+      </div>
 
       {!order && !loadingSaved && store?.open && cartLines.length > 0 && (
         <button type="button"

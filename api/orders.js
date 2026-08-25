@@ -4,6 +4,33 @@ import { catalog, ADDON_CATEGORY, PIZZA_CATEGORY } from './_lib/catalog.js';
 import { createOrder, getOrder, listOrders, setOrderStatus, getSettings, rateLimit } from './_lib/store.js';
 import { isOpenNow } from './_lib/hours.js';
 
+// ── Order intake caps ──────────────────────────────────────────────────────
+// `clientIp` reads x-forwarded-for, so the per-IP cap is really a *per-network*
+// cap: campus wifi puts an entire dorm behind one NAT address, and every
+// student in that building shares this budget.
+//
+// It was 15 per 10 minutes, which a load test emptied in seconds — 40
+// concurrent orders got 15 through and turned away 25. On a Saturday rush
+// that's the whole building locked out after the fifteenth pizza, and the
+// people it turns away are exactly the customers, not an attacker.
+//
+// 60 per 10 minutes is one order every ten seconds from a single building,
+// which is faster than a student-run kitchen can physically fire them. The
+// global cap stays the real abuse backstop and keeps ~4x headroom over the
+// largest plausible rush. Both are here to be tuned rather than hunted for.
+//
+// Raising these has a second-order cost worth knowing before you do it again:
+// `listOrders()` in _lib/store.js only ever returns the newest `MAX_LISTED`
+// (300) orders, so a board that exceeds 300 live orders silently drops the
+// oldest ones — off the admin board, and out of the archive that "close for
+// the night" writes. At 240/10min that ceiling is ~13 minutes of sustained
+// maximum intake away, where the old 120 put it at ~25. Still unreachable on
+// legitimate volume (a night is tens of orders), but if these go up again,
+// raise MAX_LISTED with them.
+const RATE_WINDOW_S = 600;
+const ORDERS_PER_IP = 60;
+const ORDERS_GLOBAL = 240;
+
 const STATUSES = ['new', 'firing', 'ready', 'done', 'cancelled'];
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no 0/O/1/I/L
 
@@ -91,12 +118,11 @@ async function create(req, res) {
     return send(res, 403, { error: 'We are not taking orders right now — check back when we open!', closed: true });
   }
 
-  // Spam guards: cap per-IP and globally per window. The per-IP cap is
-  // generous because campus wifi puts whole dorms behind one NAT address.
-  if (!(await rateLimit(`order:${clientIp(req)}`, 15, 600))) {
+  // Spam guards: cap per-IP and globally per window.
+  if (!(await rateLimit(`order:${clientIp(req)}`, ORDERS_PER_IP, RATE_WINDOW_S))) {
     return send(res, 429, { error: 'Too many orders from this network — give it a few minutes.' });
   }
-  if (!(await rateLimit('order:all', 120, 600))) {
+  if (!(await rateLimit('order:all', ORDERS_GLOBAL, RATE_WINDOW_S))) {
     return send(res, 429, { error: 'We are getting slammed! Please try again in a couple minutes.' });
   }
 

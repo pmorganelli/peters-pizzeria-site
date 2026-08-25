@@ -1,4 +1,3 @@
-import { AtSign } from 'lucide-react';
 import { LogoBadge } from './LogoBadge';
 
 const PAGES = [

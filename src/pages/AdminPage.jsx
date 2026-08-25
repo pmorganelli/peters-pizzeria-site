@@ -267,7 +267,7 @@ export function AdminPage({ nav }) {
   // Bumped by every mutation (advance, 86 toggle, hours save). A poll snapshot
   // taken before a mutation is stale — applying it would visually revert the
   // change, and a re-tap would then persist the wrong state to the server.
-  const epoch = useRef(0);
+  const epochRef = useRef(0);
 
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
@@ -296,11 +296,11 @@ export function AdminPage({ nav }) {
   const {
     reports, setReports, busySliceId: reportBusyId, error: reportError, takeDown, dismiss,
     unavailable: reportsUnavailable, setUnavailable: setReportsUnavailable,
-  } = useTakedownRequests({ epoch, onAuthError: sessionExpired });
+  } = useTakedownRequests({ epochRef, onAuthError: sessionExpired });
 
   const load = useCallback(async () => {
     if (!authed) return;
-    const snapshot = epoch.current;
+    const snapshot = epochRef.current;
     try {
       const [{ orders: list }, status, reportData] = await Promise.all([
         api('/api/orders'),
@@ -313,7 +313,7 @@ export function AdminPage({ nav }) {
         // from an empty queue, which is the overwhelmingly common case.
         api('/api/reports').catch(() => ({ reports: null })),
       ]);
-      if (epoch.current !== snapshot) return; // a mutation superseded this poll
+      if (epochRef.current !== snapshot) return; // a mutation superseded this poll
       setOrders(list);
       setStoreInfo(status);
       setReportsUnavailable(reportData.reports === null);
@@ -331,10 +331,10 @@ export function AdminPage({ nav }) {
   const saveStore = async (next) => {
     setSavingStore(true);
     setStoreError('');
-    epoch.current += 1; // invalidate polls in flight before this save
+    epochRef.current += 1; // invalidate polls in flight before this save
     try {
       const status = await api('/api/store', { method: 'PATCH', body: next });
-      epoch.current += 1; // …and polls whose GET raced the PATCH server-side
+      epochRef.current += 1; // …and polls whose GET raced the PATCH server-side
       setStoreInfo(status);
     } catch (err) {
       if (err.status === 401) logout('Session expired — log in again.');
@@ -367,7 +367,7 @@ export function AdminPage({ nav }) {
       // dialog would have this tab archiving a board that no longer exists.
       const { orders: fresh } = await api('/api/orders');
       if (fresh.length === 0) {
-        epoch.current += 1;
+        epochRef.current += 1;
         setOrders([]);
         setStoreError('The board is already empty — another device may have closed the night.');
         return;
@@ -376,9 +376,9 @@ export function AdminPage({ nav }) {
       const active = fresh.filter((o) => o.status === 'new' || o.status === 'firing' || o.status === 'ready').length;
       const warn = active > 0 ? `\n\n${active} order${active === 1 ? ' is' : 's are'} still in progress — closing archives and clears them too.` : '';
       if (!window.confirm(`Close the night? This archives ${fresh.length} order${fresh.length === 1 ? '' : 's'} (${done} picked up) and clears the board.${warn}`)) return;
-      epoch.current += 1;
+      epochRef.current += 1;
       await api('/api/nights', { method: 'POST' });
-      epoch.current += 1;
+      epochRef.current += 1;
       setOrders([]);
     } catch (err) {
       if (err.status === 401) logout('Session expired — log in again.');
@@ -393,6 +393,11 @@ export function AdminPage({ nav }) {
 
   useEffect(() => {
     if (!authed) return undefined;
+    // `load` is async and awaits Promise.all before it touches state, so
+    // nothing is set synchronously here and no cascading render happens. This
+    // is the subscribe-to-an-external-system case the rule exists to allow; it
+    // just can't see through the async boundary to prove it.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
     const t = setInterval(load, POLL_MS);
     return () => clearInterval(t);
@@ -400,11 +405,11 @@ export function AdminPage({ nav }) {
 
   const advance = async (order, status) => {
     // Optimistic update; the next poll reconciles
-    epoch.current += 1; // a poll from before this tap must not snap the card back
+    epochRef.current += 1; // a poll from before this tap must not snap the card back
     setOrders((list) => list.map((o) => (o.id === order.id ? { ...o, status } : o)));
     try {
       await api(`/api/orders?id=${encodeURIComponent(order.id)}`, { method: 'PATCH', body: { status } });
-      epoch.current += 1;
+      epochRef.current += 1;
     } catch {
       load();
     }
