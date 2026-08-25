@@ -1,0 +1,52 @@
+# Semgrep CE — fast pattern-based scanning. It runs in seconds where CodeQL
+# takes minutes, so this is the check that gives quick feedback on a PR; CodeQL
+# (codeql.yml) is the slower dataflow pass that catches what patterns can't.
+#
+# The rulesets below are the ones this repo was first scanned with. p/secrets
+# and p/owasp-top-ten cover the application code; the CI findings that actually
+# turned up on the first run were supply-chain hygiene in .github itself
+# (unpinned action tags, missing Dependabot cooldown), which is exactly the
+# kind of drift worth catching on the PR that introduces it.
+
+name: Semgrep
+
+on:
+  pull_request:
+  push:
+    branches: ["main"]
+
+concurrency:
+  group: semgrep-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  semgrep:
+    name: Scan
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      # Installed from PyPI rather than through a third-party action, so there
+      # is one less external workflow to trust and pin.
+      - run: pipx install semgrep
+
+      # `--sarif` + the upload below routes findings to the Security tab
+      # alongside CodeQL's. Continues on error so a finding annotates the PR
+      # rather than red-X'ing it — matching how react-doctor is set up here.
+      - run: |
+          semgrep scan \
+            --config=p/javascript --config=p/react --config=p/nodejs \
+            --config=p/secrets --config=p/owasp-top-ten \
+            --exclude=dist --exclude=node_modules --exclude=photos --exclude=public \
+            --metrics=off --sarif --output=semgrep.sarif
+        continue-on-error: true
+
+      - uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
+        if: always()
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep

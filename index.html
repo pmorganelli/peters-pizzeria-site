@@ -15,12 +15,25 @@
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="preload" as="image" href="/photos/static/pizza-ooni.jpg" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,100..900,0..100,0..1;1,9..144,100..900,0..100,0..1&family=Inter:wght@400..700&display=swap"
-      rel="stylesheet"
-    />
+    <!-- Fonts are self-hosted (see the @font-face block at the top of
+         src/index.css). The two preloads below are the faces used above the
+         fold on every page — the roman Fraunces that sets the headlines and
+         the Inter that sets the nav. Preloading them starts the download
+         alongside the stylesheet instead of after it, which is the whole point:
+         the browser otherwise cannot know it needs a font until the CSS that
+         references it has parsed.
+
+         Only the latin subsets are preloaded. The -ext files are declared with
+         a unicode-range and stay unfetched unless the page actually renders a
+         character in that range, so preloading them would be a guaranteed
+         wasted download on nearly every visit. Italic is not preloaded either
+         — it is used, but never in the first paint.
+
+         crossorigin is required on a font preload even same-origin: fonts are
+         fetched in CORS mode, and without it the browser downloads the file
+         twice rather than reusing the preloaded copy. -->
+    <link rel="preload" as="font" type="font/woff2" href="/fonts/fraunces-latin.woff2" crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href="/fonts/inter-latin.woff2" crossorigin />
   </head>
   <body>
     <div id="root"></div>

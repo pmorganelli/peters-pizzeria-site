@@ -10,11 +10,11 @@ import { api } from '../utils/api';
 // board's request rate for a feature that's idle almost all the time. So this
 // owns the state and the mutations; the caller owns the fetch.
 //
-// `epoch` is AdminPage's poll-invalidation ref, passed in so a resolve can
+// `epochRef` is AdminPage's poll-invalidation ref, passed in so a resolve can
 // invalidate a poll snapshot taken before it — otherwise the 5s poll already
 // in flight lands afterward and puts the row that was just handled back on
 // the screen.
-export function useTakedownRequests({ epoch, onAuthError }) {
+export function useTakedownRequests({ epochRef, onAuthError }) {
   const [reports, setReports] = useState([]);
   const [busySliceId, setBusySliceId] = useState(null);
   const [error, setError] = useState('');
@@ -27,7 +27,7 @@ export function useTakedownRequests({ epoch, onAuthError }) {
   const resolve = useCallback(async (report, action) => {
     setBusySliceId(report.sliceId);
     setError('');
-    epoch.current += 1; // invalidate polls in flight before this mutation
+    epochRef.current += 1; // invalidate polls in flight before this mutation
     try {
       if (action === 'takeDown') {
         // Deleting the photo clears its report server-side too (api/slices.js
@@ -36,7 +36,7 @@ export function useTakedownRequests({ epoch, onAuthError }) {
       } else {
         await api(`/api/reports?sliceId=${encodeURIComponent(report.sliceId)}`, { method: 'DELETE' });
       }
-      epoch.current += 1; // …and polls whose GET raced the DELETE server-side
+      epochRef.current += 1; // …and polls whose GET raced the DELETE server-side
       setReports((list) => list.filter((r) => r.sliceId !== report.sliceId));
     } catch (err) {
       if (err.status === 401) onAuthError();
@@ -44,7 +44,7 @@ export function useTakedownRequests({ epoch, onAuthError }) {
     } finally {
       setBusySliceId(null);
     }
-  }, [epoch, onAuthError]);
+  }, [epochRef, onAuthError]);
 
   const takeDown = useCallback((report) => resolve(report, 'takeDown'), [resolve]);
   const dismiss = useCallback((report) => resolve(report, 'dismiss'), [resolve]);

@@ -24,6 +24,15 @@ updates:
       day: monday
       time: "09:00"
       timezone: America/New_York
+    # Wait a week before proposing a newly published version. Nearly every
+    # recent npm supply-chain compromise (the chalk/debug and nx incidents,
+    # eslint-config-prettier) was a hijacked maintainer account publishing a
+    # malicious patch that was pulled within hours-to-days of being caught. A
+    # cooldown means the weekly PR simply never contains those versions, which
+    # matters here specifically because these PRs are grouped and routine, and
+    # a patch bump is the update least likely to get read line by line.
+    cooldown:
+      default-days: 7
     # Small project, one maintainer: a handful of PRs at a time is the point at
     # which review still happens. Grouping below keeps this well under the cap
     # in a normal week.
@@ -107,6 +116,12 @@ updates:
       day: monday
       time: "09:00"
       timezone: America/New_York
+    # Same reasoning as the npm block above. Actions are pinned to commit SHAs
+    # (a tag can be silently repointed at new code; a SHA cannot), and
+    # Dependabot bumps both the SHA and its trailing version comment — so this
+    # ecosystem is what keeps those pins from going stale.
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 3
     commit-message:
       prefix: "chore(ci)"

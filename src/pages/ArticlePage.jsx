@@ -101,8 +101,12 @@ export function ArticlePage({ article, nav }) {
             {s.images && s.images.length > 1 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 20, margin: '16px 0 28px' }}>
                 {s.images.map((img, j) => (
-                  <ArticleFigure
-                    key={j}
+                  // Static content out of src/data/posts.js: a post's image
+                  // list is fixed at build time and never reordered, inserted
+                  // into, or filtered at runtime, so position is a stable
+                  // identity. Same reasoning as the add-on units in OrderPage.
+                  // eslint-disable-next-line react/no-array-index-key
+                  <ArticleFigure key={j}
                     img={img}
                     heading={s.heading}
                     index={j}
@@ -115,6 +119,7 @@ export function ArticlePage({ article, nav }) {
               <div className="recipe-box">
                 <h3>{s.recipe.title}</h3>
                 <ul>
+                  {/* eslint-disable-next-line react/no-array-index-key -- fixed build-time list, see above */}
                   {s.recipe.items.map((item, j) => <li key={j}>{item}</li>)}
                 </ul>
               </div>

@@ -137,6 +137,62 @@ CLAUDE.md for why two and not four.
       used to be "no new findings beyond a known baseline"; the baseline is
       empty now, so any finding is a new one.
 
+## Self-hosted fonts and the CSP
+
+The webfonts moved from Google Fonts to `public/fonts/` (see the `@font-face`
+block at the top of `src/index.css`). jsdom has no font metrics and
+`vercel.json` headers don't apply locally, so none of this is reachable from
+the automated suite — and both failure modes are silent, which is the reason
+they're listed here rather than trusted.
+
+- [ ] Load the site with a cold cache and confirm headlines render in Fraunces,
+      not a fallback serif. A 404 on a font file doesn't throw anything — the
+      page just quietly sets in Times.
+- [ ] DevTools → Network, filter to Font: exactly **two** files should download
+      on a plain English page (`fraunces-latin`, `inter-latin`). If a `-ext`
+      file loads too, a stray character is pulling in latin-ext.
+- [ ] Confirm **no** request goes to `fonts.googleapis.com` or
+      `fonts.gstatic.com`. One means a `<link>` or `@import` came back, and the
+      tightened CSP will now block it.
+- [ ] Check the two preloaded fonts aren't downloaded twice (one preload + one
+      CSS fetch in the Network panel means the `crossorigin` attribute was
+      dropped from the `<link rel="preload">`).
+- [ ] Test the CSP change the way CLAUDE.md describes — inject it as a
+      `<meta http-equiv>` into `dist/index.html` and run `npm run preview`,
+      since `vercel.json` headers don't apply locally. Watch the console for
+      violations: `font-src 'self'` and `style-src` no longer allow Google.
+- [ ] Type an accented name (e.g. `José`) into the pickup-name field and
+      confirm it renders rather than showing tofu — that's the latin-ext
+      subset doing its job.
+
+## Route code splitting (`App.jsx`)
+
+Admin, nights, studio and slices load as separate chunks now.
+
+- [ ] Navigate to each of those four pages on a throttled connection and
+      confirm the page appears rather than collapsing — `.route-loading`
+      reserves the height while the chunk downloads.
+- [ ] Hard-refresh directly on `/slices` and `/admin` (deep link, not a
+      client-side nav) and confirm both still render.
+- [ ] After a redeploy, an open tab navigating to a lazy route requests a
+      chunk hash that no longer exists. Confirm that surfaces as the
+      ErrorBoundary crash page, not a blank screen. Note the request does
+      **not** 404 visibly — the stale chunk URL matches the SPA rewrite, so the
+      browser gets `index.html` back and the import fails on MIME type instead.
+- [ ] From that crash page, press **Back to home**, then navigate to the same
+      lazy route again. It must load. `React.lazy` caches a rejected import,
+      so if the escape hatch is ever changed back to a client-side `nav()` the
+      route stays broken for the rest of the session and this is the check
+      that catches it.
+
+## Order page layout reservation (`.order-gate`)
+
+- [ ] Throttle to Slow 3G and load `/order`. The footer should sit below the
+      fold from the first paint and **not** jump when the menu appears. This is
+      the 0.70 → 0.00 CLS fix; it regresses silently if the wrapper is removed.
+- [ ] Repeat with the store **closed** — the short closed card must not pull
+      the footer back up.
+
 ## Photos and Image Optimization
 
 Every `<img>` goes through `/_vercel/image`, **which only exists on Vercel** —
