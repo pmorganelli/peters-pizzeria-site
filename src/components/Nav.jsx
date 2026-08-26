@@ -13,12 +13,23 @@ const PAGES = [
 
 export function Nav({ page, nav }) {
   const scrolled = useScrolled();
-  // Store the route on which the menu was opened. A Back/Forward route change
-  // makes `menuOpen` false immediately without a state-setting effect.
-  const [menuOpenPage, setMenuOpenPage] = useState(null);
-  const menuOpen = menuOpenPage === page;
+  // The mobile menu closes on any route change, including a Back/Forward the
+  // nav never hears about. This is the adjust-state-during-render pattern
+  // rather than an effect: React re-runs this component before committing, so
+  // the overlay never paints open on the new page.
+  //
+  // Deriving it instead (`menuOpen = openedOnPage === page`) looks equivalent
+  // and isn't — the remembered page id outlives the route change, so opening
+  // the menu on /menu, pressing Back, then pressing Forward re-satisfies the
+  // comparison and the overlay reopens on its own.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [renderedPage, setRenderedPage] = useState(page);
+  if (renderedPage !== page) {
+    setRenderedPage(page);
+    setMenuOpen(false);
+  }
 
-  const doNav = (p) => { setMenuOpenPage(null); nav(p); };
+  const doNav = (p) => { setMenuOpen(false); nav(p); };
   const isDark = ['home', 'gallery', 'blog', 'menu', 'studio', 'slices', 'admin', 'nights'].includes(page);
 
   return (
@@ -44,7 +55,7 @@ export function Nav({ page, nav }) {
 
       <button type="button"
         className={`nav-hamburger${menuOpen ? ' open' : ''}`}
-        onClick={() => setMenuOpenPage((openPage) => openPage === page ? null : page)}
+        onClick={() => setMenuOpen((open) => !open)}
         aria-label="Menu"
         aria-expanded={menuOpen}
         aria-controls="primary-navigation"

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { resetEnv } from '../../tests/helpers/env.js';
 import {
   MAX_LIVE_ORDERS, clearOrders, createOrder, getOrder, getOrderByCode,
-  getSettings, listOrders, patchSettings,
+  getSettings, listOrders, patchSettings, saveSettings,
 } from './store.js';
 
 // These exercise the in-memory fallback only (no Redis env configured, same
@@ -85,5 +85,28 @@ describe('clearOrders', () => {
     await createOrder(order('a'));
     await clearOrders([]);
     expect(await getOrder('a')).not.toBeNull();
+  });
+});
+
+describe('getSettings — empty 86 list written by the Redis path', () => {
+  // Redis's cjson cannot tell an empty array from an empty table, so
+  // PATCH_SETTINGS_LUA serialises an empty `unavailable` as a JSON *object*.
+  // That is the shape stored here by hand: normalizeSettings has to hand back
+  // a real array regardless, because every consumer spreads this into
+  // `new Set(...)` and `new Set({})` throws. When this broke, the first
+  // storefront save on a fresh deploy 500'd all order intake and crashed the
+  // order page and the admin board — persistently, since the next read
+  // decoded the same object again.
+  it('coerces a non-array unavailable back to an array', async () => {
+    await saveSettings({ mode: 'open', unavailable: {} });
+    const settings = await getSettings();
+    expect(Array.isArray(settings.unavailable)).toBe(true);
+    expect(settings.unavailable).toEqual([]);
+    expect(() => new Set(settings.unavailable)).not.toThrow();
+  });
+
+  it('leaves a populated 86 list alone', async () => {
+    await saveSettings({ mode: 'open', unavailable: ['Something'] });
+    expect((await getSettings()).unavailable).toEqual(['Something']);
   });
 });

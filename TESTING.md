@@ -129,6 +129,38 @@ CLAUDE.md for why two and not four.
 - [ ] 86 an add-on from the admin Availability panel and confirm the chip goes
       struck-through and unclickable without changing the grid shape.
 
+## Redis-only paths (`api/_lib/store.js` Lua)
+
+The suite runs with **no Redis env vars**, so every `EVAL` in `store.js` is
+exercised by nothing — the in-memory fallback beside it is what the tests hit,
+and the two have already drifted once. These need a real Upstash instance
+(a scratch database on a preview deploy is enough).
+
+- [ ] **Empty 86 list round-trip.** On a database with no `pp:settings` key,
+      save the storefront panel once (any change — "Open now" is enough), then
+      read the key back with `redis-cli GET pp:settings` / the Upstash console.
+      It will contain `"unavailable":{}`, **not** `[]` — cjson cannot encode an
+      empty array. That is expected and is why `normalizeSettings()` coerces it;
+      what this checks is that ordering, the order page, and the admin board all
+      still work afterwards. Before the coercion this state 500'd every
+      `POST /api/orders` and crashed both pages, permanently.
+- [ ] Same check after 86'ing one item and then un-86'ing it — the
+      `availability` branch builds its own empty table and hits the same
+      encoding.
+- [ ] **Code-index epoch.** Confirm `pp:order-code-epoch` appears after the
+      first order placed on a fresh database, holds a millisecond timestamp,
+      and has **no TTL** (`TTL pp:order-code-epoch` returns `-1`). If it ever
+      expires, both legacy board scans switch back on permanently.
+- [ ] **Legacy pickup codes still resolve at cutover.** Deploying the code
+      index onto a board that already holds orders is a one-time event that
+      can't be replayed later: before promoting, place an order on the *old*
+      build, promote, then look that order's pickup code up on Slice Status.
+      It must be found (via the fallback scan) and must resolve instantly on a
+      second lookup (backfilled into `pp:order-code:`).
+- [ ] A wrong pickup code on `?find=` returns "not found" without a full board
+      scan once the epoch is older than three days — check the Upstash command
+      count, not just the response.
+
 ## General regression pass (any change touching ordering/admin)
 
 - [ ] Full order → admin board → status advance → pickup flow, once, in a

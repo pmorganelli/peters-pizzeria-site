@@ -4,6 +4,8 @@ import loginHandler from './login.js';
 import { startServer, call } from '../tests/helpers/server.js';
 import { resetEnv } from '../tests/helpers/env.js';
 import { openStore, adminCookie, insertOrder, TEST_ITEM_NAME, CAPPED_ITEM } from '../tests/helpers/fixtures.js';
+import { saveSettings } from './_lib/store.js';
+import { DEFAULT_SETTINGS } from './_lib/hours.js';
 import { DEFAULT_MAX_QTY } from '../src/utils/orders.js';
 
 let server;
@@ -166,5 +168,42 @@ describe('POST /api/orders — idempotent retries', () => {
       method: 'POST', headers: { 'Idempotency-Key': key }, body: { ...body, notes: 'different' },
     });
     expect(conflict.status).toBe(409);
+  });
+});
+
+describe('POST /api/orders — abuse budget vs. the closed-store gate', () => {
+  it('consumes the per-IP limit even while the store is closed', async () => {
+    // The rate limits have to sit above the closed-store check, not below it.
+    // The store is closed most of the week, so limiting only the requests that
+    // get *past* the gate leaves intake effectively unlimited almost all the
+    // time — and every rejected attempt still costs a body read and a settings
+    // lookup. 60 is ORDERS_PER_IP; the 61st must be turned away by the limiter
+    // rather than answered with another cheap-looking 403 forever.
+    await saveSettings({ ...DEFAULT_SETTINGS, mode: 'closed' });
+    const body = { name: 'Test', items: [{ name: TEST_ITEM_NAME, qty: 1 }] };
+
+    let closed = 0;
+    let limited = 0;
+    for (let i = 0; i < 61; i += 1) {
+      const { status } = await call(base, '/api/orders', { method: 'POST', body });
+      if (status === 403) closed += 1;
+      if (status === 429) limited += 1;
+    }
+
+    expect(closed).toBe(60);
+    expect(limited).toBe(1);
+  });
+});
+
+describe('POST /api/orders — empty 86 list stored as an object', () => {
+  it('still accepts an order when unavailable is not an array', async () => {
+    // The shape PATCH_SETTINGS_LUA writes for an empty 86 list (Redis cjson
+    // cannot encode an empty array). Reaching `new Set(settings.unavailable)`
+    // with an object throws, which 500s every order rather than rejecting one.
+    await saveSettings({ ...DEFAULT_SETTINGS, mode: 'open', unavailable: {} });
+    const { status } = await call(base, '/api/orders', {
+      method: 'POST', body: { name: 'Test', items: [{ name: TEST_ITEM_NAME, qty: 1 }] },
+    });
+    expect(status).toBe(201);
   });
 });

@@ -11,6 +11,29 @@ export const ORDER_TTL_SECONDS = 60 * 60 * 24 * 3; // orders self-expire after 3
 const INDEX_KEY = 'pp:order-index';
 export const MAX_LIVE_ORDERS = 300;
 
+// The `pp:order-code:<code>` index shipped after the board was already taking
+// orders, so at cutover Redis holds up to ORDER_TTL_SECONDS worth of orders
+// with no index entry. Two code paths scan the whole board to find those —
+// getOrderByCode's fallback and the collision check inside CREATE_ORDER_LUA —
+// and both are expensive enough that they must not run forever: the fallback
+// fires on every *wrong* pickup code (reachable unauthenticated via ?find= and
+// slice posting), and the collision check costs up to MAX_LIVE_ORDERS GETs and
+// cjson decodes inside a single blocking EVAL on every order placed.
+//
+// This key records when the index went live. It is written once, never
+// expires, and is what lets both scans retire themselves: once it is older
+// than one order lifetime, every order still on the board was written with an
+// index entry and there is nothing left for a scan to find.
+const CODE_EPOCH_KEY = 'pp:order-code-epoch';
+const ORDER_TTL_MS = ORDER_TTL_SECONDS * 1000;
+
+// Missing epoch means the first post-cutover order hasn't landed yet, so the
+// board can still be holding nothing but pre-index orders — scan.
+async function legacyCodesPossible(redis) {
+  const epoch = Number(await redis.get(CODE_EPOCH_KEY));
+  return !epoch || Date.now() - epoch <= ORDER_TTL_MS;
+}
+
 function redisClient() {
   const url = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
@@ -36,14 +59,29 @@ if ARGV[6] == '1' and idem then
 end
 
 local codeReserved = redis.call('EXISTS', KEYS[3])
+
+-- Stamp the code-index epoch on the first order to reach this script, then
+-- decide whether pre-index orders can still be on the board (see CODE_EPOCH_KEY).
+local epoch = redis.call('GET', KEYS[5])
+if not epoch then redis.call('SET', KEYS[5], ARGV[8]) end
+local scanLegacy = 1
+if epoch and (tonumber(ARGV[8]) - tonumber(epoch)) > tonumber(ARGV[9]) then scanLegacy = 0 end
+
+-- Pruning a dead index entry needs only EXISTS. The GET + decode is purely the
+-- pre-index collision check, and it is the half that costs — so it drops out
+-- entirely once scanLegacy goes to 0, leaving an EXISTS-only sweep.
 local ids = redis.call('LRANGE', KEYS[2], 0, -1)
 for _, id in ipairs(ids) do
-  local existingOrder = redis.call('GET', 'pp:order:' .. id)
-  if not existingOrder then
+  local orderKey = 'pp:order:' .. id
+  if scanLegacy == 1 and codeReserved == 0 then
+    local existingOrder = redis.call('GET', orderKey)
+    if not existingOrder then
+      redis.call('LREM', KEYS[2], 0, id)
+    elseif cjson.decode(existingOrder).code == ARGV[7] then
+      return 'code_conflict'
+    end
+  elseif redis.call('EXISTS', orderKey) == 0 then
     redis.call('LREM', KEYS[2], 0, id)
-  elseif codeReserved == 0 then
-    local live = cjson.decode(existingOrder)
-    if live.code == ARGV[7] then return 'code_conflict' end
   end
 end
 if redis.call('LLEN', KEYS[2]) >= tonumber(ARGV[3]) then return 'capacity' end
@@ -86,6 +124,7 @@ export async function createOrder(order, { idempotencyKey = null, fingerprint = 
       INDEX_KEY,
       `pp:order-code:${order.code}`,
       `pp:order-idempotency:${idempotencyKey ?? order.id}`,
+      CODE_EPOCH_KEY,
     ],
     [
       JSON.stringify(order),
@@ -95,6 +134,8 @@ export async function createOrder(order, { idempotencyKey = null, fingerprint = 
       fingerprint,
       idempotencyKey ? '1' : '0',
       order.code,
+      Date.now(),
+      ORDER_TTL_MS,
     ],
   );
   if (typeof result === 'string' && result.startsWith('existing:')) {
@@ -124,6 +165,7 @@ export async function getOrderByCode(code) {
   const id = await redis.get(`pp:order-code:${code}`);
   if (id) return (await redis.get(`pp:order:${id}`)) ?? null;
 
+  if (!(await legacyCodesPossible(redis))) return null;
   const legacy = (await listOrders()).find((order) => order.code === code) ?? null;
   if (legacy) {
     const ttl = await redis.ttl(`pp:order:${legacy.id}`);
@@ -205,9 +247,19 @@ function normalizeSettings(stored) {
   // Merge over defaults so settings saved before new fields existed stay
   // valid. `hours` merges per-field: a stored hours object from before `tz`
   // existed must not silently evaluate in the server's timezone (UTC).
+  //
+  // `unavailable` is coerced back to an array because Redis's cjson cannot
+  // tell an empty array from an empty table: PATCH_SETTINGS_LUA writes
+  // `"unavailable":{}` whenever the 86 list is empty (which it is by default,
+  // and again whenever the last sold-out item is restored). An empty object
+  // and an empty array mean the same thing here, but callers spread this into
+  // `new Set(...)` — `new Set({})` throws, which 500s every order and crashes
+  // the order page and the admin board. Coerce on read; do not "tidy" away.
+  const unavailable = stored?.unavailable;
   return {
     ...DEFAULT_SETTINGS,
     ...(stored ?? {}),
+    unavailable: Array.isArray(unavailable) ? unavailable : [],
     hours: { ...DEFAULT_SETTINGS.hours, ...(stored?.hours ?? {}) },
   };
 }
@@ -248,6 +300,9 @@ if patch.availability ~= nil then
   if patch.availability.unavailable and not found then table.insert(next, patch.availability.name) end
   settings.unavailable = next
 end
+-- NOTE: an empty settings.unavailable encodes as an empty JSON *object*, not
+-- an empty array — cjson cannot tell the two apart. normalizeSettings()
+-- coerces it back on the way out; every reader of this key must go through it.
 local encoded = cjson.encode(settings)
 redis.call('SET', KEYS[1], encoded)
 return encoded`;
@@ -275,7 +330,10 @@ export async function patchSettings(patch) {
     [SETTINGS_KEY],
     [JSON.stringify(DEFAULT_SETTINGS), JSON.stringify(patch)],
   );
-  return typeof result === 'string' ? JSON.parse(result) : result;
+  // Through normalizeSettings for the same reason getSettings is: the script
+  // hands back exactly what it stored, empty-list-as-`{}` included, and this
+  // return value is what the admin board renders after a save.
+  return normalizeSettings(typeof result === 'string' ? JSON.parse(result) : result);
 }
 
 // ── Rate limiting (fixed window, per key) ─────────────────────────────

@@ -1,4 +1,5 @@
 import { pathForRoute, titleForRoute } from '../utils/routes.js';
+import { isOptimizable, sourceSrc } from '../utils/photos.js';
 
 export const SITE_URL = 'https://peters-pizzeria-site.vercel.app';
 export const DEFAULT_SOCIAL_IMAGE = '/photos/static/pizza-ooni.jpg';
@@ -21,7 +22,16 @@ export function metadataForRoute(page, article = null) {
   const description = page === 'article'
     ? (article?.excerpt || DESCRIPTIONS.blog)
     : (DESCRIPTIONS[page] || DESCRIPTIONS.home);
-  const imagePath = page === 'article' && article?.img ? article.img : DEFAULT_SOCIAL_IMAGE;
+  // A social scraper fetches this URL directly — no responsive selection, no
+  // /_vercel/image transform — so it has to name a file that actually ships.
+  // `article.img` is a bare /photos/<file> path pointing at a camera original,
+  // and only photos/large and photos/static are symlinked into public/photos:
+  // the raw path 404s into the SPA fallback. Map it onto the source tier,
+  // which is a plain deployed file a scraper can read.
+  const articleImage = page === 'article' && isOptimizable(article?.img)
+    ? sourceSrc(article.img)
+    : null;
+  const imagePath = articleImage ?? DEFAULT_SOCIAL_IMAGE;
   return {
     title: titleForRoute(page, article),
     description,

@@ -141,6 +141,19 @@ async function create(req, res) {
   if (replay.conflict) return send(res, 409, { error: 'This retry key was already used for a different order.' });
   if (replay.order) return send(res, 200, { order: replay.order, replayed: true });
 
+  // Fresh attempts consume the abuse budget; a replay of an already-created
+  // order above does not. These sit above the closed-store and sold-out gates
+  // on purpose: the store is closed most of the week, so limiting only the
+  // requests that get past the gate would leave intake effectively unlimited
+  // for the majority of the time — every rejected attempt still costs a body
+  // read and a settings GET.
+  if (!(await rateLimit(`order:${clientIp(req)}`, ORDERS_PER_IP, RATE_WINDOW_S))) {
+    return send(res, 429, { error: 'Too many orders from this network — give it a few minutes.' });
+  }
+  if (!(await rateLimit('order:all', ORDERS_GLOBAL, RATE_WINDOW_S))) {
+    return send(res, 429, { error: 'We are getting slammed! Please try again in a couple minutes.' });
+  }
+
   const settings = await getSettings();
   if (!isOpenNow(settings)) {
     return send(res, 403, { error: 'We are not taking orders right now — check back when we open!', closed: true });
@@ -150,15 +163,6 @@ async function create(req, res) {
     ?? items.flatMap((it) => it.addons ?? []).find((a) => eightySixed.has(a.name));
   if (soldOut) {
     return send(res, 400, { error: `${soldOut.name} just sold out — please remove it from your cart.`, soldOut: soldOut.name });
-  }
-
-  // Fresh attempts consume the abuse budget; a replay of an already-created
-  // order above does not.
-  if (!(await rateLimit(`order:${clientIp(req)}`, ORDERS_PER_IP, RATE_WINDOW_S))) {
-    return send(res, 429, { error: 'Too many orders from this network — give it a few minutes.' });
-  }
-  if (!(await rateLimit('order:all', ORDERS_GLOBAL, RATE_WINDOW_S))) {
-    return send(res, 429, { error: 'We are getting slammed! Please try again in a couple minutes.' });
   }
 
   // The store owns both uniqueness checks. A pre-read here would race another
