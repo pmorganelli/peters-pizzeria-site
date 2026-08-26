@@ -128,3 +128,43 @@ describe('PII in public order reads', () => {
     expect(mine.contact).toBeUndefined();
   });
 });
+
+describe('public pickup-code lookup', () => {
+  it('requires the exact pickup code and never falls back to a name or prefix', async () => {
+    const order = await insertOrder({ name: 'Casey Customer', code: 'AB2C' });
+    expect((await call(base, '/api/orders?find=Casey')).status).toBe(404);
+    expect((await call(base, '/api/orders?find=AB2')).status).toBe(404);
+    const exact = await call(base, '/api/orders?find=%23ab2c');
+    expect(exact.status).toBe(200);
+    expect(exact.body.order.id).toBe(order.id);
+  });
+});
+
+describe('POST /api/orders — idempotent retries', () => {
+  const key = 'retry_key_1234567890';
+  const body = { name: 'Retry Customer', items: [{ name: TEST_ITEM_NAME, qty: 1 }] };
+
+  it('returns the original order when the same attempt is retried', async () => {
+    const first = await call(base, '/api/orders', {
+      method: 'POST', headers: { 'Idempotency-Key': key }, body,
+    });
+    const retry = await call(base, '/api/orders', {
+      method: 'POST', headers: { 'Idempotency-Key': key }, body,
+    });
+    expect(first.status).toBe(201);
+    expect(retry.status).toBe(200);
+    expect(retry.body).toMatchObject({ replayed: true, order: { id: first.body.order.id } });
+
+    const cookie = await adminCookie(base);
+    const board = await call(base, '/api/orders', { headers: { Cookie: cookie } });
+    expect(board.body.orders).toHaveLength(1);
+  });
+
+  it('rejects reusing one key for different order contents', async () => {
+    await call(base, '/api/orders', { method: 'POST', headers: { 'Idempotency-Key': key }, body });
+    const conflict = await call(base, '/api/orders', {
+      method: 'POST', headers: { 'Idempotency-Key': key }, body: { ...body, notes: 'different' },
+    });
+    expect(conflict.status).toBe(409);
+  });
+});

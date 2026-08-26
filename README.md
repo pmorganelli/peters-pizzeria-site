@@ -102,7 +102,9 @@ log in, and get a live board — New / In the oven / Ready columns plus a
 - `api/` — Vercel serverless functions (`orders`, `login`, `store`); prices are
   always recomputed server-side from `src/data/menu.js`
 - Orders are stored in **Upstash Redis** in production and in memory during
-  local dev; they expire after 3 days
+  local dev; they expire after 3 days. Each browser retry carries an
+  idempotency key, pickup codes are reserved atomically, and the 300-order
+  live-board limit refuses overflow instead of hiding accepted orders
 - **Store hours**: the admin board has a Storefront panel — force Open, force
   Closed, or follow a weekly schedule (default Saturdays 7:00–8:30 PM ET).
   When closed, the order page shows the next window and the API rejects
@@ -114,8 +116,8 @@ log in, and get a live board — New / In the oven / Ready columns plus a
 - **Post your slice**: customers put a photo of themselves with their pizza on
   a public wall that updates live. Posting needs the pickup code from a real
   order (3 photos per order, code good for as long as the order lives — 3
-  days); photos go up instantly and are taken down from the admin board's
-  Slice wall panel, which offers Hide (reversible) and Delete (permanent).
+  days); photos go up instantly, expire from the wall after 90 days, and are
+  taken down by an admin from the Community Pictures page.
   Posters can also delete their own photo from the wall, on the device they
   posted it from
 - **Safeguards**: per-IP + global rate limits on orders, uploads and login,
@@ -132,7 +134,10 @@ log in, and get a live board — New / In the oven / Ready columns plus a
 3. Create a Blob store (dashboard → Storage → Blob, or `vercel blob store add`)
    — injects `BLOB_READ_WRITE_TOKEN`, which the slice wall needs. Without it
    the wall still displays, but posting returns a friendly 503
-4. Redeploy
+4. Set `CRON_SECRET` to a long random value. Vercel sends it as a Bearer token
+   to the daily `/api/cleanup` job, which removes expired photo Blobs and their
+   metadata. Failed Blob deletions retain metadata so a later run can retry.
+5. Redeploy
 
 ### Keeping dependencies current
 

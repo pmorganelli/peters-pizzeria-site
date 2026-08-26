@@ -99,6 +99,14 @@ describe('POST /api/reports — public takedown request', () => {
     expect(body.reports[0].count).toBe(2);
   });
 
+  it('does not lose distinct devices that report simultaneously', async () => {
+    const sliceId = await postSlice();
+    await Promise.all(Array.from({ length: 8 }, (_, i) => report(sliceId, `device-${i}`)));
+    const cookie = await adminCookie(base);
+    const { body } = await call(base, '/api/reports', { headers: { Cookie: cookie } });
+    expect(body.reports[0].count).toBe(8);
+  });
+
   it('does not let one device inflate the count by reporting repeatedly', async () => {
     const sliceId = await postSlice();
     for (let i = 0; i < 5; i++) await report(sliceId, 'same-device');

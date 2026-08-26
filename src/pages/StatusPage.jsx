@@ -43,18 +43,28 @@ export function StatusPage({ nav }) {
     // replaces could never change the value; it just cost a render pass.
     if (!trackedId || settled) return undefined;
     let cancelled = false;
-    const fetchOrder = () =>
-      api(`/api/orders?id=${encodeURIComponent(trackedId)}`)
-        .then((d) => { if (!cancelled) setOrder(d.order); })
+    let issued = 0;
+    let applied = 0;
+    const fetchOrder = () => {
+      const sequence = ++issued;
+      return api(`/api/orders?id=${encodeURIComponent(trackedId)}`)
+        .then((d) => {
+          if (!cancelled && sequence > applied) {
+            applied = sequence;
+            setOrder(d.order);
+          }
+        })
         .catch((err) => {
           // Forget the order only when the server says it's gone — a network
           // blip or a 5xx mustn't wipe live tracking mid-bake.
-          if (!cancelled && err.status === 404) {
+          if (!cancelled && sequence > applied && err.status === 404) {
+            applied = sequence;
             localStorage.removeItem(SAVED_KEY);
             setTrackedId(null);
             setOrder(null);
           }
         });
+    };
     fetchOrder().finally(() => { if (!cancelled) setLoading(false); });
     const t = setInterval(fetchOrder, POLL_MS);
     return () => { cancelled = true; clearInterval(t); };
@@ -62,11 +72,12 @@ export function StatusPage({ nav }) {
 
   const lookup = async (e) => {
     e.preventDefault();
-    if (query.trim().length < 2 || searching) return;
+    const pickupCode = query.trim().replace(/^#/, '');
+    if (pickupCode.length !== 4 || searching) return;
     setSearching(true);
     setLookupError('');
     try {
-      const { order: found } = await api(`/api/orders?find=${encodeURIComponent(query.trim())}`);
+      const { order: found } = await api(`/api/orders?find=${encodeURIComponent(pickupCode)}`);
       localStorage.setItem(SAVED_KEY, found.id);
       setOrder(found);
       setTrackedId(found.id);
@@ -96,15 +107,15 @@ export function StatusPage({ nav }) {
   const lookupForm = (
     <form className="status-lookup" onSubmit={lookup}>
       <label className="order-field status-lookup-field">
-        <span>Pickup code or name</span>
+        <span>Pickup code</span>
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="e.g. F4WS or Sam"
-          maxLength={60}
+          placeholder="e.g. F4WS"
+          maxLength={5}
         />
       </label>
-      <button className="btn-primary status-lookup-btn" type="submit" disabled={query.trim().length < 2 || searching}>
+      <button className="btn-primary status-lookup-btn" type="submit" disabled={query.trim().replace(/^#/, '').length !== 4 || searching}>
         {searching ? 'Searching…' : <>Find my order <Search size={13} /></>}
       </button>
       {lookupError && <div className="order-error status-lookup-error">{lookupError}</div>}
@@ -142,8 +153,8 @@ export function StatusPage({ nav }) {
             <div className="order-closed-icon" aria-hidden="true"><Pizza size={20} /></div>
             <h2 className="confirm-title">Let&apos;s find <em>your slices.</em></h2>
             <p className="order-closed-sub">
-              Enter the pickup code from your confirmation or the name the order is
-              under. We&apos;ll track it for you live until it&apos;s ready for pickup!
+              Enter the pickup code from your confirmation. We&apos;ll track it for
+              you live until it&apos;s ready for pickup!
             </p>
             {lookupForm}
             <div className="confirm-fineprint">

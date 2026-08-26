@@ -1,7 +1,10 @@
 import crypto from 'node:crypto';
-import { readBody, readQuery, send, isAdmin, clientIp, hasRedisEnv } from './_lib/util.js';
+import { BodyTooLargeError, readBody, readQuery, send, isAdmin, clientIp, hasRedisEnv } from './_lib/util.js';
 import { catalog, ADDON_CATEGORY, PIZZA_CATEGORY } from './_lib/catalog.js';
-import { createOrder, getOrder, listOrders, setOrderStatus, getSettings, rateLimit } from './_lib/store.js';
+import {
+  createOrder, getOrder, getOrderByCode, getOrderByIdempotency,
+  listOrders, setOrderStatus, getSettings, rateLimit,
+} from './_lib/store.js';
 import { isOpenNow } from './_lib/hours.js';
 
 // ── Order intake caps ──────────────────────────────────────────────────────
@@ -19,20 +22,16 @@ import { isOpenNow } from './_lib/hours.js';
 // global cap stays the real abuse backstop and keeps ~4x headroom over the
 // largest plausible rush. Both are here to be tuned rather than hunted for.
 //
-// Raising these has a second-order cost worth knowing before you do it again:
-// `listOrders()` in _lib/store.js only ever returns the newest `MAX_LISTED`
-// (300) orders, so a board that exceeds 300 live orders silently drops the
-// oldest ones — off the admin board, and out of the archive that "close for
-// the night" writes. At 240/10min that ceiling is ~13 minutes of sustained
-// maximum intake away, where the old 120 put it at ~25. Still unreachable on
-// legitimate volume (a night is tens of orders), but if these go up again,
-// raise MAX_LISTED with them.
+// The store also enforces a hard live-board capacity. It refuses a new order
+// once that capacity is reached instead of accepting an order that the admin
+// board or nightly archive cannot see.
 const RATE_WINDOW_S = 600;
 const ORDERS_PER_IP = 60;
 const ORDERS_GLOBAL = 240;
 
 const STATUSES = ['new', 'firing', 'ready', 'done', 'cancelled'];
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no 0/O/1/I/L
+const IDEMPOTENCY_KEY = /^[A-Za-z0-9_-]{16,128}$/;
 
 function makeId() {
   // 10 random bytes → unguessable; the id doubles as the customer's
@@ -113,21 +112,12 @@ async function create(req, res) {
     return send(res, 503, { error: 'Ordering is temporarily offline — find us at the window!' });
   }
 
-  const settings = await getSettings();
-  if (!isOpenNow(settings)) {
-    return send(res, 403, { error: 'We are not taking orders right now — check back when we open!', closed: true });
-  }
-
-  // Spam guards: cap per-IP and globally per window.
-  if (!(await rateLimit(`order:${clientIp(req)}`, ORDERS_PER_IP, RATE_WINDOW_S))) {
-    return send(res, 429, { error: 'Too many orders from this network — give it a few minutes.' });
-  }
-  if (!(await rateLimit('order:all', ORDERS_GLOBAL, RATE_WINDOW_S))) {
-    return send(res, 429, { error: 'We are getting slammed! Please try again in a couple minutes.' });
-  }
-
   let body;
-  try { body = await readBody(req); } catch { return send(res, 400, { error: 'Invalid JSON' }); }
+  try { body = await readBody(req); } catch (err) {
+    return send(res, err instanceof BodyTooLargeError ? 413 : 400, {
+      error: err instanceof BodyTooLargeError ? 'That order is too large.' : 'Invalid JSON',
+    });
+  }
 
   const name = clean(body.name, 60);
   const notes = clean(body.notes, 280);
@@ -136,6 +126,25 @@ async function create(req, res) {
   const items = validateItems(body.items);
   if (!items) return send(res, 400, { error: 'Your cart has an item we did not recognize — please refresh and try again.' });
 
+  const totalCents = items.reduce((sum, it) => sum + lineTotal(it), 0);
+
+  const idempotencyKey = String(req.headers['idempotency-key'] ?? '');
+  if (idempotencyKey && !IDEMPOTENCY_KEY.test(idempotencyKey)) {
+    return send(res, 400, { error: 'Invalid order retry key — refresh and try again.' });
+  }
+  const fingerprint = crypto.createHash('sha256').update(JSON.stringify({ name, notes, items, totalCents })).digest('hex');
+
+  // A retry must return the first result even if the store closed or a rate
+  // window filled after that result was committed. Replaying before those
+  // gates is what makes an ambiguous network failure safe.
+  const replay = await getOrderByIdempotency(idempotencyKey, fingerprint);
+  if (replay.conflict) return send(res, 409, { error: 'This retry key was already used for a different order.' });
+  if (replay.order) return send(res, 200, { order: replay.order, replayed: true });
+
+  const settings = await getSettings();
+  if (!isOpenNow(settings)) {
+    return send(res, 403, { error: 'We are not taking orders right now — check back when we open!', closed: true });
+  }
   const eightySixed = new Set(settings.unavailable ?? []);
   const soldOut = items.find((it) => eightySixed.has(it.name))
     ?? items.flatMap((it) => it.addons ?? []).find((a) => eightySixed.has(a.name));
@@ -143,58 +152,62 @@ async function create(req, res) {
     return send(res, 400, { error: `${soldOut.name} just sold out — please remove it from your cart.`, soldOut: soldOut.name });
   }
 
-  const totalCents = items.reduce((sum, it) => sum + lineTotal(it), 0);
+  // Fresh attempts consume the abuse budget; a replay of an already-created
+  // order above does not.
+  if (!(await rateLimit(`order:${clientIp(req)}`, ORDERS_PER_IP, RATE_WINDOW_S))) {
+    return send(res, 429, { error: 'Too many orders from this network — give it a few minutes.' });
+  }
+  if (!(await rateLimit('order:all', ORDERS_GLOBAL, RATE_WINDOW_S))) {
+    return send(res, 429, { error: 'We are getting slammed! Please try again in a couple minutes.' });
+  }
 
-  // 4 chars from a 31-symbol alphabet is only ~923k codes — at a few hundred
-  // live orders a birthday collision is a real % chance, and `find` would
-  // then hand a customer someone else's order. Reroll against live codes.
-  const liveCodes = new Set((await listOrders()).map((o) => o.code));
-  let code = makeCode();
-  for (let i = 0; i < 10 && liveCodes.has(code); i++) code = makeCode();
-
-  const now = Date.now();
-  const order = {
-    id: makeId(),
-    code,
-    name,
-    notes,
-    items,
-    totalCents,
-    status: 'new',
-    createdAt: now,
-    updatedAt: now,
-  };
-  await createOrder(order);
-  return send(res, 201, { order });
+  // The store owns both uniqueness checks. A pre-read here would race another
+  // serverless invocation between choosing a code and writing the order.
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const now = Date.now();
+    const order = {
+      id: makeId(),
+      code: makeCode(),
+      name,
+      notes,
+      items,
+      totalCents,
+      status: 'new',
+      createdAt: now,
+      updatedAt: now,
+    };
+    const stored = await createOrder(order, { idempotencyKey: idempotencyKey || null, fingerprint });
+    if (stored.reason === 'code_conflict') continue;
+    if (stored.reason === 'capacity') {
+      return send(res, 503, { error: 'The order board is full right now — please order at the window.' });
+    }
+    if (stored.reason === 'idempotency_conflict') {
+      return send(res, 409, { error: 'This retry key was already used for a different order.' });
+    }
+    return send(res, stored.created ? 201 : 200, { order: stored.order, replayed: !stored.created });
+  }
+  return send(res, 503, { error: 'Could not reserve a pickup code — please try again.' });
 }
 
 // Public responses never include contact/notes — the status UI doesn't show
-// them, and the `find` lookup means typing a name can reach someone else's order.
+// them, and order ids/codes are the credentials for public reads.
 // `contact` is no longer collected or stored (no UI has asked for it in a long
 // time), but it stays in this destructure deliberately: orders written before
 // the field was dropped can still be live in Redis for up to 3 days, and this
 // is the only thing standing between one of those and a public response.
 const publicOrder = ({ contact, notes, ...rest }) => rest;
 
-const ACTIVE = new Set(['new', 'firing', 'ready']);
-
-// Match a pickup code (exact) or a name (full, first, or prefix) against the
-// recent orders; prefer the newest still-active order when names collide.
+// A pickup code is a credential, while a name is public information. Name or
+// prefix lookup used to return the same response (including the posting code),
+// which let anyone search common names and act as that customer.
 async function findOrder(query) {
-  const q = query.replace(/^#/, '').replace(/\s+/g, ' ').trim().toLowerCase();
-  if (q.length < 2) return null;
-  const orders = await listOrders(); // newest first, bounded by the 3-day TTL
-  const byCode = orders.find((o) => o.code.toLowerCase() === q);
-  if (byCode) return byCode;
-  const byName = orders.filter((o) => {
-    const n = o.name.toLowerCase();
-    return n === q || n.split(' ')[0] === q || n.startsWith(q);
-  });
-  return byName.find((o) => ACTIVE.has(o.status)) ?? byName[0] ?? null;
+  const code = query.replace(/^#/, '').trim().toUpperCase();
+  if (code.length !== 4 || [...code].some((ch) => !CODE_ALPHABET.includes(ch))) return null;
+  return getOrderByCode(code);
 }
 
 // GET /api/orders?id=…   — public status of a single order (customer polling)
-// GET /api/orders?find=… — public lookup by pickup code or name (rate-limited)
+// GET /api/orders?find=… — public lookup by exact pickup code (rate-limited)
 // GET /api/orders        — full board (admin only)
 async function read(req, res) {
   const { id, find } = readQuery(req);
@@ -208,7 +221,7 @@ async function read(req, res) {
       return send(res, 429, { error: 'Too many lookups — give it a minute and try again.' });
     }
     const order = await findOrder(String(find));
-    if (!order) return send(res, 404, { error: 'No order under that code or name — double-check the spelling, or it may have expired.' });
+    if (!order) return send(res, 404, { error: 'No order under that pickup code — double-check it, or it may have expired.' });
     return send(res, 200, { order: publicOrder(order) });
   }
   if (!isAdmin(req)) return send(res, 401, { error: 'Admin login required' });
@@ -220,7 +233,9 @@ async function patch(req, res) {
   if (!isAdmin(req)) return send(res, 401, { error: 'Admin login required' });
   const { id } = readQuery(req);
   let body;
-  try { body = await readBody(req); } catch { return send(res, 400, { error: 'Invalid JSON' }); }
+  try { body = await readBody(req); } catch (err) {
+    return send(res, err instanceof BodyTooLargeError ? 413 : 400, { error: err instanceof BodyTooLargeError ? 'Invalid request.' : 'Invalid JSON' });
+  }
   if (!id || !STATUSES.includes(body.status)) return send(res, 400, { error: 'Invalid id or status' });
   // Terminal states are final — a stale admin tab must not resurrect a
   // cancelled order or un-complete a picked-up one. The check-and-write is

@@ -119,21 +119,21 @@ function StorePanel({ storeInfo, savingStore, draft, setDraft, saveStore, curren
           <button type="button"
             className={storeInfo.mode === 'open' ? 'active' : ''}
             disabled={savingStore}
-            onClick={() => saveStore({ mode: 'open', hours: currentHours() })}
+            onClick={() => saveStore({ mode: 'open' })}
           >
             Open now
           </button>
           <button type="button"
             className={storeInfo.mode === 'closed' ? 'active' : ''}
             disabled={savingStore}
-            onClick={() => saveStore({ mode: 'closed', hours: currentHours() })}
+            onClick={() => saveStore({ mode: 'closed' })}
           >
             Close
           </button>
           <button type="button"
             className={storeInfo.mode === 'auto' ? 'active' : ''}
             disabled={savingStore}
-            onClick={() => saveStore({ mode: 'auto', hours: currentHours() })}
+            onClick={() => saveStore({ mode: 'auto' })}
           >
             Use schedule
           </button>
@@ -152,7 +152,7 @@ function StorePanel({ storeInfo, savingStore, draft, setDraft, saveStore, curren
           <button type="button"
             className="store-save"
             disabled={savingStore}
-            onClick={() => saveStore({ mode: storeInfo.mode, hours: currentHours() })}
+            onClick={() => saveStore({ hours: currentHours() })}
           >
             Save times
           </button>
@@ -268,6 +268,8 @@ export function AdminPage({ nav }) {
   // taken before a mutation is stale — applying it would visually revert the
   // change, and a re-tap would then persist the wrong state to the server.
   const epochRef = useRef(0);
+  const pollIssuedRef = useRef(0);
+  const pollAppliedRef = useRef(0);
 
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
@@ -301,6 +303,7 @@ export function AdminPage({ nav }) {
   const load = useCallback(async () => {
     if (!authed) return;
     const snapshot = epochRef.current;
+    const sequence = ++pollIssuedRef.current;
     try {
       const [{ orders: list }, status, reportData] = await Promise.all([
         api('/api/orders'),
@@ -313,7 +316,12 @@ export function AdminPage({ nav }) {
         // from an empty queue, which is the overwhelmingly common case.
         api('/api/reports').catch(() => ({ reports: null })),
       ]);
-      if (epochRef.current !== snapshot) return; // a mutation superseded this poll
+      // A newer request merely being issued does not make this response stale:
+      // when requests consistently take longer than POLL_MS, rejecting on that
+      // basis would reject every response. Only reject a response when a newer
+      // one has already been applied (or a mutation invalidated its snapshot).
+      if (epochRef.current !== snapshot || sequence <= pollAppliedRef.current) return;
+      pollAppliedRef.current = sequence;
       setOrders(list);
       setStoreInfo(status);
       setReportsUnavailable(reportData.reports === null);
@@ -324,7 +332,11 @@ export function AdminPage({ nav }) {
         setDraft({ day: status.hours.day, start: status.hours.start, end: status.hours.end });
       }
     } catch (err) {
-      if (err.status === 401) logout('Session expired — log in again.');
+      // As with successful polls, an issued-but-unsettled request must not
+      // suppress this result. Ignore only errors older than applied state.
+      if (epochRef.current === snapshot && sequence > pollAppliedRef.current && err.status === 401) {
+        logout('Session expired — log in again.');
+      }
     }
   }, [authed, logout, setReports, setReportsUnavailable]);
 
@@ -352,9 +364,7 @@ export function AdminPage({ nav }) {
   });
 
   const toggleItem = (name) => {
-    const next = new Set(storeInfo?.unavailable || []);
-    if (next.has(name)) next.delete(name); else next.add(name);
-    saveStore({ unavailable: [...next] });
+    saveStore({ availability: { name, unavailable: !unavailableSet.has(name) } });
   };
 
   const closeNight = async () => {
@@ -419,7 +429,7 @@ export function AdminPage({ nav }) {
     if (window.confirm(`Cancel order #${order.code} for ${order.name}?`)) advance(order, 'cancelled');
   };
 
-  const unavailableSet = useMemo(() => new Set(storeInfo?.unavailable || []), [storeInfo]);
+  const unavailableSet = new Set(storeInfo?.unavailable || []);
 
   const fireNext = useMemo(() => {
     if (!orders) return { pizzas: [], addons: [], waiting: 0, oldest: null };

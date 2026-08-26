@@ -8,6 +8,9 @@
     "minimumCacheTTL": 2592000,
     "dangerouslyAllowSVG": false
   },
+  "crons": [
+    { "path": "/api/cleanup", "schedule": "0 8 * * *" }
+  ],
   "rewrites": [
     {
       "source": "/((?!api/).*)",

@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { Readable } from 'node:stream';
 import { resetEnv } from '../../tests/helpers/env.js';
-import { mintAdminToken, verifyAdminToken, isAdmin, SESSION_MAX_AGE_MS } from './util.js';
+import {
+  BodyTooLargeError, isAdmin, mintAdminToken, readBody,
+  SESSION_MAX_AGE_MS, verifyAdminToken,
+} from './util.js';
 
 // The admin token used to be an HMAC over a constant string: byte-identical on
 // every login, valid forever, and impossible to revoke without changing
@@ -114,5 +118,12 @@ describe('isAdmin', () => {
   it('finds its cookie among others and ignores a malformed neighbour', () => {
     const token = mintAdminToken();
     expect(isAdmin(req(`pp_cart=%E0%A4%A; pp_admin=${token}; other=1`))).toBe(true);
+  });
+});
+
+describe('readBody', () => {
+  it('enforces the cap while reading a chunked request', async () => {
+    const req = Readable.from([Buffer.from('{"value":"'), Buffer.alloc(20, 0x61), Buffer.from('"}')]);
+    await expect(readBody(req, { maxBytes: 16 })).rejects.toBeInstanceOf(BodyTooLargeError);
   });
 });

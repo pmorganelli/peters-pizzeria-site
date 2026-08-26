@@ -12,6 +12,7 @@ const CART_KEY = 'pp_cart:v2';
 const CART_KEY_UNVERSIONED = 'pp_cart2'; // pre-versioning name for the same shape
 const LEGACY_CART_KEY = 'pp_cart';
 const WHO_KEY = 'pp_who:v1';
+const ATTEMPT_KEY = 'pp_order_attempt:v1';
 
 const readJSON = (key, fallback) => {
   try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
@@ -279,13 +280,22 @@ export function OrderPage({ nav }) {
     // The cancelled flag covers the fetch in flight when the interval clears —
     // without it, a late response resurrects an order the user just dismissed.
     let cancelled = false;
+    let issued = 0;
+    let applied = 0;
     const t = setInterval(() => {
+      const sequence = ++issued;
       api(`/api/orders?id=${encodeURIComponent(orderId)}`)
-        .then((d) => { if (!cancelled) setOrder(d.order); })
+        .then((d) => {
+          if (!cancelled && sequence > applied) {
+            applied = sequence;
+            setOrder(d.order);
+          }
+        })
         .catch((err) => {
           // Forget the order only when the server says it's gone — a network
           // blip or a 5xx mustn't wipe live tracking mid-bake.
-          if (!cancelled && err.status === 404) {
+          if (!cancelled && sequence > applied && err.status === 404) {
+            applied = sequence;
             localStorage.removeItem(SAVED_KEY);
             setOrder(null);
           }
@@ -374,14 +384,23 @@ export function OrderPage({ nav }) {
     setPlacing(true);
     setError('');
     try {
+      const body = {
+        name, notes,
+        items: cartLines.map(({ name: n, qty, addons }) =>
+          addons.length ? { name: n, qty, addons } : { name: n, qty }),
+      };
+      const fingerprint = JSON.stringify(body);
+      const savedAttempt = readJSON(ATTEMPT_KEY, null);
+      const key = savedAttempt?.fingerprint === fingerprint
+        ? savedAttempt.key
+        : (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+      localStorage.setItem(ATTEMPT_KEY, JSON.stringify({ key, fingerprint }));
       const { order: created } = await api('/api/orders', {
         method: 'POST',
-        body: {
-          name, notes,
-          items: cartLines.map(({ name: n, qty, addons }) =>
-            addons.length ? { name: n, qty, addons } : { name: n, qty }),
-        },
+        body,
+        headers: { 'Idempotency-Key': key },
       });
+      localStorage.removeItem(ATTEMPT_KEY);
       localStorage.setItem(SAVED_KEY, created.id);
       localStorage.setItem(WHO_KEY, JSON.stringify({ name }));
       setOrder(created);
@@ -399,6 +418,7 @@ export function OrderPage({ nav }) {
 
   const newOrder = () => {
     localStorage.removeItem(SAVED_KEY);
+    localStorage.removeItem(ATTEMPT_KEY);
     setOrder(null);
   };
 

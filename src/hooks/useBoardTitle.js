@@ -1,9 +1,9 @@
 import { useEffect } from 'react';
+import { PAGE_TITLES } from '../utils/routes';
 
-// Captured at module load, before the board ever renames the tab, so the
-// cleanup always restores the site's real title rather than whatever the
-// previous render happened to set.
-const BASE_TITLE = document.title;
+// Stable route title: the hook's cleanup must not capture whichever page title
+// happened to be in the document when this lazy module first loaded.
+const BASE_TITLE = PAGE_TITLES.admin;
 
 // Surfaces the board's queue in the tab title, so an admin who has the board
 // open behind another tab still sees work arriving.

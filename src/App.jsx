@@ -11,8 +11,9 @@ import { ArticlePage } from './pages/ArticlePage';
 import { GalleryPage } from './pages/GalleryPage';
 import { OrderPage }   from './pages/OrderPage';
 import { StatusPage }  from './pages/StatusPage';
-import { routeFromPath, pathForRoute, titleForRoute } from './utils/routes';
+import { routeFromPath, pathForRoute } from './utils/routes';
 import { markChunkLoaded, shouldReloadForChunkFailure } from './utils/chunkReload';
+import { metadataForRoute } from './data/routeMetadata';
 
 // Split out of the initial bundle. Everything above is on the path a first-time
 // visitor actually walks (home → menu/blog/gallery → order); everything below
@@ -75,6 +76,7 @@ export default function App() {
   const [lbIndex,  setLbIndex]  = useState(0);
   const [lbOpen,   setLbOpen]   = useState(false);
   const [lbCaptions, setLbCaptions] = useState(null);
+  const [lbAltTexts, setLbAltTexts] = useState(null);
   // Bumped in the same batch as the page swap purely so the rise below always
   // gets a commit to hang off — navigating to the page that's already mounted
   // (article → same article) changes no other state, and a layout effect that
@@ -123,12 +125,24 @@ export default function App() {
   }, []);
 
   // The tab title doubles as the label on each history entry. Skipped on the
-  // two admin pages: useBoardTitle owns the title there, and it only rewrites
+  // admin board: useBoardTitle owns the title there, and it only rewrites
   // on a count change, so clobbering it here could leave the wrong title up
   // until the next new order.
   useEffect(() => {
-    if (page === 'admin' || page === 'nights') return;
-    document.title = titleForRoute(page, article);
+    if (page === 'admin') return;
+    const metadata = metadataForRoute(page, article);
+    document.title = metadata.title;
+    const setContent = (selector, value) => document.querySelector(selector)?.setAttribute('content', value);
+    setContent('meta[name="description"]', metadata.description);
+    setContent('meta[property="og:title"]', metadata.title);
+    setContent('meta[property="og:description"]', metadata.description);
+    setContent('meta[property="og:type"]', metadata.type);
+    setContent('meta[property="og:url"]', metadata.canonical);
+    setContent('meta[property="og:image"]', metadata.image);
+    setContent('meta[name="twitter:title"]', metadata.title);
+    setContent('meta[name="twitter:description"]', metadata.description);
+    setContent('meta[name="twitter:image"]', metadata.image);
+    document.querySelector('link[rel="canonical"]')?.setAttribute('href', metadata.canonical);
   }, [page, article]);
 
   // Second half of nav()'s swap: the new page is now committed to the DOM
@@ -307,8 +321,8 @@ export default function App() {
 
   const openArticle  = useCallback((post) => nav('article', post), [nav]);
   // `captions` is optional — only the community wall passes one.
-  const openLightbox = useCallback((photos, index, captions = null) => {
-    setLbPhotos(photos); setLbIndex(index); setLbCaptions(captions); setLbOpen(true);
+  const openLightbox = useCallback((photos, index, captions = null, altTexts = null) => {
+    setLbPhotos(photos); setLbIndex(index); setLbCaptions(captions); setLbAltTexts(altTexts); setLbOpen(true);
   }, []);
   const lbPrev = useCallback(() => setLbIndex((i) => (i - 1 + lbPhotos.length) % lbPhotos.length), [lbPhotos]);
   const lbNext = useCallback(() => setLbIndex((i) => (i + 1) % lbPhotos.length), [lbPhotos]);
@@ -372,6 +386,7 @@ export default function App() {
         <Lightbox
           photos={lbPhotos}
           captions={lbCaptions}
+          altTexts={lbAltTexts}
           index={lbIndex}
           onClose={() => setLbOpen(false)}
           onPrev={lbPrev}

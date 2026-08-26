@@ -219,4 +219,25 @@ describe('OrderPage', () => {
       expect(saved[SLICES[0].name]).toHaveLength(1);
     });
   });
+
+  it('reuses the same idempotency key when an ambiguous submission is retried', async () => {
+    const fetchSpy = mockFetch({
+      '/api/orders': { status: 502, body: { error: 'Temporary upstream error' } },
+      '/api/store': { body: OPEN_STORE },
+    });
+    render(<OrderPage nav={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(SLICES[0].name)).toBeTruthy());
+    addOne(SLICES[0].name);
+    fireEvent.change(screen.getByPlaceholderText("Who's picking up?"), { target: { value: 'Retry Customer' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /place order/i }));
+    await waitFor(() => expect(screen.getByText('Temporary upstream error')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /place order/i }));
+    await waitFor(() => {
+      const posts = fetchSpy.mock.calls.filter(([, init]) => init.method === 'POST');
+      expect(posts).toHaveLength(2);
+      expect(posts[0][1].headers['Idempotency-Key']).toBe(posts[1][1].headers['Idempotency-Key']);
+      expect(JSON.parse(localStorage.getItem('pp_order_attempt:v1')).key).toBe(posts[0][1].headers['Idempotency-Key']);
+    });
+  });
 });

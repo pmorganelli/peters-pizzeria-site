@@ -2,14 +2,42 @@ import crypto from 'node:crypto';
 
 // ── Request helpers (work both on Vercel and in scripts/dev-api.mjs) ──
 
-export async function readBody(req) {
+export const DEFAULT_JSON_BODY_BYTES = 100_000;
+
+export class BodyTooLargeError extends Error {
+  constructor(limit) {
+    super(`Request body exceeds ${limit} bytes`);
+    this.name = 'BodyTooLargeError';
+    this.limit = limit;
+  }
+}
+
+const assertBodySize = (bytes, limit) => {
+  if (Number.isFinite(limit) && bytes > limit) throw new BodyTooLargeError(limit);
+};
+
+export async function readBody(req, { maxBytes = DEFAULT_JSON_BODY_BYTES } = {}) {
   let body;
   if (req.body !== undefined) {
     // Vercel parses JSON bodies; it may hand us a string for other content types
-    body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body;
+    if (typeof req.body === 'string') {
+      assertBodySize(Buffer.byteLength(req.body), maxBytes);
+      body = JSON.parse(req.body || '{}');
+    } else {
+      // The platform has already buffered and parsed this branch, but enforcing
+      // the same application limit keeps Vercel and the local Node server from
+      // accepting different payloads.
+      assertBodySize(Buffer.byteLength(JSON.stringify(req.body ?? {})), maxBytes);
+      body = req.body;
+    }
   } else {
     const chunks = [];
-    for await (const chunk of req) chunks.push(chunk);
+    let bytes = 0;
+    for await (const chunk of req) {
+      bytes += chunk.length;
+      assertBodySize(bytes, maxBytes);
+      chunks.push(chunk);
+    }
     const raw = Buffer.concat(chunks).toString('utf8');
     body = raw ? JSON.parse(raw) : {};
   }

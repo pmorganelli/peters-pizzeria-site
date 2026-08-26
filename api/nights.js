@@ -1,10 +1,11 @@
 import crypto from 'node:crypto';
 import { send, isAdmin, readQuery } from './_lib/util.js';
-import { listOrders, clearOrders } from './_lib/store.js';
-import { createNight, listNights, getNight, deleteNight } from './_lib/nights.js';
+import { listOrders } from './_lib/store.js';
+import { acquireNightCloseLock, archiveNightAndClear, listNights, getNight, deleteNight } from './_lib/nights.js';
 
-function makeId() {
-  return `n${crypto.randomBytes(8).toString('hex')}`;
+function makeId(orders) {
+  const fingerprint = orders.map((order) => order.id).sort().join('\n');
+  return `n${crypto.createHash('sha256').update(fingerprint).digest('hex').slice(0, 16)}`;
 }
 
 export default async function handler(req, res) {
@@ -40,35 +41,42 @@ const archiveOrder = ({ id, code, name, items, totalCents, status }) => ({ id, c
 // only counts orders actually picked up — a cancelled order was never paid
 // for, so it's tallied separately rather than folded into the total.
 async function close(req, res) {
-  const orders = await listOrders();
+  const token = crypto.randomBytes(16).toString('hex');
+  const release = await acquireNightCloseLock(token);
+  if (!release) {
+    return send(res, 409, { error: 'Another device is already closing the night. Refresh in a moment.' });
+  }
+  try {
+    const orders = await listOrders();
   // Refuse an empty board rather than writing a spurious zero-count record
   // into the permanent archive. Reachable in practice when two admin tabs
   // race: the second tab's stale poll still shows orders, its confirm dialog
   // quotes them, but by the time its POST lands the first tab has already
   // archived and cleared everything. 409 (not 400) so the client can tell
   // "state moved under you" apart from a malformed request.
-  if (orders.length === 0) {
-    return send(res, 409, { error: 'Nothing to archive — the board is already empty. Another device may have closed the night.' });
-  }
-  const done = orders.filter((o) => o.status === 'done');
-  const cancelled = orders.filter((o) => o.status === 'cancelled');
-  const totalCents = done.reduce((sum, o) => sum + o.totalCents, 0);
+    if (orders.length === 0) {
+      return send(res, 409, { error: 'Nothing to archive — the board is already empty. Another device may have closed the night.' });
+    }
+    const done = orders.filter((o) => o.status === 'done');
+    const cancelled = orders.filter((o) => o.status === 'cancelled');
+    const totalCents = done.reduce((sum, o) => sum + o.totalCents, 0);
 
-  const night = {
-    id: makeId(),
-    closedAt: Date.now(),
-    orderCount: orders.length,
-    doneCount: done.length,
-    cancelledCount: cancelled.length,
-    totalCents,
-    orders: orders.map(archiveOrder),
-  };
-  await createNight(night);
-  // Pass the exact ids just archived, not "everything currently live" — an
-  // order placed between the listOrders() snapshot above and this call would
-  // otherwise be deleted without ever being archived. See clearOrders().
-  await clearOrders(orders.map((o) => o.id));
-  return send(res, 201, { night });
+    const night = {
+      id: makeId(orders),
+      closedAt: Date.now(),
+      orderCount: orders.length,
+      doneCount: done.length,
+      cancelledCount: cancelled.length,
+      totalCents,
+      orders: orders.map(archiveOrder),
+    };
+    const archived = await archiveNightAndClear(night, orders);
+    return send(res, 201, { night: archived });
+  } finally {
+    // A transient lock-release failure must not replace a successfully
+    // committed archive response. The lease still expires on its own.
+    await release().catch((err) => console.error('night close lock release error:', err));
+  }
 }
 
 // DELETE /api/nights?id=… — erase one archived night for good.

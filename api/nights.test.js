@@ -106,6 +106,18 @@ describe('POST /api/nights — close for the night', () => {
     const { body: listed } = await call(base, '/api/nights', { headers: { Cookie: cookie } });
     expect(listed.nights).toHaveLength(1);
   });
+
+  it('serializes simultaneous closes into one archive', async () => {
+    await insertOrder({ status: 'done', totalCents: 400 });
+    const cookie = await adminCookie(base);
+    const results = await Promise.all([
+      call(base, '/api/nights', { method: 'POST', headers: { Cookie: cookie } }),
+      call(base, '/api/nights', { method: 'POST', headers: { Cookie: cookie } }),
+    ]);
+    expect(results.map((result) => result.status).sort()).toEqual([201, 409]);
+    const { body } = await call(base, '/api/nights', { headers: { Cookie: cookie } });
+    expect(body.nights).toHaveLength(1);
+  });
 });
 
 describe('DELETE /api/nights — erase an archived night', () => {

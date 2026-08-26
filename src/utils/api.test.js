@@ -41,6 +41,19 @@ describe('api()', () => {
     expect(spy.mock.calls[1][1].body).toBe('{"items":[]}');
   });
 
+  it('forwards custom headers and an abort signal', async () => {
+    const spy = stubFetch();
+    const controller = new AbortController();
+    await api('/api/orders', {
+      method: 'POST', body: {}, signal: controller.signal,
+      headers: { 'Idempotency-Key': 'retry_key_1234567890' },
+    });
+    expect(spy.mock.calls[0][1]).toMatchObject({
+      signal: controller.signal,
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'retry_key_1234567890' },
+    });
+  });
+
   // The order page and the admin board both surface `e.message` straight to the
   // user and branch on `e.status` (a 400 refetches store hours, a 403 shows the
   // closed card). Both have to survive the throw.

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "npm run gen:sitemap && vite build",
+    "build": "npm run gen:sitemap && vite build && node scripts/gen-route-html.mjs",
     "gen:sitemap": "node scripts/gen-sitemap.mjs",
     "preview": "vite preview",
     "dev:api": "node scripts/dev-api.mjs",

@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { put, del } from '@vercel/blob';
-import { readBody, readQuery, send, isAdmin, clientIp, hasRedisEnv } from './_lib/util.js';
-import { listOrders, rateLimit, ORDER_TTL_SECONDS } from './_lib/store.js';
+import { BodyTooLargeError, readBody, readQuery, send, isAdmin, clientIp, hasRedisEnv } from './_lib/util.js';
+import { getOrderByCode, rateLimit, ORDER_TTL_SECONDS } from './_lib/store.js';
 import {
   createSlice, getSlice, listSlices, setSliceHidden, deleteSlice,
   claimSliceQuota, releaseSliceQuota,
@@ -20,8 +20,14 @@ const POST_WINDOW_MS = ORDER_TTL_SECONDS * 1000;
 // buffered body small.
 const MAX_BODY_BYTES = 1_500_000;
 const MAX_IMAGE_BYTES = 1_000_000;
+const MAX_IMAGE_EDGE = 4_096;
+const MAX_IMAGE_PIXELS = 16_000_000;
 // {device} is a short token; a DELETE body claiming more than this is abuse.
 const MAX_DELETE_BODY_BYTES = 2_000;
+// The wall polls every few seconds from every visible tab. Bound both the
+// Redis work and response/render size while retaining the complete index for
+// cleanup and authenticated moderation.
+const PUBLIC_FEED_LIMIT = 300;
 
 // @vercel/blob accepts either a long-lived read/write token or OIDC auth
 // (VERCEL_OIDC_TOKEN + BLOB_STORE_ID) — connecting a store through the
@@ -148,9 +154,10 @@ async function read(req, res) {
     const all = await listSlices();
     return send(res, 200, { slices: all.map(adminSlice) });
   }
-  const all = await listSlices();
-  // One pass rather than .filter().map() — the wall can hold 300 records and
-  // this runs on every poll from every open tab.
+  const all = await listSlices({ limit: PUBLIC_FEED_LIMIT });
+  // One pass rather than .filter().map() — this runs on every poll from every
+  // open tab. Hidden posts count toward the scan cap, which keeps work bounded
+  // even if moderation hides a large burst of recent uploads.
   const visible = [];
   for (const s of all) if (!s.hidden) visible.push(publicSlice(s));
   return send(res, 200, { slices: visible });
@@ -176,15 +183,19 @@ async function create(req, res) {
     return send(res, 429, { error: 'The wall is busy right now — try again in a few minutes.' });
   }
 
-  // Reject oversized payloads on the declared length, before a single chunk is
-  // buffered. readBody() reads the whole stream with no byte accounting.
+  // Reject oversized declared bodies immediately; readBody() also counts the
+  // stream so chunked requests cannot bypass the same cap.
   const declared = Number(req.headers['content-length']);
   if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
     return send(res, 413, { error: 'That photo is too large — try a smaller one.' });
   }
 
   let body;
-  try { body = await readBody(req); } catch { return send(res, 400, { error: 'Invalid JSON' }); }
+  try { body = await readBody(req, { maxBytes: MAX_BODY_BYTES }); } catch (err) {
+    return send(res, err instanceof BodyTooLargeError ? 413 : 400, {
+      error: err instanceof BodyTooLargeError ? 'That photo is too large — try a smaller one.' : 'Invalid JSON',
+    });
+  }
 
   // Reject a non-boolean rather than coercing it. Guessing is wrong in both
   // directions here: treat a stray truthy value as false and someone who asked
@@ -216,15 +227,17 @@ async function create(req, res) {
   if (!meta || !meta.w || !meta.h) {
     return send(res, 400, { error: 'That file is not a photo we can display (JPEG, PNG or WebP only).' });
   }
+  if (meta.w > MAX_IMAGE_EDGE || meta.h > MAX_IMAGE_EDGE || meta.w * meta.h > MAX_IMAGE_PIXELS) {
+    return send(res, 413, { error: 'That photo has dimensions that are too large — try a smaller one.' });
+  }
 
   const code = clean(body.code, 12).replace(/^#/, '').toUpperCase();
   if (code.length < 3) return send(res, 400, { error: 'Enter the pickup code from your order.' });
 
-  // Exact code match only — never by name. The `find` lookup in orders.js
-  // matches names too, which is fine for reading your own status but would let
-  // anyone post as anyone here.
-  const orders = await listOrders();
-  const order = orders.find((o) => o.code?.toUpperCase() === code);
+  // Exact code match only — never by name. The pickup code is the credential
+  // for posting, so use its atomic reservation index rather than scanning the
+  // live board.
+  const order = await getOrderByCode(code);
   const tooOld = order && Date.now() - order.createdAt > POST_WINDOW_MS;
   // One generic message for missing / expired / cancelled, so the endpoint
   // can't be used to probe which pickup codes are real.
@@ -297,7 +310,9 @@ async function patch(req, res) {
   if (!isAdmin(req)) return send(res, 401, { error: 'Admin login required' });
   const { id } = readQuery(req);
   let body;
-  try { body = await readBody(req); } catch { return send(res, 400, { error: 'Invalid JSON' }); }
+  try { body = await readBody(req); } catch (err) {
+    return send(res, err instanceof BodyTooLargeError ? 413 : 400, { error: err instanceof BodyTooLargeError ? 'Invalid request.' : 'Invalid JSON' });
+  }
   if (!id || typeof body.hidden !== 'boolean') return send(res, 400, { error: 'Invalid id or hidden flag' });
   const slice = await setSliceHidden(id, body.hidden);
   if (!slice) return send(res, 404, { error: 'Post not found' });
@@ -327,7 +342,7 @@ async function remove(req, res) {
       return send(res, 413, { error: 'Invalid request.' });
     }
     let body = {};
-    try { body = await readBody(req); } catch { /* no credential; fails below */ }
+    try { body = await readBody(req, { maxBytes: MAX_DELETE_BODY_BYTES }); } catch { /* no credential; fails below */ }
     if (!ownsSlice(slice, body.device)) {
       return send(res, 403, { error: 'That photo was posted from a different device.' });
     }

@@ -58,6 +58,17 @@ export async function adminCookie(base, password = 'admin') {
 }
 
 let orderCounter = 0;
+const PICKUP_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+
+function fixtureCode(value) {
+  let n = value;
+  let code = '';
+  for (let i = 0; i < 4; i += 1) {
+    code = PICKUP_ALPHABET[n % PICKUP_ALPHABET.length] + code;
+    n = Math.floor(n / PICKUP_ALPHABET.length);
+  }
+  return code;
+}
 
 // Writes an order straight into the store, bypassing the HTTP handler. Used
 // for edge cases (an expired or cancelled order) that placeOrder() can't
@@ -67,7 +78,7 @@ export async function insertOrder(overrides = {}) {
   const now = Date.now();
   const order = {
     id: `test-order-${orderCounter}`,
-    code: `TEST${orderCounter}`,
+    code: fixtureCode(orderCounter),
     name: 'Test Customer',
     contact: '',
     notes: '',

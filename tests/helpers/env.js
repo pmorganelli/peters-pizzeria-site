@@ -13,18 +13,21 @@ const BLOB_KEYS = ['BLOB_READ_WRITE_TOKEN', 'BLOB_STORE_ID', 'VERCEL_OIDC_TOKEN'
 // don't fire), no admin password (devMode() true, password "admin"), and
 // fresh in-memory stores.
 export function resetEnv() {
-  for (const k of [...REDIS_KEYS, ...BLOB_KEYS, 'VERCEL', 'ADMIN_PASSWORD']) delete process.env[k];
+  for (const k of [...REDIS_KEYS, ...BLOB_KEYS, 'VERCEL', 'ADMIN_PASSWORD', 'CRON_SECRET']) delete process.env[k];
   // api/_lib/slices.js and api/_lib/store.js each capture their in-memory
   // Map in a module-top-level `const`, read once at first import — deleting
   // the globalThis key wouldn't un-bind that reference for the rest of the
   // test file, so the maps must be cleared in place instead.
   globalThis.__ppOrderStore?.clear();
+  globalThis.__ppOrderCodeStore?.clear();
+  globalThis.__ppOrderIdempotency?.clear();
   globalThis.__ppSliceStore?.clear();
   globalThis.__ppSliceQuota?.clear();
   globalThis.__ppNightStore?.clear();
   globalThis.__ppReportStore?.clear();
   globalThis.__ppRate?.clear();
   delete globalThis.__ppSettings;
+  delete globalThis.__ppNightCloseLock;
 }
 
 export function configureBlob() {

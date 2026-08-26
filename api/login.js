@@ -1,4 +1,4 @@
-import { readBody, send, checkPassword, adminConfigured, mintAdminToken, devMode, clientIp, isAdmin, setAuthCookie, clearAuthCookie } from './_lib/util.js';
+import { BodyTooLargeError, readBody, send, checkPassword, adminConfigured, mintAdminToken, devMode, clientIp, isAdmin, setAuthCookie, clearAuthCookie } from './_lib/util.js';
 import { rateLimit } from './_lib/store.js';
 
 export default async function handler(req, res) {
@@ -21,7 +21,9 @@ async function login(req, res) {
   }
 
   let body;
-  try { body = await readBody(req); } catch { return send(res, 400, { error: 'Invalid JSON' }); }
+  try { body = await readBody(req); } catch (err) {
+    return send(res, err instanceof BodyTooLargeError ? 413 : 400, { error: err instanceof BodyTooLargeError ? 'Request is too large' : 'Invalid JSON' });
+  }
 
   if (!adminConfigured()) {
     // Redis is configured but no ADMIN_PASSWORD — refuse rather than fall back

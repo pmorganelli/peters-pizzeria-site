@@ -7,9 +7,12 @@ import { hasRedisEnv } from './util.js';
 //
 // Posts outlive orders by a lot — an order is operational data that expires in
 // 3 days, but the wall is the point of the feature and should stay up.
-const SLICE_TTL_SECONDS = 60 * 60 * 24 * 90; // 90 days
+export const SLICE_RETENTION_MS = 1000 * 60 * 60 * 24 * 90;
+// Metadata intentionally has no Redis TTL. Once a post reaches 90 days it is
+// hidden from feeds, but the record must remain discoverable until the cleanup
+// job successfully deletes its Blob. Expiring metadata first would orphan the
+// Blob permanently during a prolonged cron or credential outage.
 const INDEX_KEY = 'pp:slice-index';
-const MAX_LISTED = 300;
 
 // The per-order quota outlives the order itself (orders expire in 3 days), so
 // a counter can't be reset by simply waiting for the order to disappear.
@@ -24,46 +27,75 @@ function redisClient() {
 const memory = globalThis.__ppSliceStore ?? (globalThis.__ppSliceStore = new Map());
 
 export async function createSlice(slice) {
+  const stored = { ...slice, expiresAt: slice.expiresAt ?? slice.createdAt + SLICE_RETENTION_MS };
   if (!hasRedisEnv()) {
-    memory.set(slice.id, slice);
-    return slice;
+    memory.set(stored.id, stored);
+    return stored;
   }
   const redis = redisClient();
-  await redis.set(`pp:slice:${slice.id}`, slice, { ex: SLICE_TTL_SECONDS });
-  await redis.lpush(INDEX_KEY, slice.id);
-  await redis.ltrim(INDEX_KEY, 0, MAX_LISTED - 1);
-  return slice;
+  await redis.set(`pp:slice:${stored.id}`, stored);
+  await redis.lrem(INDEX_KEY, 0, stored.id);
+  await redis.lpush(INDEX_KEY, stored.id);
+  return stored;
 }
 
-export async function getSlice(id) {
-  if (!hasRedisEnv()) return memory.get(id) ?? null;
-  return (await redisClient().get(`pp:slice:${id}`)) ?? null;
+// Records written before `expiresAt` was introduced still have the old Redis
+// TTL. The cleanup cron calls this once per legacy record to remove that TTL
+// and make the Blob pointer durable until deletion succeeds.
+export async function preserveSliceMetadata(slice) {
+  if (slice.expiresAt !== undefined) return slice;
+  const updated = { ...slice, expiresAt: slice.createdAt + SLICE_RETENTION_MS };
+  if (!hasRedisEnv()) memory.set(updated.id, updated);
+  else await redisClient().set(`pp:slice:${updated.id}`, updated);
+  return updated;
 }
 
-export async function listSlices() {
-  if (!hasRedisEnv()) {
-    return [...memory.values()].sort((a, b) => b.createdAt - a.createdAt);
+const isExpired = (slice, now) => (slice.expiresAt ?? slice.createdAt + SLICE_RETENTION_MS) <= now;
+
+export async function getSlice(id, { includeExpired = false, now = Date.now() } = {}) {
+  const slice = !hasRedisEnv()
+    ? (memory.get(id) ?? null)
+    : ((await redisClient().get(`pp:slice:${id}`)) ?? null);
+  return slice && (includeExpired || !isExpired(slice, now)) ? slice : null;
+}
+
+export async function listSlices({ includeExpired = false, now = Date.now(), limit } = {}) {
+  if (limit !== undefined && (!Number.isInteger(limit) || limit < 0)) {
+    throw new TypeError('limit must be a non-negative integer');
   }
+  if (!hasRedisEnv()) {
+    const rows = [...memory.values()]
+      .filter((slice) => includeExpired || !isExpired(slice, now))
+      .sort((a, b) => b.createdAt - a.createdAt);
+    return limit === undefined ? rows : rows.slice(0, limit);
+  }
+  if (limit === 0) return [];
   const redis = redisClient();
-  const ids = await redis.lrange(INDEX_KEY, 0, MAX_LISTED - 1);
+  // Keep unbounded access available for the cleanup job, but let frequently
+  // polled feeds bound both the Redis range and subsequent mget work.
+  const ids = await redis.lrange(INDEX_KEY, 0, limit === undefined ? -1 : limit - 1);
   if (!ids.length) return [];
-  const rows = await redis.mget(...ids.map((id) => `pp:slice:${id}`));
-  return rows.filter(Boolean); // expired keys read back as null
+  const rows = [];
+  for (let start = 0; start < ids.length; start += 100) {
+    rows.push(...await redis.mget(...ids.slice(start, start + 100).map((id) => `pp:slice:${id}`)));
+  }
+  return rows.filter((slice) => slice && (includeExpired || !isExpired(slice, now)));
 }
 
 export async function setSliceHidden(id, hidden) {
   if (!hasRedisEnv()) {
     const existing = memory.get(id);
-    if (!existing) return null;
+    if (!existing || isExpired(existing, Date.now())) return null;
     const updated = { ...existing, hidden };
     memory.set(id, updated);
     return updated;
   }
   const redis = redisClient();
   const existing = await redis.get(`pp:slice:${id}`);
-  if (!existing) return null;
+  if (!existing || isExpired(existing, Date.now())) return null;
   const updated = { ...existing, hidden };
-  // KEEPTTL — hiding a post must not restart its 90-day expiry.
+  // Preserve any TTL carried by records written by an older deployment;
+  // current records remain persistent until Blob cleanup succeeds.
   await redis.set(`pp:slice:${id}`, updated, { keepTtl: true });
   return updated;
 }

@@ -18,6 +18,7 @@ import { startServer, call } from '../tests/helpers/server.js';
 import { resetEnv, configureBlob } from '../tests/helpers/env.js';
 import { openStore, placeOrder, adminCookie, insertOrder } from '../tests/helpers/fixtures.js';
 import { makeJpeg, makePng, makeWebpVp8x, makeWebpVp8, makeWebpVp8L, dataUrl } from '../tests/helpers/images.js';
+import { createSlice } from './_lib/slices.js';
 
 let server;
 let base;
@@ -280,6 +281,16 @@ describe('POST /api/slices — request validation', () => {
     expect(body.slice.w).toBe(60);
     expect(body.slice.h).toBe(40);
   });
+
+  it('rejects a valid image header with unsafe dimensions before upload', async () => {
+    const order = await placeOrder(base);
+    const { status } = await call(base, '/api/slices', {
+      method: 'POST',
+      body: await postBody(order, { image: dataUrl(makePng(5000, 10), 'image/png') }),
+    });
+    expect(status).toBe(413);
+    expect(blobState.putImpl).not.toHaveBeenCalled();
+  });
 });
 
 describe('POST /api/slices — happy path across formats', () => {
@@ -393,6 +404,20 @@ describe('unsupported methods', () => {
 });
 
 describe('GET /api/slices', () => {
+  it('caps the frequently polled public feed', async () => {
+    const now = Date.now();
+    await Promise.all(Array.from({ length: 305 }, (_, i) => createSlice({
+      id: `feed-${i}`,
+      url: `https://blob.test/feed-${i}.jpg`,
+      createdAt: now + i,
+      hidden: false,
+    })));
+
+    const { status, body } = await call(base, '/api/slices');
+    expect(status).toBe(200);
+    expect(body.slices).toHaveLength(300);
+  });
+
   it('a freshly posted photo actually appears on the public wall with the right fields', async () => {
     const order = await placeOrder(base, { name: 'Jamie Somebody' });
     const posted = await call(base, '/api/slices', {
