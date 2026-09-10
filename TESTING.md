@@ -23,9 +23,13 @@ Run `npm run dev` + `npm run dev:api` with a real `BLOB_READ_WRITE_TOKEN` in
 `.env.local` before working through this list — the automated suite mocks
 `@vercel/blob` entirely, so it never touches real storage.
 
-- [ ] Full journey: place a real order → note the pickup code → open Slice
-      Status once the order is `ready`/`done` → tap the CTA → composer opens
-      prefilled with the code/name → post a photo → it appears on `/slices`.
+- [ ] Full journey: staff place an order → hand the customer the pickup code →
+      customer looks it up on Slice Status → once it's `ready`/`done`, tap the
+      CTA → composer opens prefilled with the name → post a photo → it appears
+      on `/slices`. (Posting itself needs none of that any more; this checks
+      the handoff still works for someone who came from an order.)
+- [ ] Post straight from `/slices` in a private window — no order, no pickup
+      code, nothing typed — and confirm it goes up.
 - [ ] Tap "Take a photo or choose from library" on iOS Safari and Android
       Chrome and confirm the native sheet offers *both* the camera and the
       photo library. There's no `capture` attribute on the input specifically
@@ -49,12 +53,94 @@ Run `npm run dev` + `npm run dev:api` with a real `BLOB_READ_WRITE_TOKEN` in
 - [ ] Admin board: hide a post (confirm it drops off the public wall but
       stays in the admin list), restore it, then delete it for real and
       confirm the Blob URL 404s afterward.
-- [ ] Post 3 photos on one order, confirm the composer/API refuses a 4th
-      with the "already posted its 3 photos" message.
-- [ ] Try posting with a pickup code from an order placed more than 3 days
-      ago (or edit an order's timestamp in Redis for a staging check) and
-      confirm the generic "did not match" message — not a different message
-      that would hint the code was once valid.
+- [ ] Post 3 photos from one browser, confirm the API refuses a 4th with the
+      "3 photos from this device today" message, then clear site data and
+      confirm a 4th goes through. That reset is expected — the cap is a speed
+      bump, not a control — so the point is confirming the *rate limits* are
+      what actually stop a flood, not the counter.
+- [ ] The per-device counter lives in Redis under `pp:slice-quota:dev:<hash>`
+      with a 24h TTL, and the in-memory dev store ignores TTLs entirely — so
+      the window only really expires against a real database. Post 3, wait out
+      (or `DEL`) the key on a staging Redis, confirm the 4th is accepted.
+- [ ] Post-as toggle: choose Anonymous and confirm the tile goes up with no
+      name at all; choose "My name", type one, and confirm it shows. Flip
+      between the two and confirm what you typed survives the round trip.
+- [ ] Arriving from an order card's CTA, the composer should open with the
+      attributed option already selected and the name filled in. Arriving from
+      the nav with nothing stored, it should start on Anonymous.
+- [ ] Post once with a name, then reopen the composer on the same device and
+      confirm it remembers it. Post anonymously and confirm it *stops*
+      remembering — opting out shouldn't be undone on the next visit.
+- [ ] Type a 40-character name and confirm what lands on the tile is truncated
+      at 20 without breaking the tile's layout at phone width.
+- [ ] Confirm the composer no longer shows a pickup-code field, and no line
+      about a per-device photo limit.
+
+## Staff-only ordering (`OrderPage.jsx`, `Nav.jsx`, `api/orders.js`)
+
+The gate itself is covered in Vitest (`App.test.jsx`, `OrderPage.test.jsx`,
+`api/orders.test.js`). What isn't is how it *looks* once a button that was
+always there stops being there, and how the session behaves across a real
+HttpOnly cookie rather than a mocked `/api/login`.
+
+- [ ] **The nav CTA swap is the item most worth a real device.** Signed out it
+      reads "See the Menu", signed in "Order Now", and the first is ~24px
+      wider — almost exactly the room the 17px wordmark buys back below 430px.
+      `.nav-order-btn` tightens its padding over that range to pay for it, and
+      that number was reasoned, not measured. Sweep 320–500px signed out and
+      confirm badge + wordmark + CTA + hamburger never touch, especially at
+      390–430px (iPhone 15 Plus/Pro Max at 430, Pixel Pro at 412).
+- [ ] Same sweep signed in, where the CTA is the shorter label. This is the
+      layout the breakpoints were originally tuned for.
+- [ ] Log in on the admin board and confirm the nav CTA flips to Order Now
+      **without a reload** (that's what `onAuthChange` is for), then log out
+      and confirm it goes back to See the Menu the same way.
+- [ ] On a fast reload while signed in, watch for the CTA rendering "See the
+      Menu" first and then swapping — expected (the session check is async),
+      but confirm it doesn't reflow the rest of the bar when it happens.
+- [ ] Load `/order` directly signed out and confirm the window card renders
+      once, with no flash of the cart or of a different card first. Open
+      DevTools' network tab and confirm the page makes no `/api/store` or
+      `/api/orders` request at all.
+- [ ] On a slow connection (throttle to 3G), load any page signed in and watch
+      the nav: the CTA should fade in late rather than appearing and vanishing.
+- [ ] Menu page, signed out: confirm the Venmo box closes up cleanly with its
+      third child gone, at desktop and at phone width.
+- [ ] Slice Status signed out: nothing under the lookup form (the opening-hours
+      line is gone), and "Start another order" on a tracked order should drop
+      back to the lookup form rather than navigating anywhere.
+- [ ] `POST /api/orders` from `curl` with no cookie → 401. Confirm the same
+      request with a *tampered* cookie value is also 401, not a 500.
+
+## Name lookup on Slice Status (`StatusPage.jsx`, `api/orders.js`)
+
+The matching rules and the tie picker are covered in Vitest. What isn't is how
+this behaves against a real board with real customer names, which is the part
+that decides whether the feature is usable or annoying.
+
+- [ ] Take three orders under names a real night would produce — including two
+      people with the same first name — then look each up by name from a
+      different device with nothing in localStorage.
+- [ ] Search a name in all caps, all lowercase, and with a double space in the
+      middle. All three must land on the same order.
+- [ ] Confirm a first name alone does **not** find someone who gave a full
+      name at the window. This is deliberate (exact match only), but it's the
+      most likely source of "it says my order doesn't exist" — decide whether
+      staff should be typing first names only into the board, and be
+      consistent about it.
+- [ ] Tie picker: the rows show items, status, age and total. With two orders
+      of *the same items* under the same name, confirm the rows are still
+      tellable apart (age and total are all you get) — and if they aren't,
+      that's the case to think about before a busy night.
+- [ ] Pick a row and confirm the pickup code that appears is the right one, and
+      that a refresh keeps tracking it (`pp_order_id`).
+- [ ] Search a name that matches nothing and read the actual error text.
+- [ ] Trip the 30/IP/10min limiter with repeated name searches and confirm the
+      message makes sense to a customer who was just mistyping their name.
+- [ ] **Privacy sanity check, once, with someone else watching:** search a
+      teammate's name and confirm you can see their order and its pickup code.
+      That is the accepted trade (see CLAUDE.md), but look at it working before
+      a real service so nobody is surprised by it later.
 
 ## Takedown requests (`api/reports.js`, admin `ReportsPanel`)
 
@@ -99,6 +185,24 @@ the part worth poking by hand — the handler itself is covered in
       date/total row doesn't push it off the right edge.
 - [ ] Before opening for real: close a test night, confirm it appears with the
       right total, delete it, and confirm the archive reads empty.
+
+## Type and layout (`index.css`)
+
+- [ ] **"Where's my slice?" on Slice Status, desktop only.** The italic `?`
+      used to have its bowl clipped by the SplitText line mask; `.line-reveal
+      > div` now pads 0.12em to the right with a matching negative margin.
+      Reload a few times and watch the reveal actually animate — the clip was
+      only visible on the settled frame, but the padding could in principle
+      shift where a line wraps. Check the menu, blog and gallery hero titles in
+      the same pass, since they share the rule and they're the multi-line ones.
+- [ ] Same headline at 767px and 769px — the phone branch skips SplitText
+      entirely, so the two sides of that breakpoint use different machinery.
+- [ ] Homepage with no `special` items in menu.js: the dark strip should read
+      "Specials coming soon." at a sensible size on phone and desktop, not a
+      heading floating over nothing.
+- [ ] Menu page with an empty category (Desserts & Sides right now): the
+      heading should sit above a "Coming soon." line on the same rule the item
+      list uses, not collapse into the next section.
 
 ## Add-on chips (`OrderPage.jsx`, `.addon-unit-chips`)
 
@@ -164,7 +268,8 @@ and the two have already drifted once. These need a real Upstash instance
 ## General regression pass (any change touching ordering/admin)
 
 - [ ] Full order → admin board → status advance → pickup flow, once, in a
-      real browser.
+      real browser. Start by logging in — placing the order is a staff action
+      now, and `/order` shows the window card until you do.
 - [ ] `npm run doctor` (react-doctor) reports **no findings at all**. The gate
       used to be "no new findings beyond a known baseline"; the baseline is
       empty now, so any finding is a new one.

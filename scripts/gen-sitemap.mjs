@@ -14,7 +14,12 @@ const SITE = 'https://peters-pizzeria-site.vercel.app';
 
 // Staff-only or single-use pages. /order and /status are left in: both are
 // things a customer might reasonably search for or be linked to.
-const PRIVATE_PAGES = new Set(['admin', 'nights', 'studio']);
+// `order` joined this list when ordering moved behind the admin login. The
+// page still renders publicly (a card explaining that orders are taken at the
+// window), but nothing links to it any more and its old description promised
+// ordering ahead — an indexed result saying so would send people to a page
+// that can't do it.
+const PRIVATE_PAGES = new Set(['admin', 'nights', 'studio', 'order']);
 
 const urls = [
   ...Object.entries(PAGE_PATHS)

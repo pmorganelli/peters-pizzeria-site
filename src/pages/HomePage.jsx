@@ -69,7 +69,7 @@ export function HomePage({ nav, openArticle, openLightbox }) {
         <div className="hero-img" />
         <div className="hero-overlay" />
         <div className="hero-badge" aria-hidden="true"><LogoBadge size={128} /></div>
-        <div className="hero-pill">Re-opening: Fall 2026</div>
+        <div className="hero-pill">Re-opening: THIS SATURDAY!</div>
         {/* Non-breaking spaces inside each segment: the label may only wrap at the dots */}
         <div className="hero-label">Somerville,&nbsp;MA · Est.&nbsp;2025</div>
         <h1 className="hero-title">Handmade<br />with <em>love.</em></h1>
@@ -158,6 +158,11 @@ export function HomePage({ nav, openArticle, openLightbox }) {
           </div>
           <button type="button" className="specials-see-all" onClick={() => nav('menu')}>Full Menu <ArrowRight size={13} /></button>
         </div>
+        {/* Weeks where nothing is tagged `special` in menu.js are normal — the
+            strip would otherwise be a heading over an empty grid. */}
+        {SPECIALS.length === 0 ? (
+          <div ref={ref(3)} className="reveal specials-soon">Specials coming soon.</div>
+        ) : (
         <div className="specials-grid">
           {SPECIALS.map((s, i) => {
             const soldOut = unavailable.has(s.name);
@@ -177,6 +182,7 @@ export function HomePage({ nav, openArticle, openLightbox }) {
             );
           })}
         </div>
+        )}
       </section>
 
       {/* ── LATEST BLOG POSTS ── */}

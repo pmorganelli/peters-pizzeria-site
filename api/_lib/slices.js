@@ -14,9 +14,11 @@ export const SLICE_RETENTION_MS = 1000 * 60 * 60 * 24 * 90;
 // Blob permanently during a prolonged cron or credential outage.
 const INDEX_KEY = 'pp:slice-index';
 
-// The per-order quota outlives the order itself (orders expire in 3 days), so
-// a counter can't be reset by simply waiting for the order to disappear.
-const QUOTA_TTL_SECONDS = 60 * 60 * 24 * 14;
+// Fallback window for callers that don't name one. Every caller currently
+// does — api/slices.js posts a 24-hour per-device window — but a quota with no
+// expiry at all would be permanent, so the default errs long rather than
+// absent.
+const DEFAULT_QUOTA_TTL_SECONDS = 60 * 60 * 24 * 14;
 
 function redisClient() {
   const url = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
@@ -108,16 +110,21 @@ export async function deleteSlice(id) {
   return true;
 }
 
-// ── Per-order upload quota ────────────────────────────────────────────
+// ── Upload quota ──────────────────────────────────────────────────────
+// `subject` is whatever the caller is counting against — a hashed device
+// token today, an order id back when a pickup code was the credential for
+// posting. It becomes part of the Redis key, so callers pass something already
+// safe to concatenate (a hash, an id we minted), never raw client input.
+//
 // Read-then-write would let a burst of parallel uploads all observe the same
 // count and slip past the cap, so the increment and the limit test happen in
 // one round trip — same reasoning as rateLimit() in store.js.
 
 // Checking the limit inside the script — rather than incrementing first and
-// comparing after — keeps a customer who keeps retrying from inflating their
-// own counter past the cap. Left unchecked, a refused attempt still consumed a
+// comparing after — keeps someone who keeps retrying from inflating their own
+// counter past the cap. Left unchecked, a refused attempt still consumed a
 // number, so releasing a slot after a failed upload could never bring them
-// back under. Returns -1 when the order is already at its limit.
+// back under. Returns -1 when the subject is already at its limit.
 const QUOTA_LUA = `
 local c = tonumber(redis.call('GET', KEYS[1]) or '0')
 if c >= tonumber(ARGV[2]) then return -1 end
@@ -125,24 +132,27 @@ c = redis.call('INCR', KEYS[1])
 if c == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
 return c`;
 
-export async function claimSliceQuota(orderId, max) {
-  const key = `pp:slice-quota:${orderId}`;
+export async function claimSliceQuota(subject, max, ttlSeconds = DEFAULT_QUOTA_TTL_SECONDS) {
+  const key = `pp:slice-quota:${subject}`;
   if (!hasRedisEnv()) {
+    // The in-memory path has never honoured the TTL, and still doesn't: it
+    // only runs in local dev and the test suite, where the process is shorter
+    // than any window worth expiring and resetting is a restart away.
     const mem = globalThis.__ppSliceQuota ?? (globalThis.__ppSliceQuota = new Map());
     const current = mem.get(key) ?? 0;
     if (current >= max) return { ok: false, count: current };
     mem.set(key, current + 1);
     return { ok: true, count: current + 1 };
   }
-  const count = await redisClient().eval(QUOTA_LUA, [key], [QUOTA_TTL_SECONDS, max]);
+  const count = await redisClient().eval(QUOTA_LUA, [key], [ttlSeconds, max]);
   return count === -1 ? { ok: false, count: max } : { ok: true, count };
 }
 
 // Claiming happens before the upload so two parallel requests can't both win
 // the last slot. If the upload then fails, give the slot back rather than
-// burning one of the customer's three on our own error.
-export async function releaseSliceQuota(orderId) {
-  const key = `pp:slice-quota:${orderId}`;
+// burning one of the poster's three on our own error.
+export async function releaseSliceQuota(subject) {
+  const key = `pp:slice-quota:${subject}`;
   if (!hasRedisEnv()) {
     const mem = globalThis.__ppSliceQuota;
     if (mem?.has(key)) mem.set(key, Math.max(0, mem.get(key) - 1));

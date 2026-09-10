@@ -12,6 +12,7 @@ import { GalleryPage } from './pages/GalleryPage';
 import { OrderPage }   from './pages/OrderPage';
 import { StatusPage }  from './pages/StatusPage';
 import { routeFromPath, pathForRoute } from './utils/routes';
+import { api } from './utils/api';
 import { markChunkLoaded, shouldReloadForChunkFailure } from './utils/chunkReload';
 import { metadataForRoute } from './data/routeMetadata';
 
@@ -108,6 +109,28 @@ export default function App() {
   // shortcut, which reveals the new page without navigating anywhere.
   const pageNow = useRef(page);
   useLayoutEffect(() => { pageNow.current = page; }, [page]);
+
+  // Is a staff session signed in? Ordering moved behind the admin login, so
+  // this decides whether the nav shows Order Now at all and what /order
+  // renders — which makes it App state rather than any one page's.
+  //
+  // `null` means "not known yet", and the distinction matters: false is a
+  // claim, and painting the public treatment on an admin's screen only to
+  // swap it out a moment later is worse than showing nothing for that moment.
+  // Nav renders no CTA while it's null; OrderPage holds its reserved space.
+  //
+  // One check for the whole app: the admin board, the community wall and the
+  // order page each used to ask independently.
+  const [isAdmin, setIsAdmin] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    api('/api/login')
+      .then((d) => { if (!cancelled) setIsAdmin(Boolean(d.authenticated)); })
+      // A check that fails reads as signed-out. It only drives what the UI
+      // offers; every write is gated server-side no matter what this says.
+      .catch(() => { if (!cancelled) setIsAdmin(false); });
+    return () => { cancelled = true; };
+  }, []);
 
   // The URL replaced pp_page2 as the restore mechanism. The old key is cleared
   // once so a returning visitor isn't carrying dead state around forever.
@@ -334,7 +357,7 @@ export default function App() {
       {/* First thing in the tab order: a keyboard user shouldn't have to walk
           the whole nav on every page. Visible only while focused. */}
       <a className="skip-link" href="#main">Skip to content</a>
-      <Nav page={page} nav={nav} />
+      <Nav page={page} nav={nav} isAdmin={isAdmin} />
 
       {/* Transition styles are applied imperatively in nav() — no style prop,
           so React re-renders never clobber them. tabIndex lets the skip link
@@ -368,15 +391,18 @@ export default function App() {
             collapse the page under the footer for the length of the fetch. */}
         <Suspense fallback={<div className="route-loading" aria-busy="true" />}>
         {page === 'home'    && <HomePage    {...pageProps} />}
-        {page === 'menu'    && <MenuPage    nav={nav} />}
+        {page === 'menu'    && <MenuPage    nav={nav} isAdmin={isAdmin} />}
         {page === 'blog'    && <BlogPage    nav={nav} openArticle={openArticle} />}
         {page === 'article' && <ArticlePage article={article} nav={nav} />}
         {page === 'gallery' && <GalleryPage nav={nav} openLightbox={openLightbox} />}
         {page === 'studio'  && <StudioPage  nav={nav} />}
-        {page === 'order'   && <OrderPage   nav={nav} />}
-        {page === 'status'  && <StatusPage  nav={nav} />}
-        {page === 'slices'  && <SlicesPage  nav={nav} openLightbox={openLightbox} />}
-        {page === 'admin'   && <AdminPage   nav={nav} />}
+        {page === 'order'   && <OrderPage   nav={nav} isAdmin={isAdmin} />}
+        {page === 'status'  && <StatusPage  nav={nav} isAdmin={isAdmin} />}
+        {page === 'slices'  && <SlicesPage  nav={nav} openLightbox={openLightbox} isAdmin={isAdmin} />}
+        {/* The board owns its own login form, so it's the one place that can
+            change the answer mid-session — it reports back rather than
+            leaving the nav a page-load behind. */}
+        {page === 'admin'   && <AdminPage   nav={nav} onAuthChange={setIsAdmin} />}
         {page === 'nights'  && <NightsArchivePage nav={nav} />}
         </Suspense>
         </ErrorBoundary>

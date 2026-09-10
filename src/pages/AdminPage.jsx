@@ -252,10 +252,22 @@ function FinishedList({ finished, totalCents, canClose, closing, closeNight }) {
   );
 }
 
-export function AdminPage({ nav }) {
+export function AdminPage({ nav, onAuthChange }) {
   // null = still checking with the server; the cookie is HttpOnly so this
   // page can't just read it out of storage to know if it's logged in.
-  const [authed, setAuthed] = useState(null);
+  const [authed, setAuthedState] = useState(null);
+  // App owns the session answer for the rest of the site (the nav's Order Now
+  // button, what /order renders), but this is the only page that can *change*
+  // it mid-session — it holds the login form and the logout button. So every
+  // place this page learns something, App hears it too; otherwise logging in
+  // here would leave the nav a reload behind.
+  //
+  // Stable as long as onAuthChange is: App passes its raw setState, so the
+  // effects and callbacks below still run once each rather than per render.
+  const setAuthed = useCallback((value) => {
+    setAuthedState(value);
+    onAuthChange?.(value);
+  }, [onAuthChange]);
   const [orders, setOrders] = useState(null); // null = not loaded yet
   const [notice, setNotice] = useState('');
   const [storeInfo, setStoreInfo] = useState(null);
@@ -274,8 +286,8 @@ export function AdminPage({ nav }) {
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
   useEffect(() => {
-    api('/api/login').then((d) => setAuthed(d.authenticated)).catch(() => setAuthed(false));
-  }, []);
+    api('/api/login').then((d) => setAuthed(Boolean(d.authenticated))).catch(() => setAuthed(false));
+  }, [setAuthed]);
 
   const logout = useCallback(async (message = '') => {
     // Only the server can clear an HttpOnly cookie — there's nothing for this
@@ -284,7 +296,7 @@ export function AdminPage({ nav }) {
     setOrders(null);
     setNotice(message);
     setAuthed(false);
-  }, []);
+  }, [setAuthed]);
 
   // Stable identity so the hook's resolve callback isn't rebuilt every render.
   const sessionExpired = useCallback(() => logout('Session expired — log in again.'), [logout]);

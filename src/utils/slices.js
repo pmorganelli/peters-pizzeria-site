@@ -8,9 +8,18 @@ const DEVICE_KEY = 'pp_slice_device:v1';
 // the server independently verifies the device token before removing anything,
 // so editing this list gets you nothing.
 const MINE_KEY = 'pp_slice_mine:v1';
-// The order card stashes {code, name} here on its way to this page, so the
-// customer doesn't retype something they're already looking at.
-const HANDOFF_KEY = 'pp_slice_code:v1';
+// One-shot handoff from the order card: arriving straight from a confirmation
+// means posting is the whole reason you're here, so the composer opens
+// prefilled instead of waiting to be found. It used to carry the pickup code
+// (the credential for posting) alongside the name; posting needs no code now,
+// so the name is all that's left and the key was renamed to match.
+const HANDOFF_KEY = 'pp_slice_who:v1';
+const LEGACY_HANDOFF_KEY = 'pp_slice_code:v1';
+// The name the poster last used, so a second photo doesn't mean typing it
+// again. Distinct from the handoff above: this one persists and only prefills,
+// where the handoff fires once and also decides whether the composer starts
+// open.
+const NAME_KEY = 'pp_slice_name:v1';
 
 export function readMine() {
   try {
@@ -27,20 +36,29 @@ export function writeMine(mine) {
 
 export function readHandoff() {
   const raw = localStorage.getItem(HANDOFF_KEY);
-  if (!raw) return { code: '', name: '' };
-  // Tolerate the bare-code string this key held before it carried a name.
+  if (!raw) return { name: '' };
   try {
     const parsed = JSON.parse(raw);
-    return typeof parsed === 'object' && parsed
-      ? { code: parsed.code ?? '', name: parsed.name ?? '' }
-      : { code: String(parsed), name: '' };
+    return { name: (typeof parsed === 'object' && parsed ? parsed.name : '') ?? '' };
   } catch {
-    return { code: raw, name: '' };
+    return { name: '' };
   }
 }
 
 export function clearHandoff() {
   localStorage.removeItem(HANDOFF_KEY);
+  // A confirmation screen open across the deploy could still have written the
+  // old key. Clear it on the same pass so it doesn't sit there forever.
+  localStorage.removeItem(LEGACY_HANDOFF_KEY);
+}
+
+export const readPosterName = () => localStorage.getItem(NAME_KEY) ?? '';
+
+export function writePosterName(name) {
+  // An empty name is a real choice — it's how you post anonymously — so it's
+  // stored rather than skipped, or the next visit would helpfully re-attach
+  // the name you just removed.
+  localStorage.setItem(NAME_KEY, name);
 }
 
 export function deviceToken() {

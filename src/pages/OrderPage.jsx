@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowDown, ArrowRight, Clock, Minus, Plus, X } from 'lucide-react';
+import { ArrowDown, ArrowRight, Clock, Minus, Plus, Store, X } from 'lucide-react';
 import { Footer } from '../components/Footer';
 import { LineReveal } from '../components/LineReveal';
 import { OrderStatusCard } from '../components/OrderStatusCard';
@@ -233,7 +233,40 @@ function ClosedCard({ store, nav }) {
   );
 }
 
-export function OrderPage({ nav }) {
+// What a customer gets at /order. Ordering is staff-only now — orders are
+// taken at the window and typed in by whoever is running the board — and
+// nothing links here for anyone else, since the nav CTA is gated on the same
+// check. So this is what an old bookmark or a shared link lands on: an
+// explanation, rather than a bounce that would look like the link had rotted.
+function StaffOnlyCard({ nav }) {
+  return (
+    <div className="confirm-wrap">
+      <div className="confirm-card order-closed">
+        <div className="order-closed-icon" aria-hidden="true"><Store size={20} /></div>
+        <h2 className="confirm-title">We take orders <em>at the window.</em></h2>
+        <p className="order-closed-sub">
+          Ordering ahead is off for now — come find us and we&apos;ll ring you up in
+          person. Have a look at what&apos;s on tonight, and once you have a pickup
+          code you can follow your slices from received to ready right here.
+        </p>
+        <div className="confirm-actions">
+          <button type="button"
+            className="btn-primary"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
+            onClick={() => nav('menu')}
+          >
+            Browse the menu <ArrowRight size={13} />
+          </button>
+          <button type="button" className="text-link-btn" onClick={() => nav('status')}>
+            Track an order
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function OrderPage({ nav, isAdmin }) {
   // Cart and pickup identity survive navigation and refreshes
   const [cart, setCart] = useState(readCart);
   const [name, setName] = useState(() => readJSON(WHO_KEY, {}).name || '');
@@ -247,20 +280,24 @@ export function OrderPage({ nav }) {
   // Open/closed status. If the check itself fails, fail open — the server
   // still enforces hours on submission.
   useEffect(() => {
+    if (isAdmin !== true) return undefined;
     let cancelled = false;
     api('/api/store')
       .then((d) => { if (!cancelled) setStore(d); })
       .catch(() => { if (!cancelled) setStore({ open: true, mode: 'open' }); });
     return () => { cancelled = true; };
-  }, []);
+  }, [isAdmin]);
 
   useEffect(() => { window.scrollTo(0, 0); }, [order?.id]);
   useEffect(() => { localStorage.setItem(CART_KEY, JSON.stringify(cart)); }, [cart]);
 
   // Restore an in-flight order across refreshes
   useEffect(() => {
+    // Gated with the store check above: a visitor who can't order gets the
+    // staff-only card below, so neither request has anything to render into.
+    if (isAdmin !== true) return undefined;
     const saved = localStorage.getItem(SAVED_KEY);
-    if (!saved) return;
+    if (!saved) return undefined;
     let cancelled = false;
     api(`/api/orders?id=${encodeURIComponent(saved)}`)
       .then((d) => { if (!cancelled) setOrder(d.order); })
@@ -268,7 +305,7 @@ export function OrderPage({ nav }) {
       .catch((err) => { if (!cancelled && err.status === 404) localStorage.removeItem(SAVED_KEY); })
       .finally(() => { if (!cancelled) setLoadingSaved(false); });
     return () => { cancelled = true; };
-  }, []);
+  }, [isAdmin]);
 
   // Live status while the order is open. Depend on id/status rather than the
   // order object — every poll builds a fresh object, and keying the effect on
@@ -424,9 +461,16 @@ export function OrderPage({ nav }) {
 
   return (
     <div className="order-page">
+      {/* Deliberately the same headline for staff and everyone else, rather
+          than one that reads correctly for each. The head sits *above* the
+          reserved .order-gate space, so text that changed when the session
+          check landed would shove the whole page down after first paint — and
+          swapping a LineReveal's `text` re-splits it and replays the reveal.
+          It used to say "Order ahead. Skip the line.", which is the one thing
+          it can't say now that ordering ahead is off. */}
       <div className="order-head">
         <div className="section-label">Order</div>
-        <LineReveal as="h1" className="order-title" text="Order ahead. Skip the line." />
+        <LineReveal as="h1" className="order-title" text="Slices, made to order." />
         <p className="order-sub">Saturdays 7pm til sellout · Pay via Venmo or Zelle at pickup</p>
       </div>
 
@@ -443,8 +487,13 @@ export function OrderPage({ nav }) {
           would just trade a downward jump for an upward one when the short
           branch won. Sized to push the footer below the fold, so whichever
           branch lands, nothing already on screen moves. */}
-      <div className="order-gate" aria-busy={loadingSaved || store === null}>
-        {loadingSaved || store === null ? null : order ? (
+      <div className="order-gate" aria-busy={isAdmin === null || loadingSaved || store === null}>
+        {/* null while App's session check is still in flight — the reserved
+            space below holds either way, so waiting costs nothing visible and
+            saves an admin from watching the customer card get swapped out. */}
+        {isAdmin === null ? null : isAdmin !== true ? (
+          <StaffOnlyCard nav={nav} />
+        ) : loadingSaved || store === null ? null : order ? (
           <OrderStatusCard order={order} onNewOrder={newOrder} nav={nav} />
         ) : !store.open ? (
           <ClosedCard store={store} nav={nav} />
@@ -460,7 +509,7 @@ export function OrderPage({ nav }) {
         )}
       </div>
 
-      {!order && !loadingSaved && store?.open && cartLines.length > 0 && (
+      {isAdmin === true && !order && !loadingSaved && store?.open && cartLines.length > 0 && (
         <button type="button"
           className="order-mobilebar"
           onClick={() => document.querySelector('.order-summary')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}

@@ -458,6 +458,15 @@ nav.nav-dark.scrolled .nav-hamburger span { background: var(--ink); }
 .special-name { font-family: var(--serif); font-size: 26px; font-weight: 700; font-style: italic; color: var(--cream); line-height: 1.1; margin-bottom: 10px; }
 .special-desc { font-family: var(--serif); font-size: 15px; color: rgba(254,245,239,0.5); line-height: 1.6; margin-bottom: 22px; }
 .special-price { font-family: var(--ui); font-size: 22px; font-weight: 500; color: var(--red); }
+/* No specials tagged in menu.js this week. Sits inside the dark strip, so it
+   borrows the card background rather than leaving the section looking broken. */
+.specials-soon {
+  background: rgba(255,255,255,0.04);
+  padding: 36px 32px;
+  font-family: var(--serif); font-style: italic;
+  font-size: clamp(20px, 2.4vw, 28px);
+  color: rgba(254,245,239,0.55);
+}
 /* Sold-out special: keep it visible (it'll be back) but clearly off tonight */
 .special-card.special-sold-out { opacity: 0.45; }
 .special-card.special-sold-out .special-name { text-decoration: line-through; text-decoration-thickness: 1.5px; text-decoration-color: rgba(224,54,22,0.7); }
@@ -495,6 +504,14 @@ nav.nav-dark.scrolled .nav-hamburger span { background: var(--ink); }
 .menu-body > div:first-of-type .menu-section-title { padding-top: 0; border-top: none; }
 .menu-items { border-top: 1px solid var(--cream2); }
 .menu-item { display: flex; align-items: baseline; padding: 13px 0; border-bottom: 1px solid var(--cream2); }
+/* Category with everything commented out of menu.js for the week. Matches the
+   .menu-items top rule so the heading still sits on a line. */
+.menu-items-soon {
+  border-top: 1px solid var(--cream2);
+  padding: 16px 0;
+  font-family: var(--serif); font-style: italic; font-size: 16px;
+  color: var(--ink2);
+}
 .menu-item-soldout { opacity: 0.5; }
 .menu-item-soldout .menu-item-name { text-decoration: line-through; text-decoration-thickness: 1px; }
 .menu-item-86 { font-family: var(--ui); font-size: 10px; letter-spacing: var(--track-label); text-transform: uppercase; color: var(--red); margin-right: 12px; flex-shrink: 0; }
@@ -782,7 +799,8 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 44px 60p
 @media (hover: hover) { .slices-preview-clear:hover { background: var(--red); } }
 .slices-optional { text-transform: none; letter-spacing: 0; color: rgba(90,74,58,0.6); }
 /* Post-as toggle — a two-up segmented control, not a checkbox, so the
-   attributed and anonymous choices carry equal visual weight. */
+   attributed and anonymous choices carry equal visual weight. Neither is a
+   lesser option: the API has no anon flag, it just stores an empty name. */
 .slices-who { display: flex; gap: 8px; }
 .slices-who-btn {
   flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 7px;
@@ -793,8 +811,14 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 44px 60p
 }
 @media (hover: hover) { .slices-who-btn:hover { border-color: rgba(224,54,22,0.45); color: var(--ink); } }
 .slices-who-on { background: white; border-color: var(--red); color: var(--red); font-style: italic; }
+/* Appears only under the attributed option, so it needs its own top gap
+   rather than inheriting the one .order-field siblings share. */
+.slices-name-field { margin-top: 14px; }
 .slices-submit { width: 100%; margin-top: 18px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
 .slices-submit:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: none; }
+/* Kept though nothing renders it right now — generic small print under the
+   composer, and the per-device cap line that used to live here may well be
+   replaced by something else. */
 .slices-fineprint {
   font-family: var(--serif); font-size: 12.5px; color: var(--ink2);
   margin-top: 14px; line-height: 1.55;
@@ -935,6 +959,30 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 44px 60p
 .status-lookup-btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 24px; }
 .status-lookup-btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: none; }
 .status-lookup-error { flex-basis: 100%; margin-top: 2px; }
+
+/* Tie-break list: several live orders share the searched name, so the customer
+   picks. Full width inside the flex form, below the field and the button. */
+.status-matches { flex-basis: 100%; margin-top: 18px; text-align: left; }
+.status-matches-label {
+  font-family: var(--ui); font-size: 10px; font-weight: 600;
+  letter-spacing: var(--track-eyebrow); text-transform: uppercase;
+  color: var(--ink2); margin-bottom: 9px;
+}
+.status-match {
+  display: block; width: 100%; text-align: left; cursor: pointer;
+  background: var(--cream); border: 1px solid var(--cream2); border-radius: 3px;
+  padding: 12px 14px; margin-bottom: 8px;
+  transition: background 0.2s, border-color 0.2s;
+}
+@media (hover: hover) { .status-match:hover { background: white; border-color: var(--red); } }
+.status-match-items {
+  display: block; font-family: var(--serif); font-size: 15px; color: var(--ink);
+  line-height: 1.45; margin-bottom: 4px;
+}
+.status-match-meta {
+  display: block; font-family: var(--ui); font-size: 10px;
+  letter-spacing: var(--track-label); text-transform: uppercase; color: var(--ink2);
+}
 .status-not-you { padding-top: 0; padding-bottom: 56px; margin-top: -56px; text-align: center; }
 .status-order-link { font: inherit; color: var(--red); border-bottom: 1px solid rgba(224,54,22,0.4); transition: opacity 0.2s; }
 .status-order-link:hover { opacity: 0.7; }
@@ -1490,8 +1538,17 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 44px 60p
    descenders (the "y" tail) paint below the font's declared descent — no
    line-height fully contains them. Extend each mask's clip window 0.35em
    downward; the negative margin cancels the layout shift. LineReveal starts
-   lines at yPercent 150 so they stay hidden inside the taller window. */
-.line-reveal > div { padding-bottom: 0.35em; margin-bottom: -0.35em; }
+   lines at yPercent 150 so they stay hidden inside the taller window.
+   The same is true horizontally: at these sizes the italic cut leans far
+   enough right that a trailing '?' (the Slice Status headline) paints past
+   the line box and the mask cuts its bowl off. padding/margin cancel exactly,
+   so the content box keeps its width — lines wrap where they always did, and
+   a centred headline stays centred. Desktop-only, like the whole SplitText
+   path; the phone branch has no mask to clip anything. */
+.line-reveal > div {
+  padding-bottom: 0.35em; margin-bottom: -0.35em;
+  padding-right: 0.12em; margin-right: -0.12em;
+}
 /* The phone path (see LineReveal.jsx): one rise on the whole headline instead
    of the per-line SplitText reveal. Reuses the home hero's keyframe on purpose
    — that entrance is the one that already reads as instant on a phone, because
@@ -1687,17 +1744,25 @@ body, .story-section, .home-latest, .menu-page, .blog-page, .article-page {
 }
 
 /* The wordmark is the brand name, so it comes off the nav last, not first.
-   At the full 20px it clears the Order Now button down to ~405px and collides
-   below that — which is why this used to hide it wholesale at 430px and took
-   the name off every large phone (430px covers the iPhone 15 Plus/Pro Max,
-   412px the Pixel Pro) where it actually still fit.
+   At the full 20px it clears the CTA down to ~405px and collides below that —
+   which is why this used to hide it wholesale at 430px and took the name off
+   every large phone (430px covers the iPhone 15 Plus/Pro Max, 412px the Pixel
+   Pro) where it actually still fit.
    Dropping to 17px buys ~23px and carries it comfortably to 390px — the
-   iPhone 12/13/14/15 width, and most of the Android field with it. */
+   iPhone 12/13/14/15 width, and most of the Android field with it.
+
+   The CTA's label is no longer fixed: a visitor sees "See the Menu" where
+   staff see "Order Now", and at 11px with --track-label that is roughly 24px
+   wider — almost exactly the 23px the smaller wordmark bought back. Tightening
+   the button's own padding over the same range pays for the longer word rather
+   than moving the threshold, so both labels sit in about the space "Order Now"
+   used to. Re-measure on a real device if any of the three changes. */
 @media (max-width: 430px) {
   .nav-logo-text { font-size: 17px; }
+  .nav-order-btn { padding: 10px 12px; }
 }
-/* Below 390 there is genuinely no room: badge + wordmark + Order Now +
-   hamburger overlap however the type is sized, and the CTA has to win. */
+/* Below 390 there is genuinely no room: badge + wordmark + CTA + hamburger
+   overlap however the type is sized, and the CTA has to win. */
 @media (max-width: 389px) {
   .nav-logo-text { display: none; }
 }

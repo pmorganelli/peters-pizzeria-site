@@ -5,23 +5,28 @@ import { LineReveal } from '../components/LineReveal';
 import { api } from '../utils/api';
 import { agoLabel } from '../utils/orders';
 import { downscaleImage } from '../utils/photos';
-import { readMine, writeMine, readHandoff, clearHandoff, deviceToken, formReducer, EMPTY_FORM } from '../utils/slices';
+import { readMine, writeMine, readHandoff, clearHandoff, readPosterName, writePosterName, deviceToken, formReducer, EMPTY_FORM } from '../utils/slices';
 
 // Matches StatusPage's poll cadence so the wall feels just as live — a new
 // photo shows up for everyone else on the page without a refresh.
 const POLL_MS = 8000;
 
-// Same key OrderPage.jsx / StatusPage.jsx save the device's current order id
-// under — reused here (not imported) to match how those two already each
-// keep their own copy of it.
-const ORDER_ID_KEY = 'pp_order_id';
+// `name` deliberately stays in the parent: closing the composer unmounts this
+// and everything local to it resets, but a name you've already typed is the
+// one thing worth carrying back if you reopen. (The pickup code used to hold
+// that spot, for the same reason.)
 
-// `code` deliberately stays in the parent: closing the composer unmounts
-// this and everything here resets, but the pickup code is the tedious part
-// to retype if you reopen.
-
-function SliceComposer({ code, setCode, name, onPosted, onClose }) {
-  const [anon, setAnon] = useState(false);
+function SliceComposer({ name, setName, onPosted, onClose }) {
+  // The toggle is UI only — the API has no `anon` flag any more, because a
+  // blank name *is* anonymous there. Anonymous mode therefore posts '' while
+  // keeping whatever is typed in `name`, so flipping back and forth doesn't
+  // make someone retype it.
+  //
+  // Which side it starts on follows whether there's a name to start with (the
+  // handoff from an order card, or the one this device last posted under).
+  // With nothing to prefill, the attributed option would just be an empty
+  // required-looking field.
+  const [anon, setAnon] = useState(() => !name);
   const [form, dispatch] = useReducer(formReducer, EMPTY_FORM);
   const { photo, caption, preparing, posting, error, posted } = form;
   const libraryRef = useRef(null);
@@ -41,19 +46,24 @@ function SliceComposer({ code, setCode, name, onPosted, onClose }) {
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!photo || code.trim().length < 3 || posting) return;
+    if (!photo || posting) return;
     dispatch({ type: 'submitting' });
     try {
+      const posterName = anon ? '' : name.trim();
       const { slice } = await api('/api/slices', {
         method: 'POST',
         body: {
-          code: code.trim(),
+          name: posterName,
           caption: caption.trim(),
-          anon,
           device: deviceToken(),
           image: photo.dataUrl,
         },
       });
+      // Remembered only once the server has taken it, so a name that gets
+      // rejected isn't the one waiting in the field next time. Posting
+      // anonymously deliberately clears it too — that's a choice, and the next
+      // visit shouldn't helpfully re-attach the name you just opted out of.
+      writePosterName(posterName);
       onPosted(slice);
       dispatch({ type: 'posted' });
     } catch (err) {
@@ -131,17 +141,6 @@ function SliceComposer({ code, setCode, name, onPosted, onClose }) {
         hidden
       />
 
-      <label className="order-field">
-        <span>Pickup code</span>
-        <input
-          value={code}
-          onChange={(e) => setCode(e.target.value)}
-          placeholder="e.g. F4WS"
-          maxLength={12}
-          autoCapitalize="characters"
-        />
-      </label>
-
       <div className="order-field">
         <span>Post as</span>
         <div className="slices-who" role="group" aria-label="Post as">
@@ -150,7 +149,7 @@ function SliceComposer({ code, setCode, name, onPosted, onClose }) {
             onClick={() => setAnon(false)}
             aria-pressed={!anon}
           >
-            <User size={13} /> {name || 'My first name'}
+            <User size={13} /> My name
           </button>
           <button type="button"
             className={`slices-who-btn${anon ? ' slices-who-on' : ''}`}
@@ -161,6 +160,23 @@ function SliceComposer({ code, setCode, name, onPosted, onClose }) {
           </button>
         </div>
       </div>
+
+      {/* Only under the attributed option — an always-visible name field next
+          to an Anonymous button reads as a contradiction. The name used to
+          come off the order the pickup code resolved to; with no order behind
+          a post, it's typed. */}
+      {!anon && (
+        <label className="order-field slices-name-field">
+          <span><span className="slices-optional">Your name</span></span>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="First name"
+            maxLength={20}
+            autoComplete="given-name"
+          />
+        </label>
+      )}
 
       <label className="order-field">
         <span><span className="slices-optional">Caption (optional)</span></span>
@@ -175,35 +191,34 @@ function SliceComposer({ code, setCode, name, onPosted, onClose }) {
       <button
         className="btn-primary slices-submit"
         type="submit"
-        disabled={!photo || code.trim().length < 3 || posting}
+        disabled={!photo || posting}
       >
         {posting ? 'Posting…' : <>Post it <ImagePlus size={13} /></>}
       </button>
 
       {error && <div className="order-error" role="alert">{error}</div>}
-
-      <div className="slices-fineprint">
-        Maximum three photos per order.
-      </div>
     </form>
   );
 }
 
 // ── Wall ──────────────────────────────────────────────────────────────
-// Public community wall. Anyone can look; posting needs a pickup code from a
-// real order placed in the last few days.
-export function SlicesPage({ nav, openLightbox }) {
+// Public community wall. Anyone can look, and now anyone can post — posting
+// used to require a pickup code from a real order placed in the last few days.
+// What's left standing between the wall and a flood is the per-device cap on
+// the server, the IP rate limits behind it, and admin take-down.
+export function SlicesPage({ nav, openLightbox, isAdmin }) {
   const [slices, setSlices] = useState([]);
   const [loading, setLoading] = useState(true);
   // Read once, in the initializer, because the mount effect clears the handoff
   // key straight afterwards — a later read would always come back empty.
   const [handoff] = useState(readHandoff);
-  const [code, setCode] = useState(handoff.code);
-  const [posterName, setPosterName] = useState(handoff.name);
+  // The name from the order you just picked up wins over the one this device
+  // last posted under; either beats an empty field.
+  const [posterName, setPosterName] = useState(() => handoff.name || readPosterName());
   // Arriving from the nav, this page is a wall of pictures and the form would
   // just push it down; arriving from the order confirmation, posting is the
   // entire reason you're here, so the form is already open and prefilled.
-  const [composerOpen, setComposerOpen] = useState(Boolean(handoff.code));
+  const [composerOpen, setComposerOpen] = useState(Boolean(handoff.name));
   const [mine, setMine] = useState(readMine);
   const [armedDelete, setArmedDelete] = useState(null);
   const [busyId, setBusyId] = useState(null);
@@ -216,13 +231,6 @@ export function SlicesPage({ nav, openLightbox }) {
   // form. Deleting your own photo happens from the wall with the composer shut,
   // so a failure there needs somewhere of its own to show up.
   const [wallError, setWallError] = useState('');
-  // Every post is public the moment it's uploaded; the only moderation is
-  // admin take-down, so this page just needs to know if it's being looked at
-  // by staff to show that control on posts that aren't this device's own.
-  // Starts false (the common case) rather than blocking the page on the
-  // check — a real admin briefly sees the wall without take-down buttons on
-  // other people's photos before this flips.
-  const [isAdmin, setIsAdmin] = useState(false);
 
   // Bumped around every local mutation; a poll that started earlier and lands
   // afterwards is discarded rather than erasing a just-posted photo.
@@ -232,33 +240,6 @@ export function SlicesPage({ nav, openLightbox }) {
     window.scrollTo(0, 0);
     clearHandoff(); // one-shot handoff
   }, []);
-
-  useEffect(() => {
-    api('/api/login').then((d) => setIsAdmin(Boolean(d.authenticated))).catch(() => {});
-  }, []);
-
-  // Arriving from the nav rather than the order-ready CTA, there's no handoff
-  // — but this device may still be tracking an order (pp_order_id, same key
-  // StatusPage/OrderPage use). Look it up so the code is filled with whatever
-  // order is actually current instead of sitting blank or, worse, whatever the
-  // customer last typed in weeks ago. A cancelled order can't post — leave the
-  // field blank rather than filling in a code that will just get rejected.
-  useEffect(() => {
-    if (handoff.code) return undefined;
-    const savedId = localStorage.getItem(ORDER_ID_KEY);
-    if (!savedId) return undefined;
-    let cancelled = false;
-    api(`/api/orders?id=${encodeURIComponent(savedId)}`)
-      .then(({ order }) => {
-        if (cancelled || order.status === 'cancelled') return;
-        setCode((cur) => cur || order.code);
-        setPosterName((cur) => cur || (order.name || '').split(' ')[0]);
-      })
-      .catch((err) => {
-        if (!cancelled && err.status === 404) localStorage.removeItem(ORDER_ID_KEY);
-      });
-    return () => { cancelled = true; };
-  }, [handoff.code]);
 
   // Persisted from an effect rather than inside the setMine updaters: state
   // updaters have to stay pure, and React may invoke them more than once.
@@ -343,7 +324,8 @@ export function SlicesPage({ nav, openLightbox }) {
   };
 
   // Anyone can ask for a photo to come down — including the person *in* it,
-  // who has no pickup code and no device token for a post they didn't make.
+  // who has no device token for a post they didn't make. That mattered when
+  // posting took a pickup code; it matters more now that it doesn't.
   // Two taps like the delete button, since the first tap is easy to hit by
   // accident on a phone-sized tile.
   const requestTakedown = async (slice) => {
@@ -384,9 +366,8 @@ export function SlicesPage({ nav, openLightbox }) {
       <div className="slices-composer-wrap">
         {composerOpen ? (
           <SliceComposer
-            code={code}
-            setCode={setCode}
             name={posterName}
+            setName={setPosterName}
             onPosted={handlePosted}
             onClose={() => setComposerOpen(false)}
           />

@@ -32,11 +32,27 @@ export async function openStore(overrides = {}) {
 }
 
 // Places a real order through the real handler + store (in-memory fallback),
-// so slice tests exercise genuine order records rather than hand-built stubs
-// that could drift from what validateItems()/createOrder() actually produce.
+// so tests exercise genuine order records rather than hand-built stubs that
+// could drift from what validateItems()/createOrder() actually produce.
+//
+// Intake is admin-only, so this logs in first. The cookie is cached per server
+// because adminCookie() goes through the real login handler and that route is
+// rate-limited to 8 attempts per IP per 5 minutes — a test placing a dozen
+// orders would otherwise trip the limiter and fail with a 429 that has nothing
+// to do with what it was testing. Caching is safe across a file's tests: the
+// token is an HMAC keyed on the admin password, not a stored session, so
+// resetEnv() clearing the store between tests doesn't invalidate it.
+const fixtureCookies = new Map();
+
+async function cachedAdminCookie(base) {
+  if (!fixtureCookies.has(base)) fixtureCookies.set(base, await adminCookie(base));
+  return fixtureCookies.get(base);
+}
+
 export async function placeOrder(base, overrides = {}) {
   const { status, body } = await call(base, '/api/orders', {
     method: 'POST',
+    headers: { Cookie: await cachedAdminCookie(base) },
     body: { name: 'Test Customer', items: [{ name: TEST_ITEM_NAME, qty: 1 }], ...overrides },
   });
   if (status !== 201) throw new Error(`fixture order failed: ${status} ${JSON.stringify(body)}`);

@@ -2,8 +2,9 @@ import { ArrowRight, Camera, Check, Clock, Flame } from 'lucide-react';
 import { addonLabel, displayName, fmtMoney, itemTotalCents, orderLineKey, STATUS_LABELS } from '../utils/orders';
 
 const VENMO_URL = 'https://venmo.com/u/Peter-Morganelli24';
-// Handed to the wall so the customer doesn't retype a code they're looking at.
-const SLICE_HANDOFF_KEY = 'pp_slice_code:v1';
+// Handed to the wall so the composer opens prefilled. It used to carry the
+// pickup code as well, back when that code was what let you post at all.
+const SLICE_HANDOFF_KEY = 'pp_slice_who:v1';
 
 const TIMELINE = [
   { status: 'new', label: 'Received', Icon: Clock },
@@ -107,9 +108,9 @@ export function OrderStatusCard({ order, onNewOrder, nav }) {
             type="button"
             className="slices-cta"
             onClick={() => {
-              // The name is only a label for the "post as" toggle — the server
-              // still resolves the real one from the order.
-              localStorage.setItem(SLICE_HANDOFF_KEY, JSON.stringify({ code: order.code, name: firstName }));
+              // Only a prefill: the wall's name field is free text now, and
+              // the poster can clear it to go up anonymously.
+              localStorage.setItem(SLICE_HANDOFF_KEY, JSON.stringify({ name: firstName }));
               nav('slices');
             }}
           >

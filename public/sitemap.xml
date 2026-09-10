@@ -17,10 +17,6 @@
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://peters-pizzeria-site.vercel.app/order</loc>
-    <priority>0.8</priority>
-  </url>
-  <url>
     <loc>https://peters-pizzeria-site.vercel.app/status</loc>
     <priority>0.8</priority>
   </url>

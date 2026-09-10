@@ -10,7 +10,7 @@ const DESCRIPTIONS = {
   blog: 'Stories, recipes, and lessons from the students behind Peter’s Pizzeria and Saturday Slices.',
   gallery: 'Photos from the Peter’s Pizzeria kitchen, Saturday Slices service, pizzas, crew, and community.',
   studio: 'Create a Peter’s Pizzeria social card from a favorite story and kitchen photo.',
-  order: 'Order Peter’s Pizzeria slices ahead for Saturday pickup and track the kitchen’s availability.',
+  order: 'Peter’s Pizzeria staff order form — orders are taken at the window.',
   status: 'Check a Peter’s Pizzeria pickup code and follow an order from received to ready.',
   slices: 'See photos shared by the Peter’s Pizzeria community and post a recent slice of your own.',
   admin: 'Peter’s Pizzeria staff order board.',

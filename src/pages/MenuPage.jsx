@@ -12,7 +12,7 @@ import { responsiveImg } from '../utils/photos';
 
 gsap.registerPlugin(useGSAP, ScrollTrigger);
 
-export function MenuPage({ nav }) {
+export function MenuPage({ nav, isAdmin }) {
   const ref = useScrollReveal();
   const pageRef = useRef(null);
   const [unavailable, setUnavailable] = useState(new Set());
@@ -61,6 +61,11 @@ export function MenuPage({ nav }) {
         {MENU_DATA.map((section, si) => (
           <div key={section.category} ref={ref(si)} className="reveal">
             <div className="menu-section-title">{section.category}</div>
+            {/* A category can be empty for a week (everything in it commented
+                out in menu.js) — say so rather than leaving a bare heading. */}
+            {section.items.length === 0 ? (
+              <div className="menu-items-soon">Coming soon.</div>
+            ) : (
             <div className="menu-items">
               {section.items.map((item) => {
                 const soldOut = unavailable.has(item.name);
@@ -80,6 +85,7 @@ export function MenuPage({ nav }) {
                 );
               })}
             </div>
+            )}
           </div>
         ))}
 
@@ -96,13 +102,17 @@ export function MenuPage({ nav }) {
               &ldquo;really f*cking good&rdquo; <span className="menu-quote-by">— Harrison Tun</span>
             </span>
           </div>
-          <button type="button"
-            className="btn-primary"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
-            onClick={() => nav('order')}
-          >
-            Order Now <ArrowRight size={13} />
-          </button>
+          {/* Same gate as the nav CTA — see Nav.jsx. The box is a wrapping
+              flex row, so it closes up on its own without this third child. */}
+          {isAdmin === true && (
+            <button type="button"
+              className="btn-primary"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
+              onClick={() => nav('order')}
+            >
+              Order Now <ArrowRight size={13} />
+            </button>
+          )}
         </div>
       </div>
 

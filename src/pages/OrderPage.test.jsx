@@ -12,7 +12,7 @@ const OPEN_STORE = { open: true, mode: 'open', unavailable: [] };
 
 function openOrderPage(store = OPEN_STORE) {
   mockFetch({ '/api/store': { body: store } });
-  const utils = render(<OrderPage nav={vi.fn()} />);
+  const utils = render(<OrderPage nav={vi.fn()} isAdmin />);
   // The menu only renders once the store check resolves.
   return waitFor(() => {
     expect(screen.getByText(SLICES[0].name)).toBeTruthy();
@@ -36,7 +36,7 @@ beforeEach(() => {
 describe('OrderPage', () => {
   it('shows the closed card instead of the menu when the store is shut', async () => {
     mockFetch({ '/api/store': { body: { open: false, mode: 'closed', hours: null } } });
-    render(<OrderPage nav={vi.fn()} />);
+    render(<OrderPage nav={vi.fn()} isAdmin />);
     await waitFor(() => expect(screen.getByText(/right now/i)).toBeTruthy());
     expect(screen.queryByText(SLICES[0].name)).toBeNull();
   });
@@ -45,7 +45,7 @@ describe('OrderPage', () => {
   // check shouldn't strand a customer in front of a closed sign.
   it('falls open when the store check itself fails', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('offline'); }));
-    render(<OrderPage nav={vi.fn()} />);
+    render(<OrderPage nav={vi.fn()} isAdmin />);
     await waitFor(() => expect(screen.getByText(SLICES[0].name)).toBeTruthy());
   });
 
@@ -225,7 +225,7 @@ describe('OrderPage', () => {
       '/api/orders': { status: 502, body: { error: 'Temporary upstream error' } },
       '/api/store': { body: OPEN_STORE },
     });
-    render(<OrderPage nav={vi.fn()} />);
+    render(<OrderPage nav={vi.fn()} isAdmin />);
     await waitFor(() => expect(screen.getByText(SLICES[0].name)).toBeTruthy());
     addOne(SLICES[0].name);
     fireEvent.change(screen.getByPlaceholderText("Who's picking up?"), { target: { value: 'Retry Customer' } });
@@ -239,5 +239,47 @@ describe('OrderPage', () => {
       expect(posts[0][1].headers['Idempotency-Key']).toBe(posts[1][1].headers['Idempotency-Key']);
       expect(JSON.parse(localStorage.getItem('pp_order_attempt:v1')).key).toBe(posts[0][1].headers['Idempotency-Key']);
     });
+  });
+});
+
+// Orders are taken at the window and typed in by whoever is running the board,
+// so this page is staff-only. Every case above passes `isAdmin` for that
+// reason; these are the ones about the gate itself.
+describe('OrderPage — ordering is staff-only', () => {
+  it('shows the window card instead of the menu to a visitor', async () => {
+    mockFetch({ '/api/store': { body: OPEN_STORE } });
+    render(<OrderPage nav={vi.fn()} isAdmin={false} />);
+    await waitFor(() => expect(screen.getByText(/at the window/i)).toBeTruthy());
+    expect(screen.queryByText(SLICES[0].name)).toBeNull();
+  });
+
+  it('makes no API calls at all for a visitor', async () => {
+    // Nothing behind the card needs the store's hours or a saved order, and
+    // this is otherwise the chattiest page on the site. The saved id is set
+    // deliberately: without it the lookup effect returns early on its own and
+    // the assertion would pass whether or not the gate works.
+    localStorage.setItem('pp_order_id', 'o-whatever');
+    const fetchSpy = mockFetch({ '/api/store': { body: OPEN_STORE } });
+    render(<OrderPage nav={vi.fn()} isAdmin={false} />);
+    await waitFor(() => expect(screen.getByText(/at the window/i)).toBeTruthy());
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('renders neither branch until the session check lands', () => {
+    // `null` is "not known yet". An admin must not watch the customer card get
+    // swapped out from under them, and .order-gate reserves the space either
+    // way, so waiting costs nothing visible.
+    mockFetch({ '/api/store': { body: OPEN_STORE } });
+    render(<OrderPage nav={vi.fn()} isAdmin={null} />);
+    expect(screen.queryByText(/at the window/i)).toBeNull();
+    expect(document.querySelector('.order-grid')).toBeNull();
+    expect(document.querySelector('.order-gate')).toBeTruthy();
+  });
+
+  it('brings up the cart when the session check comes back positive', async () => {
+    mockFetch({ '/api/store': { body: OPEN_STORE } });
+    const { rerender } = render(<OrderPage nav={vi.fn()} isAdmin={null} />);
+    rerender(<OrderPage nav={vi.fn()} isAdmin />);
+    await waitFor(() => expect(screen.getByText(SLICES[0].name)).toBeTruthy());
   });
 });

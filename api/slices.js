@@ -1,19 +1,28 @@
 import crypto from 'node:crypto';
 import { put, del } from '@vercel/blob';
 import { BodyTooLargeError, readBody, readQuery, send, isAdmin, clientIp, hasRedisEnv } from './_lib/util.js';
-import { getOrderByCode, rateLimit, ORDER_TTL_SECONDS } from './_lib/store.js';
+import { rateLimit } from './_lib/store.js';
 import {
   createSlice, getSlice, listSlices, setSliceHidden, deleteSlice,
   claimSliceQuota, releaseSliceQuota,
 } from './_lib/slices.js';
 import { deleteReport } from './_lib/reports.js';
 
-const MAX_PER_ORDER = 3;
-
-// A pickup code can only be resolved while its order still exists, and orders
-// self-expire after ORDER_TTL_SECONDS (_lib/store.js). Advertising a longer
-// window than that would just fail confusingly at the lookup step.
-const POST_WINDOW_MS = ORDER_TTL_SECONDS * 1000;
+// ── Posting limits ────────────────────────────────────────────────────
+// Posting used to require an exact pickup code from a real, recent,
+// non-cancelled order: the wall was for customers, and the code was the proof
+// that you were one. It doesn't any more — anyone who can see the wall can
+// post to it.
+//
+// That removed the only *hard* per-person cap the feature had, so what stands
+// in for it is deliberately soft. This counter keys on the random token the
+// browser keeps in localStorage, which anyone determined can clear. It is not
+// an identity and isn't trying to be one; it's a speed bump that stops one
+// person idly dumping twenty photos out of a single session. The real
+// backstops are the per-IP and global rate limits below, plus admin take-down
+// after the fact.
+const MAX_PER_DEVICE = 3;
+const DEVICE_WINDOW_S = 60 * 60 * 24;
 
 // Encoded payload cap. The client downscales to ~200-400 KB before sending;
 // base64 inflates by ~33%, so this leaves generous headroom while keeping the
@@ -50,7 +59,19 @@ const blobAuth = () =>
   (process.env.BLOB_READ_WRITE_TOKEN ? { token: process.env.BLOB_READ_WRITE_TOKEN } : {});
 
 const CAPTION_MAX = 80;
+// The poster's name is self-declared now. The old one came off the order the
+// pickup code resolved to, which is why it needed neither a cap nor
+// sanitising — it had already been through order intake. This one is a
+// stranger's free text, so it gets both.
+const NAME_MAX = 20;
 const clean = (v, max) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
+
+// The device token is a localStorage value, so it reaches Redis as part of a
+// key. Pin the shape rather than hashing whatever arrives: the client writes
+// 32 hex characters, and the range leaves room to change that without a
+// server deploy while refusing anything long enough to be an attack on the
+// keyspace.
+const DEVICE_TOKEN = /^[A-Za-z0-9_-]{16,128}$/;
 
 function makeId() {
   return `s${crypto.randomBytes(10).toString('hex')}`;
@@ -59,7 +80,8 @@ function makeId() {
 // Posters can delete their own photo, proven by the random token their browser
 // generated on first visit. Only the hash is stored: the record is what an
 // attacker would be trying to read, and a hash of it is useless for
-// impersonation. It never leaves the server in any case.
+// impersonation. It never leaves the server in any case. The same hash is
+// what the per-device post counter is keyed on.
 const hashDevice = (device) => crypto.createHash('sha256').update(device).digest('hex');
 
 function ownsSlice(slice, device) {
@@ -137,9 +159,13 @@ export default async function handler(req, res) {
   }
 }
 
-// orderId is the upload credential — it must never reach a client. `hidden` is
-// dropped too: the public feed only ever contains visible posts, so shipping
-// the flag would just invite a client to ask why.
+// New posts carry no orderId — nothing ties a photo to an order any more. The
+// destructure stays because records written while the pickup code *was* the
+// credential live on the wall for 90 days, and it is the only thing keeping
+// one of those order ids out of a public response. Don't tidy it away (same
+// deal as `contact` in api/orders.js). `hidden` is dropped too: the public
+// feed only ever contains visible posts, so shipping the flag would just
+// invite a client to ask why.
 const publicSlice = ({ orderId, hidden, deviceHash, ...rest }) => rest;
 // The board needs `hidden` to render the takedown state, but has no use for
 // the delete credential — so it doesn't get it either.
@@ -197,17 +223,28 @@ async function create(req, res) {
     });
   }
 
-  // Reject a non-boolean rather than coercing it. Guessing is wrong in both
-  // directions here: treat a stray truthy value as false and someone who asked
-  // to be anonymous gets named; treat it as true and someone loses the credit
-  // they wanted. Neither is worth a silent wrong answer about a person's name.
-  if (body.anon !== undefined && typeof body.anon !== 'boolean') {
-    return send(res, 400, { error: 'Invalid post-as setting — refresh and try again.' });
+  // The device token is required now, where it used to be optional. It was a
+  // convenience then — a post without one simply wasn't self-deletable — but
+  // it is what the per-device counter is keyed on, so a post arriving without
+  // one would be uncountable, and therefore unlimited. Requiring it also means
+  // every post is deletable by whoever made it, which is the only self-service
+  // remedy left now that no order stands behind a photo.
+  //
+  // Checked here, before the image is decoded, because it's the cheapest
+  // rejection available: a bad token shouldn't cost a megabyte of base64.
+  // (The image used to be validated first, so that a bad file and a bad pickup
+  // code couldn't be told apart by their error — with no code to probe, that
+  // ordering has nothing left to protect.)
+  // Typed check, not `String(body.device)`: a JSON number of the right length
+  // coerces to a string that satisfies the pattern, and hashDevice() would
+  // then hand a number to crypto's update(), which throws — turning a
+  // malformed request into a 500.
+  const device = typeof body.device === 'string' ? body.device : '';
+  if (!DEVICE_TOKEN.test(device)) {
+    return send(res, 400, { error: 'Your browser did not send a posting token — reload the page and try again.' });
   }
+  const deviceHash = hashDevice(device);
 
-  // Validated before the pickup code is even looked up: if a bad file produced
-  // a different error than a bad code, that difference would let an attacker
-  // probe which codes are real without ever needing a working photo.
   const raw = typeof body.image === 'string' ? body.image : '';
   const base64 = raw.startsWith('data:') ? raw.slice(raw.indexOf(',') + 1) : raw;
   if (!base64 || base64.length > MAX_BODY_BYTES) {
@@ -231,26 +268,12 @@ async function create(req, res) {
     return send(res, 413, { error: 'That photo has dimensions that are too large — try a smaller one.' });
   }
 
-  const code = clean(body.code, 12).replace(/^#/, '').toUpperCase();
-  if (code.length < 3) return send(res, 400, { error: 'Enter the pickup code from your order.' });
-
-  // Exact code match only — never by name. The pickup code is the credential
-  // for posting, so use its atomic reservation index rather than scanning the
-  // live board.
-  const order = await getOrderByCode(code);
-  const tooOld = order && Date.now() - order.createdAt > POST_WINDOW_MS;
-  // One generic message for missing / expired / cancelled, so the endpoint
-  // can't be used to probe which pickup codes are real.
-  if (!order || tooOld || order.status === 'cancelled') {
-    return send(res, 400, { error: 'That pickup code did not match a recent order.' });
-  }
-
   // Claim the slot before uploading so two parallel requests can't both take
   // the last one; released again if anything downstream fails.
-  const { ok, count } = await claimSliceQuota(order.id, MAX_PER_ORDER);
+  const { ok, count } = await claimSliceQuota(`dev:${deviceHash}`, MAX_PER_DEVICE, DEVICE_WINDOW_S);
   if (!ok) {
     return send(res, 429, {
-      error: `This order has already posted its ${MAX_PER_ORDER} photos — thanks for sharing!`,
+      error: `That's ${MAX_PER_DEVICE} photos from this device today — thanks for sharing!`,
       quotaUsed: true,
     });
   }
@@ -266,7 +289,7 @@ async function create(req, res) {
       ...blobAuth(),
     });
   } catch (err) {
-    await releaseSliceQuota(order.id);
+    await releaseSliceQuota(`dev:${deviceHash}`);
     console.error('blob upload failed:', err);
     return send(res, 502, { error: 'Could not save that photo — please try again.' });
   }
@@ -277,16 +300,15 @@ async function create(req, res) {
     pathname: blob.pathname,
     w: meta.w,
     h: meta.h,
-    // The name always comes from the order, never from the request body, so it
-    // needs no sanitising and can't be spoofed. The body only gets a say in
-    // whether to show it at all. Strict === true, so a missing or junk value
-    // falls back to attributed rather than silently anonymising someone.
-    name: body.anon === true ? '' : (order.name || '').split(' ')[0],
+    // Self-declared and optional: blank means anonymous, which is also what an
+    // untouched form sends — so leaving it alone is the private choice rather
+    // than a setting to find. The old value was read off the order the pickup
+    // code resolved to and so couldn't be faked; this one can be, and the
+    // remedy is the same as for a caption: admin take-down, plus the flag
+    // button any visitor can use on any tile.
+    name: clean(body.name, NAME_MAX),
     caption: clean(body.caption, CAPTION_MAX),
-    orderId: order.id,
-    // Absent if the client sent no device token — that post simply isn't
-    // self-deletable, rather than being deletable by anyone.
-    deviceHash: typeof body.device === 'string' && body.device ? hashDevice(body.device) : null,
+    deviceHash,
     createdAt: Date.now(),
     // Posts go live the moment they're uploaded — moderation is take-down
     // (DELETE) only, from the community pictures page itself, not a
@@ -297,12 +319,12 @@ async function create(req, res) {
   try {
     await createSlice(slice);
   } catch (err) {
-    await releaseSliceQuota(order.id);
+    await releaseSliceQuota(`dev:${deviceHash}`);
     await del(blob.url, blobAuth()).catch(() => { /* orphaned blob is better than a 500 */ });
     throw err;
   }
 
-  return send(res, 201, { slice: publicSlice(slice), remaining: MAX_PER_ORDER - count });
+  return send(res, 201, { slice: publicSlice(slice), remaining: MAX_PER_DEVICE - count });
 }
 
 // PATCH /api/slices?id=… {hidden} — admin hides or restores a post
@@ -369,8 +391,10 @@ async function remove(req, res) {
   // a photo that no longer exists, which GET /api/reports would then have to
   // filter out on every poll.
   await deleteReport(id);
-  // Deliberately no releaseSliceQuota() here: the per-order limit counts photos
-  // posted, not photos currently live. Giving the slot back would turn
-  // post-delete-repeat into an unlimited upload channel.
+  // Deliberately no releaseSliceQuota() here: the per-device limit counts
+  // photos posted, not photos currently live. Giving the slot back would turn
+  // post-delete-repeat into an unlimited upload channel — and with the device
+  // token now the only thing bounding a poster at all, that loop would undo
+  // the whole cap rather than just one order's share of it.
   return send(res, 200, { ok: true, blobRemoved });
 }

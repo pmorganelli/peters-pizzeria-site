@@ -8,19 +8,22 @@ import {
 import { isOpenNow } from './_lib/hours.js';
 
 // ── Order intake caps ──────────────────────────────────────────────────────
-// `clientIp` reads x-forwarded-for, so the per-IP cap is really a *per-network*
-// cap: campus wifi puts an entire dorm behind one NAT address, and every
-// student in that building shares this budget.
+// Intake is admin-only now (see create() below), so these are no longer the
+// thing standing between a rush and the kitchen — a valid session is. They
+// stay as a runaway backstop: a staff tab stuck in a retry loop, or a leaked
+// session, shouldn't be able to fill the board faster than anyone notices.
 //
-// It was 15 per 10 minutes, which a load test emptied in seconds — 40
-// concurrent orders got 15 through and turned away 25. On a Saturday rush
-// that's the whole building locked out after the fifteenth pizza, and the
-// people it turns away are exactly the customers, not an attacker.
+// The numbers are left where the public era put them rather than tightened to
+// fit a couple of staff phones, because `clientIp` reads x-forwarded-for and
+// campus wifi puts the whole building behind one NAT address — every device
+// taking orders shares this budget, and so does every customer sharing that
+// wifi who is merely *reading* an order status. Tightening to "how many
+// orders can two people type" would start refusing legitimate work the first
+// time a third person helps at the window.
 //
-// 60 per 10 minutes is one order every ten seconds from a single building,
-// which is faster than a student-run kitchen can physically fire them. The
-// global cap stays the real abuse backstop and keeps ~4x headroom over the
-// largest plausible rush. Both are here to be tuned rather than hunted for.
+// (For the record, since the derivation is easy to lose: this was 15 per 10
+// minutes, which a load test emptied in seconds — 40 concurrent orders got 15
+// through and turned away 25.)
 //
 // The store also enforces a hard live-board capacity. It refuses a new order
 // once that capacity is reached instead of accepting an order that the admin
@@ -104,8 +107,20 @@ export default async function handler(req, res) {
   }
 }
 
-// POST /api/orders — anyone can place an order (while the store is open)
+// POST /api/orders — staff place orders on the customer's behalf (while open)
+//
+// Ordering used to be open to anyone with the page loaded. It isn't: orders
+// are taken at the window and typed in by whoever is running the board, so a
+// valid admin session is the credential for creating one. This check sits
+// above every other gate on purpose — an unauthenticated request should learn
+// nothing here, not whether Redis is wired up, not whether the store is open,
+// and not how full the rate-limit window is.
+//
+// Reading an order stays public and unchanged: `?id=` and `?find=` below are
+// how a customer tracks the order someone else typed for them.
 async function create(req, res) {
+  if (!isAdmin(req)) return send(res, 401, { error: 'Admin login required' });
+
   // Deployed without Redis, orders would silently land in per-instance memory
   // and vanish between cold starts. Refuse loudly instead of losing orders.
   if (process.env.VERCEL && !hasRedisEnv()) {
@@ -201,17 +216,63 @@ async function create(req, res) {
 // is the only thing standing between one of those and a public response.
 const publicOrder = ({ contact, notes, ...rest }) => rest;
 
-// A pickup code is a credential, while a name is public information. Name or
-// prefix lookup used to return the same response (including the posting code),
-// which let anyone search common names and act as that customer.
+// ── Public lookup: pickup code, then name ─────────────────────────────
+// Name lookup was removed once, and it is deliberately back. The original
+// reasoning still holds on its own terms — a pickup code is a credential and a
+// name is public information, so anyone can search a common name and turn up
+// somebody else's order — but the situation around it changed twice. Posting
+// to the community wall no longer takes a pickup code, so the code is not the
+// credential for anything but collecting a pizza; and ordering went
+// staff-only, so a customer never sees their own confirmation screen and the
+// name they gave at the window is frequently the only thing they have.
+//
+// What that leaves is: someone who knows a real customer's exact name, on a
+// night that customer has a live order, can find it and see its pickup code.
+// The bound on that is the 30-per-IP-per-10-minutes limiter above, the fact
+// that only exact full names match (no prefixes, no partials), and orders
+// living three days. It is a real trade, made knowingly — see CLAUDE.md.
+//
+// A code always wins when the query is shaped like one, so the credential path
+// is never shadowed by a namesake. The one collision this can't resolve is a
+// customer whose name happens to be four characters that are all in
+// CODE_ALPHABET *and* matches a live pickup code — they'd get that order
+// instead of their own. Four simultaneous coincidences; the picker below
+// covers everything else.
+const MAX_NAME_MATCHES = 8;
+
+const normalizeName = (v) => String(v ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+
 async function findOrder(query) {
   const code = query.replace(/^#/, '').trim().toUpperCase();
   if (code.length !== 4 || [...code].some((ch) => !CODE_ALPHABET.includes(ch))) return null;
   return getOrderByCode(code);
 }
 
+// Exact, case- and whitespace-insensitive. Never a prefix: "sar" matching
+// Sarah is the behaviour that made the old version a name-harvesting tool
+// rather than a lookup.
+//
+// Costs one full board read (bounded by MAX_LIVE_ORDERS) per miss on the code
+// path, which is why it sits behind the same limiter and below the indexed
+// code lookup rather than beside it.
+async function findOrdersByName(query) {
+  const wanted = normalizeName(query);
+  if (wanted.length < 2) return [];
+  return (await listOrders()).filter((o) => normalizeName(o.name) === wanted);
+}
+
+// Just enough to tell your own order from a namesake's: what's in it, when it
+// was placed, where it's up to. Deliberately no pickup code — picking one is
+// what gets you that, and it keeps a single search from printing every
+// matching customer's collection credential in one response.
+const matchSummary = ({ id, status, createdAt, items, totalCents }) =>
+  ({ id, status, createdAt, items, totalCents });
+
 // GET /api/orders?id=…   — public status of a single order (customer polling)
-// GET /api/orders?find=… — public lookup by exact pickup code (rate-limited)
+// GET /api/orders?find=… — public lookup by exact pickup code, falling back to
+//                          an exact name match (rate-limited). Several orders
+//                          under one name come back as `matches` for the
+//                          customer to pick from rather than a guess.
 // GET /api/orders        — full board (admin only)
 async function read(req, res) {
   const { id, find } = readQuery(req);
@@ -224,9 +285,17 @@ async function read(req, res) {
     if (!(await rateLimit(`find:${clientIp(req)}`, 30, 600))) {
       return send(res, 429, { error: 'Too many lookups — give it a minute and try again.' });
     }
-    const order = await findOrder(String(find));
-    if (!order) return send(res, 404, { error: 'No order under that pickup code — double-check it, or it may have expired.' });
-    return send(res, 200, { order: publicOrder(order) });
+    const query = String(find);
+    const byCode = await findOrder(query);
+    if (byCode) return send(res, 200, { order: publicOrder(byCode) });
+
+    const byName = await findOrdersByName(query);
+    // One match is unambiguous, so skip the picker and hand it straight over.
+    if (byName.length === 1) return send(res, 200, { order: publicOrder(byName[0]) });
+    if (byName.length > 1) {
+      return send(res, 200, { matches: byName.slice(0, MAX_NAME_MATCHES).map(matchSummary) });
+    }
+    return send(res, 404, { error: 'No order under that pickup code or name — double-check it, or it may have expired.' });
   }
   if (!isAdmin(req)) return send(res, 401, { error: 'Admin login required' });
   return send(res, 200, { orders: await listOrders() });

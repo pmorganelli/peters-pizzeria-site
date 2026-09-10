@@ -10,12 +10,12 @@ vi.mock('@vercel/blob', () => ({
 
 import reportsHandler from './reports.js';
 import slicesHandler from './slices.js';
-import ordersHandler from './orders.js';
 import loginHandler from './login.js';
 import { startServer, call } from '../tests/helpers/server.js';
 import { resetEnv, configureBlob } from '../tests/helpers/env.js';
-import { openStore, placeOrder, adminCookie } from '../tests/helpers/fixtures.js';
+import { openStore, adminCookie } from '../tests/helpers/fixtures.js';
 import { makeJpeg, dataUrl } from '../tests/helpers/images.js';
+import { createSlice } from './_lib/slices.js';
 
 let server;
 let base;
@@ -29,7 +29,6 @@ beforeEach(async () => {
   server = await startServer({
     '/api/reports': reportsHandler,
     '/api/slices': slicesHandler,
-    '/api/orders': ordersHandler,
     '/api/login': loginHandler,
   });
   base = server.url;
@@ -37,16 +36,19 @@ beforeEach(async () => {
 
 afterEach(async () => { await server.close(); });
 
-// Post a real photo to the wall and hand back its id.
+// Post a real photo to the wall and hand back its id. No order behind it any
+// more — posting takes a device token and nothing else.
+let posterSeq = 0;
 async function postSlice(overrides = {}) {
-  const order = await placeOrder(base);
+  posterSeq += 1;
   const { body } = await call(base, '/api/slices', {
     method: 'POST',
     body: {
-      code: order.code,
       caption: 'a slice',
-      anon: false,
-      device: 'poster-device',
+      // A distinct token per post, so the 3-per-device cap never quietly
+      // decides the outcome of a test about takedown requests. Padded past
+      // the token's 16-character floor.
+      device: `poster-device-${String(posterSeq).padStart(6, '0')}`,
       image: dataUrl(makeJpeg(), 'image/jpeg'),
       ...overrides,
     },
@@ -142,14 +144,40 @@ describe('GET /api/reports — admin review queue', () => {
     expect(body.reports[0].slice.url).toContain('https://blob.test/');
   });
 
-  it('never exposes the device hashes or the order id behind a photo', async () => {
+  it('never exposes the device hashes behind a photo', async () => {
     const sliceId = await postSlice();
     await report(sliceId);
     const cookie = await adminCookie(base);
     const { body } = await call(base, '/api/reports', { headers: { Cookie: cookie } });
     expect(body.reports[0].devices).toBeUndefined();
     expect(body.reports[0].slice.deviceHash).toBeUndefined();
-    expect(body.reports[0].slice.orderId).toBeUndefined();
+  });
+
+  it('never exposes the order id on a photo old enough to carry one', async () => {
+    // Posting stopped recording an orderId when the pickup code stopped being
+    // the credential, so a photo posted through the handler above proves
+    // nothing here — the assertion would pass with the field-by-field
+    // allow-list in reports.js replaced by a blind spread. Records written
+    // while a code *was* required stay on the wall for 90 days and do carry
+    // one, so seed that shape directly and check it still can't get out.
+    await createSlice({
+      id: 'legacy-slice',
+      url: 'https://blob.test/legacy.jpg',
+      pathname: 'legacy.jpg',
+      w: 10, h: 10,
+      name: 'Casey',
+      caption: 'from the pickup-code era',
+      orderId: 'o-legacy-0001',
+      deviceHash: 'a'.repeat(64),
+      createdAt: Date.now(),
+      hidden: false,
+    });
+    await report('legacy-slice');
+    const cookie = await adminCookie(base);
+    const { body } = await call(base, '/api/reports', { headers: { Cookie: cookie } });
+    const legacy = body.reports.find((r) => r.sliceId === 'legacy-slice');
+    expect(legacy.slice.caption).toBe('from the pickup-code era'); // the record really is there
+    expect(legacy.slice.orderId).toBeUndefined();
   });
 });
 
