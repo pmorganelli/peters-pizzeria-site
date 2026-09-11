@@ -283,3 +283,59 @@ describe('OrderPage — ordering is staff-only', () => {
     await waitFor(() => expect(screen.getByText(SLICES[0].name)).toBeTruthy());
   });
 });
+
+// One staff device takes every order at the window now, so anything the form
+// carries from one order to the next lands on the wrong customer — and since
+// a name is what a customer searches on to find their order, a stale one hides
+// theirs and surfaces somebody else's.
+describe('OrderPage between orders on a shared staff device', () => {
+  const ORDER = {
+    id: 'o-1', code: 'AA22', name: 'Sarah', status: 'new',
+    items: [{ name: SLICES[0].name, qty: 1, priceCents: 200 }],
+    totalCents: 200, createdAt: Date.now(), updatedAt: Date.now(),
+  };
+
+  it('never prefills a name, however the last order was filed', async () => {
+    localStorage.setItem('pp_who:v1', JSON.stringify({ name: 'Sarah' }));
+    await openOrderPage();
+    expect(screen.getByPlaceholderText("Who's picking up?").value).toBe('');
+    // …and the dead key doesn't linger in storage either.
+    expect(localStorage.getItem('pp_who:v1')).toBeNull();
+  });
+
+  it('clears the name once an order is placed', async () => {
+    mockFetch({
+      '/api/store': { body: OPEN_STORE },
+      '/api/orders': { status: 201, body: { order: ORDER } },
+    });
+    render(<OrderPage nav={vi.fn()} isAdmin />);
+    await waitFor(() => expect(screen.getByText(SLICES[0].name)).toBeTruthy());
+    addOne(SLICES[0].name);
+    fireEvent.change(screen.getByPlaceholderText("Who's picking up?"), { target: { value: 'Sarah' } });
+    fireEvent.click(screen.getByRole('button', { name: /place order/i }));
+
+    // The confirmation replaces the form; going back to a fresh order must not
+    // bring Sarah with it.
+    await waitFor(() => expect(screen.getByText(`#${ORDER.code}`)).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /start another order/i }));
+    await waitFor(() => expect(screen.getByText(SLICES[0].name)).toBeTruthy());
+    expect(screen.getByPlaceholderText("Who's picking up?").value).toBe('');
+  });
+
+  it('tells staff what to do when the session expires mid-service', async () => {
+    mockFetch({
+      '/api/store': { body: OPEN_STORE },
+      '/api/orders': { status: 401, body: { error: 'Admin login required' } },
+    });
+    render(<OrderPage nav={vi.fn()} isAdmin />);
+    await waitFor(() => expect(screen.getByText(SLICES[0].name)).toBeTruthy());
+    addOne(SLICES[0].name);
+    fireEvent.change(screen.getByPlaceholderText("Who's picking up?"), { target: { value: 'Sarah' } });
+    fireEvent.click(screen.getByRole('button', { name: /place order/i }));
+
+    // Not the server's "Admin login required", which says nothing to whoever
+    // is standing at the window with a queue.
+    await waitFor(() => expect(screen.getByText(/session expired/i)).toBeTruthy());
+    expect(screen.getByText(/cart is saved/i)).toBeTruthy();
+  });
+});

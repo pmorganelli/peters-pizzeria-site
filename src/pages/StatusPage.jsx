@@ -5,6 +5,7 @@ import { LineReveal } from '../components/LineReveal';
 import { OrderStatusCard } from '../components/OrderStatusCard';
 import { api } from '../utils/api';
 import { STATUS_LABELS, agoLabel, fmtMoney, formatOrderItems } from '../utils/orders';
+import { readStored, writeStored, removeStored } from '../utils/storage';
 
 const SAVED_KEY = 'pp_order_id';
 const POLL_MS = 8000;
@@ -13,9 +14,9 @@ const POLL_MS = 8000;
 // (saved on submit by the order page), show its live status; otherwise show
 // the kitchen's open/closed state and point people at ordering.
 export function StatusPage({ nav, isAdmin }) {
-  const [trackedId, setTrackedId] = useState(() => localStorage.getItem(SAVED_KEY));
+  const [trackedId, setTrackedId] = useState(() => readStored(SAVED_KEY));
   const [order, setOrder] = useState(null);
-  const [loading, setLoading] = useState(() => Boolean(localStorage.getItem(SAVED_KEY)));
+  const [loading, setLoading] = useState(() => Boolean(readStored(SAVED_KEY)));
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [lookupError, setLookupError] = useState('');
@@ -53,15 +54,36 @@ export function StatusPage({ nav, isAdmin }) {
           // blip or a 5xx mustn't wipe live tracking mid-bake.
           if (!cancelled && sequence > applied && err.status === 404) {
             applied = sequence;
-            localStorage.removeItem(SAVED_KEY);
+            removeStored(SAVED_KEY);
             setTrackedId(null);
             setOrder(null);
           }
         });
     };
+    // Don't poll at a tab nobody is looking at, and refresh the moment someone
+    // looks again. Both halves matter here: every customer of the night has
+    // this page open on a phone that spends the evening locked in a pocket, so
+    // the skipped requests are most of the requests — and the refresh on the
+    // way back is why someone unlocking at the window sees "Ready" straight
+    // away instead of up to 8 seconds later, which is the one moment this page
+    // exists for.
+    //
+    // The interval keeps ticking while hidden and simply does no work, rather
+    // than being torn down and rebuilt around visibility (which is what the
+    // community wall does). A timer created lazily inside a closure is a timer
+    // static analysis can't prove gets cleared — react-doctor's
+    // effect-needs-cleanup flags exactly that shape — and browsers throttle
+    // background intervals to about once a minute anyway, so the idle tick
+    // costs nothing while the network call it guards is the real expense.
+    const onVisibility = () => { if (!document.hidden) fetchOrder(); };
+    const timer = setInterval(() => { if (!document.hidden) fetchOrder(); }, POLL_MS);
     fetchOrder().finally(() => { if (!cancelled) setLoading(false); });
-    const t = setInterval(fetchOrder, POLL_MS);
-    return () => { cancelled = true; clearInterval(t); };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [trackedId, settled]);
 
   // One field for both a pickup code and a name — the server tries the code
@@ -82,7 +104,7 @@ export function StatusPage({ nav, isAdmin }) {
         setMatches(found.matches);
         return;
       }
-      localStorage.setItem(SAVED_KEY, found.order.id);
+      writeStored(SAVED_KEY, found.order.id);
       setOrder(found.order);
       setTrackedId(found.order.id);
       setQuery('');
@@ -99,7 +121,7 @@ export function StatusPage({ nav, isAdmin }) {
   // trackedId change below arms. `loading` covers the gap so the lookup form
   // doesn't flash back up in between.
   const pickMatch = (id) => {
-    localStorage.setItem(SAVED_KEY, id);
+    writeStored(SAVED_KEY, id);
     setMatches(null);
     setQuery('');
     setLoading(true);
@@ -108,7 +130,7 @@ export function StatusPage({ nav, isAdmin }) {
   };
 
   const forget = () => {
-    localStorage.removeItem(SAVED_KEY);
+    removeStored(SAVED_KEY);
     setTrackedId(null);
     setOrder(null);
     setLookupError('');
@@ -119,7 +141,7 @@ export function StatusPage({ nav, isAdmin }) {
   // that page is staff-only now, so for everyone else this drops back to the
   // lookup form — which is the only thing a customer can act on here.
   const newOrder = () => {
-    localStorage.removeItem(SAVED_KEY);
+    removeStored(SAVED_KEY);
     setTrackedId(null);
     setOrder(null);
     if (isAdmin === true) nav('order');

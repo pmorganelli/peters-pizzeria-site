@@ -252,16 +252,35 @@ describe('GET /api/orders?find= — name lookup', () => {
     expect(body.order.notes).toBeUndefined();
   });
 
-  it('spends the same per-IP budget as a code lookup (30/10min)', async () => {
-    // The limiter is the main thing bounding how much of the board a name
-    // search can sweep, so it has to cover this path too — not just `?find=`
-    // when the query happens to look like a code.
+  it('spends the same per-IP budget as a code lookup (300/10min)', async () => {
+    // Both halves of `?find=` share one budget — the limiter can't be reached
+    // only when the query happens to look like a code.
+    //
+    // The number is high on purpose: every customer now reaches their order
+    // through here, and a whole building on campus wifi is one x-forwarded-for
+    // address (see FIND_PER_IP in orders.js). A regression *down* to something
+    // person-sized is the failure this guards against, so it checks both that
+    // the 300th lookup still works and that the 301st doesn't.
     await postOrder({ name: 'Casey Customer', items });
     let last;
-    for (let i = 0; i < 31; i += 1) {
+    for (let i = 0; i < 300; i += 1) {
       last = await call(base, '/api/orders?find=casey%20customer');
     }
+    expect(last.status).toBe(200);
+    expect((await call(base, '/api/orders?find=casey%20customer')).status).toBe(429);
+  });
+
+  it('keeps one busy network from emptying the lookup budget for everyone', async () => {
+    // The global cap is the abuse backstop the per-IP one stopped being once
+    // it had to accommodate a whole dorm.
+    let last;
+    for (let i = 0; i < 1201; i += 1) {
+      last = await call(base, '/api/orders?find=nobody-at-all', {
+        headers: { 'x-forwarded-for': `10.0.${Math.floor(i / 250)}.${i % 250}` },
+      });
+    }
     expect(last.status).toBe(429);
+    expect(last.body.error).toMatch(/slammed/i);
   });
 });
 

@@ -32,6 +32,28 @@ const RATE_WINDOW_S = 600;
 const ORDERS_PER_IP = 60;
 const ORDERS_GLOBAL = 240;
 
+// ── Lookup caps (`?find=`) ─────────────────────────────────────────────
+// This was 30 per IP per 10 minutes, sized for a world where the lookup was a
+// fallback: customers ordered on their own phone, kept `pp_order_id`, and only
+// typed a code if they'd cleared their browser.
+//
+// Ordering is staff-only now, which inverts that completely. A customer never
+// sees a confirmation screen, so **every one of them** reaches their order
+// through this endpoint — and `clientIp` reads x-forwarded-for, so a whole
+// building on campus wifi is one address. Forty customers making one or two
+// attempts each (a typo, a re-check twenty minutes later) is 40-120 lookups
+// from a single IP inside one window. At 30 the thirty-first person of the
+// night is told to come back later, and the ones it turns away are the entire
+// customer base.
+//
+// 300 leaves ~2.5x headroom over the worst plausible night from one network,
+// and the global cap is the actual abuse backstop. Note that neither of these
+// is what stops someone reading a stranger's order: exact-full-name matching
+// is (see findOrdersByName). Loosening *that* is the change to think hard
+// about; this one only decides whether the feature works on a busy night.
+const FIND_PER_IP = 300;
+const FIND_GLOBAL = 1200;
+
 const STATUSES = ['new', 'firing', 'ready', 'done', 'cancelled'];
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no 0/O/1/I/L
 const IDEMPOTENCY_KEY = /^[A-Za-z0-9_-]{16,128}$/;
@@ -282,8 +304,11 @@ async function read(req, res) {
     return send(res, 200, { order: publicOrder(order) });
   }
   if (find !== undefined) {
-    if (!(await rateLimit(`find:${clientIp(req)}`, 30, 600))) {
+    if (!(await rateLimit(`find:${clientIp(req)}`, FIND_PER_IP, RATE_WINDOW_S))) {
       return send(res, 429, { error: 'Too many lookups — give it a minute and try again.' });
+    }
+    if (!(await rateLimit('find:all', FIND_GLOBAL, RATE_WINDOW_S))) {
+      return send(res, 429, { error: 'We are getting slammed! Please try again in a couple minutes.' });
     }
     const query = String(find);
     const byCode = await findOrder(query);

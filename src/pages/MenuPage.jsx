@@ -6,7 +6,7 @@ import { ArrowRight } from 'lucide-react';
 import { Footer } from '../components/Footer';
 import { LineReveal } from '../components/LineReveal';
 import { useScrollReveal } from '../hooks/useScrollReveal';
-import { MENU_DATA } from '../data/menu';
+import { MENU_DATA, UPCOMING_SPECIALS } from '../data/menu';
 import { api } from '../utils/api';
 import { responsiveImg } from '../utils/photos';
 
@@ -61,8 +61,11 @@ export function MenuPage({ nav, isAdmin }) {
         {MENU_DATA.map((section, si) => (
           <div key={section.category} ref={ref(si)} className="reveal">
             <div className="menu-section-title">{section.category}</div>
-            {/* A category can be empty for a week (everything in it commented
-                out in menu.js) — say so rather than leaving a bare heading. */}
+            {/* A category can be empty for a week — everything in it commented
+                out in menu.js — which is worth saying rather than leaving a
+                bare heading. Defensive: the current menu has no empty
+                category, because an off week gets the whole block commented
+                out instead. */}
             {section.items.length === 0 ? (
               <div className="menu-items-soon">Coming soon.</div>
             ) : (
@@ -88,6 +91,29 @@ export function MenuPage({ nav, isAdmin }) {
             )}
           </div>
         ))}
+
+        {/* The homepage strip advertises these when nothing on the menu is
+            tagged `special`, and its "Full Menu" button lands here — so
+            without this, someone taps through from a Bianca card and finds no
+            Bianca anywhere. Same list, same source (UPCOMING_SPECIALS), no
+            prices treated as orderable: these have no catalog entry, so the
+            server would reject them if a row here were ever made clickable. */}
+        {UPCOMING_SPECIALS.length > 0 && (
+          <div ref={ref(MENU_DATA.length)} className="reveal">
+            <div className="menu-section-title">Coming Soon</div>
+            <div className="menu-items">
+              {UPCOMING_SPECIALS.map((item) => (
+                <div key={item.name} className="menu-item menu-item-soon">
+                  <span className="menu-item-name">{item.name}</span>
+                  <span className="menu-item-desc">{item.desc}</span>
+                  <span className="menu-item-dots" />
+                  <span className="menu-item-price">{item.price}</span>
+                </div>
+              ))}
+            </div>
+            <div className="menu-items-soon">Back on a future Saturday — not available tonight.</div>
+          </div>
+        )}
 
         <div className="menu-venmo-box">
           <div>

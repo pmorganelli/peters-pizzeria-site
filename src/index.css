@@ -458,15 +458,19 @@ nav.nav-dark.scrolled .nav-hamburger span { background: var(--ink); }
 .special-name { font-family: var(--serif); font-size: 26px; font-weight: 700; font-style: italic; color: var(--cream); line-height: 1.1; margin-bottom: 10px; }
 .special-desc { font-family: var(--serif); font-size: 15px; color: rgba(254,245,239,0.5); line-height: 1.6; margin-bottom: 22px; }
 .special-price { font-family: var(--ui); font-size: 22px; font-weight: 500; color: var(--red); }
-/* No specials tagged in menu.js this week. Sits inside the dark strip, so it
-   borrows the card background rather than leaving the section looking broken. */
-.specials-soon {
-  background: rgba(255,255,255,0.04);
-  padding: 36px 32px;
-  font-family: var(--serif); font-style: italic;
-  font-size: clamp(20px, 2.4vw, 28px);
-  color: rgba(254,245,239,0.55);
+/* A special that isn't on the menu yet: the same card, but rendered as a div
+   rather than a button, so every affordance .special-card sets for the
+   clickable case has to be taken back — the pointer, the lift, and the red
+   rule that wipes in across the top on hover. Leaving those on a card that
+   does nothing is worse than a plain card. The price is dimmed to the same
+   weight as the description: it's information about a future week, not a
+   thing you can pay right now. */
+.special-card-soon { cursor: default; }
+@media (hover: hover) {
+  .special-card-soon:hover { background: rgba(255,255,255,0.04); transform: none; }
+  .special-card-soon:hover::before { transform: scaleX(0); }
 }
+.special-card-soon .special-price { color: rgba(254,245,239,0.45); }
 /* Sold-out special: keep it visible (it'll be back) but clearly off tonight */
 .special-card.special-sold-out { opacity: 0.45; }
 .special-card.special-sold-out .special-name { text-decoration: line-through; text-decoration-thickness: 1.5px; text-decoration-color: rgba(224,54,22,0.7); }
@@ -504,14 +508,20 @@ nav.nav-dark.scrolled .nav-hamburger span { background: var(--ink); }
 .menu-body > div:first-of-type .menu-section-title { padding-top: 0; border-top: none; }
 .menu-items { border-top: 1px solid var(--cream2); }
 .menu-item { display: flex; align-items: baseline; padding: 13px 0; border-bottom: 1px solid var(--cream2); }
-/* Category with everything commented out of menu.js for the week. Matches the
-   .menu-items top rule so the heading still sits on a line. */
+/* Two jobs. Under an empty category it stands in for the item list, so it
+   carries the same top rule .menu-items does and the heading still sits on a
+   line. Under the Coming Soon block it's a footnote *below* a real list, where
+   that rule would read as a second divider — hence the override there. */
 .menu-items-soon {
   border-top: 1px solid var(--cream2);
   padding: 16px 0;
   font-family: var(--serif); font-style: italic; font-size: 16px;
   color: var(--ink2);
 }
+.menu-items + .menu-items-soon { border-top: none; padding-top: 10px; font-size: 14px; }
+/* Not tonight's menu: dimmed like a sold-out row, but without the strike —
+   nothing was withdrawn, it just hasn't arrived. */
+.menu-item-soon { opacity: 0.55; }
 .menu-item-soldout { opacity: 0.5; }
 .menu-item-soldout .menu-item-name { text-decoration: line-through; text-decoration-thickness: 1px; }
 .menu-item-86 { font-family: var(--ui); font-size: 10px; letter-spacing: var(--track-label); text-transform: uppercase; color: var(--red); margin-right: 12px; flex-shrink: 0; }

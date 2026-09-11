@@ -6,24 +6,39 @@ import { OrderStatusCard } from '../components/OrderStatusCard';
 import { MENU_DATA } from '../data/menu';
 import { api } from '../utils/api';
 import { DAY_NAMES, DEFAULT_MAX_QTY, addonLabel, clampCartQty, displayName, fmtMoney, fmtTime, parsePriceCents } from '../utils/orders';
+import { readStored, readStoredJSON, writeStored, writeStoredJSON, removeStored } from '../utils/storage';
 
 const SAVED_KEY = 'pp_order_id';
 const CART_KEY = 'pp_cart:v2';
 const CART_KEY_UNVERSIONED = 'pp_cart2'; // pre-versioning name for the same shape
 const LEGACY_CART_KEY = 'pp_cart';
-const WHO_KEY = 'pp_who:v1';
+// `pp_who:v1` used to remember the name for next time and is deliberately
+// gone. It made sense when a customer ordered on their own phone — same person
+// every visit. One staff device now takes every order at the window, so
+// "remember the last name typed" means the next customer's order is filed
+// under the previous customer's name by default, and staff have to notice and
+// clear it every single time. Since a name is now what a customer *searches*
+// on to find their order, getting that wrong doesn't just look sloppy: it
+// hands them somebody else's pizza, or hides their own. The key is cleared
+// once on mount so it doesn't sit in storage forever.
+const LEGACY_WHO_KEY = 'pp_who:v1';
 const ATTEMPT_KEY = 'pp_order_attempt:v1';
 
-const readJSON = (key, fallback) => {
-  try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
-};
+const readJSON = (key, fallback) => readStoredJSON(key, fallback);
 const POLL_MS = 8000;
 
 const PIZZA_CATEGORY = MENU_DATA[0].category;
 const ADDON_CATEGORY = MENU_DATA[1].category;
 const ADDON_ITEMS = MENU_DATA[1].items;
-// Add-ons aren't standalone order rows — they attach to slices per unit
-const ORDERABLE_SECTIONS = MENU_DATA.filter((s) => s.category !== ADDON_CATEGORY);
+// Add-ons aren't standalone order rows — they attach to slices per unit.
+// Empty categories are dropped too: items go in and out of menu.js week to
+// week (commented out, not deleted), so a category can legitimately have
+// nothing in it, and the menu page says "coming soon" there. On a staff order
+// form there is nothing to say — an "and then?" heading with no rows under it
+// is just something to scroll past mid-service.
+const ORDERABLE_SECTIONS = MENU_DATA.filter(
+  (s) => s.category !== ADDON_CATEGORY && s.items.length > 0,
+);
 
 // Cart model: item name → one entry per unit, each entry listing that unit's
 // add-on names — so "one cheese slice with burrata, one plain" is two units.
@@ -269,12 +284,13 @@ function StaffOnlyCard({ nav }) {
 export function OrderPage({ nav, isAdmin }) {
   // Cart and pickup identity survive navigation and refreshes
   const [cart, setCart] = useState(readCart);
-  const [name, setName] = useState(() => readJSON(WHO_KEY, {}).name || '');
+  // Always blank. See LEGACY_WHO_KEY above for why this isn't remembered.
+  const [name, setName] = useState('');
   const [notes, setNotes] = useState('');
   const [placing, setPlacing] = useState(false);
   const [error, setError] = useState('');
   const [order, setOrder] = useState(null);
-  const [loadingSaved, setLoadingSaved] = useState(() => Boolean(localStorage.getItem(SAVED_KEY)));
+  const [loadingSaved, setLoadingSaved] = useState(() => Boolean(readStored(SAVED_KEY)));
   const [store, setStore] = useState(null);
 
   // Open/closed status. If the check itself fails, fail open — the server
@@ -288,21 +304,22 @@ export function OrderPage({ nav, isAdmin }) {
     return () => { cancelled = true; };
   }, [isAdmin]);
 
+  useEffect(() => { removeStored(LEGACY_WHO_KEY); }, []);
   useEffect(() => { window.scrollTo(0, 0); }, [order?.id]);
-  useEffect(() => { localStorage.setItem(CART_KEY, JSON.stringify(cart)); }, [cart]);
+  useEffect(() => { writeStoredJSON(CART_KEY, cart); }, [cart]);
 
   // Restore an in-flight order across refreshes
   useEffect(() => {
     // Gated with the store check above: a visitor who can't order gets the
     // staff-only card below, so neither request has anything to render into.
     if (isAdmin !== true) return undefined;
-    const saved = localStorage.getItem(SAVED_KEY);
+    const saved = readStored(SAVED_KEY);
     if (!saved) return undefined;
     let cancelled = false;
     api(`/api/orders?id=${encodeURIComponent(saved)}`)
       .then((d) => { if (!cancelled) setOrder(d.order); })
       // Forget only when the server says it's gone; keep it through blips
-      .catch((err) => { if (!cancelled && err.status === 404) localStorage.removeItem(SAVED_KEY); })
+      .catch((err) => { if (!cancelled && err.status === 404) removeStored(SAVED_KEY); })
       .finally(() => { if (!cancelled) setLoadingSaved(false); });
     return () => { cancelled = true; };
   }, [isAdmin]);
@@ -333,7 +350,7 @@ export function OrderPage({ nav, isAdmin }) {
           // blip or a 5xx mustn't wipe live tracking mid-bake.
           if (!cancelled && sequence > applied && err.status === 404) {
             applied = sequence;
-            localStorage.removeItem(SAVED_KEY);
+            removeStored(SAVED_KEY);
             setOrder(null);
           }
         });
@@ -431,20 +448,30 @@ export function OrderPage({ nav, isAdmin }) {
       const key = savedAttempt?.fingerprint === fingerprint
         ? savedAttempt.key
         : (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`);
-      localStorage.setItem(ATTEMPT_KEY, JSON.stringify({ key, fingerprint }));
+      writeStoredJSON(ATTEMPT_KEY, { key, fingerprint });
       const { order: created } = await api('/api/orders', {
         method: 'POST',
         body,
         headers: { 'Idempotency-Key': key },
       });
-      localStorage.removeItem(ATTEMPT_KEY);
-      localStorage.setItem(SAVED_KEY, created.id);
-      localStorage.setItem(WHO_KEY, JSON.stringify({ name }));
+      removeStored(ATTEMPT_KEY);
+      writeStored(SAVED_KEY, created.id);
       setOrder(created);
       setCart({});
+      setName('');
       setNotes('');
     } catch (e) {
-      setError(e.message);
+      // A 401 here means the staff session went away between loading the page
+      // and placing the order — a 30-day expiry landing mid-service, or
+      // someone rotating ADMIN_PASSWORD. The server's own wording ("Admin
+      // login required") is true but useless to whoever is standing at the
+      // window with a queue, so say what to do instead. The cart survives in
+      // localStorage, so logging in and coming back loses nothing.
+      if (e.status === 401) {
+        setError('Your staff session expired — log in again from the Admin button at the bottom of the page, then place this order. Your cart is saved.');
+      } else {
+        setError(e.message);
+      }
       // The store may have closed or an item sold out while the cart was built
       if (e.status === 403) setStore((s) => ({ ...(s || { mode: 'closed', hours: null }), open: false }));
       else if (e.status === 400) api('/api/store').then(setStore).catch(() => {});
@@ -454,8 +481,8 @@ export function OrderPage({ nav, isAdmin }) {
   };
 
   const newOrder = () => {
-    localStorage.removeItem(SAVED_KEY);
-    localStorage.removeItem(ATTEMPT_KEY);
+    removeStored(SAVED_KEY);
+    removeStored(ATTEMPT_KEY);
     setOrder(null);
   };
 

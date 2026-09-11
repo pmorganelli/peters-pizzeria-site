@@ -13,6 +13,7 @@ import { OrderPage }   from './pages/OrderPage';
 import { StatusPage }  from './pages/StatusPage';
 import { routeFromPath, pathForRoute } from './utils/routes';
 import { api } from './utils/api';
+import { removeStored } from './utils/storage';
 import { markChunkLoaded, shouldReloadForChunkFailure } from './utils/chunkReload';
 import { metadataForRoute } from './data/routeMetadata';
 
@@ -135,7 +136,7 @@ export default function App() {
   // The URL replaced pp_page2 as the restore mechanism. The old key is cleared
   // once so a returning visitor isn't carrying dead state around forever.
   useEffect(() => {
-    localStorage.removeItem('pp_page2');
+    removeStored('pp_page2');
     // Every page scrolls itself to top on mount, so letting the browser also
     // restore a remembered offset on Back just makes the two fight.
     if ('scrollRestoration' in window.history) window.history.scrollRestoration = 'manual';

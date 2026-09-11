@@ -1,5 +1,6 @@
 import { ArrowRight, Camera, Check, Clock, Flame } from 'lucide-react';
 import { addonLabel, displayName, fmtMoney, itemTotalCents, orderLineKey, STATUS_LABELS } from '../utils/orders';
+import { writeStoredJSON } from '../utils/storage';
 
 const VENMO_URL = 'https://venmo.com/u/Peter-Morganelli24';
 // Handed to the wall so the composer opens prefilled. It used to carry the
@@ -110,7 +111,7 @@ export function OrderStatusCard({ order, onNewOrder, nav }) {
             onClick={() => {
               // Only a prefill: the wall's name field is free text now, and
               // the poster can clear it to go up anonymously.
-              localStorage.setItem(SLICE_HANDOFF_KEY, JSON.stringify({ name: firstName }));
+              writeStoredJSON(SLICE_HANDOFF_KEY, { name: firstName });
               nav('slices');
             }}
           >

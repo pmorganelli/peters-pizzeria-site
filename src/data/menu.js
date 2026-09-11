@@ -18,8 +18,10 @@ export const MENU_DATA = [
       // panel instead — that greys the item out where this hides it.)
       //
       // `special` puts an item on the homepage "This week's specials" strip
-      // and stamps a SPECIAL tag on its menu row. With all three specials out,
-      // both surfaces fall back to a "coming soon" placeholder.
+      // and stamps a SPECIAL tag on its menu row. The three specials below are
+      // *also* listed in UPCOMING_SPECIALS so the homepage can still show what
+      // is coming back — uncommenting one here means deleting it from there,
+      // or it appears twice.
       // { name: 'Margherita',         desc: 'House-made sauce, fior di latte, basil',                             price: '$4', maxQty: 4 },
       // { name: 'Bianca',             desc: 'Ricotta, garlic, olive oil, rosemary',                            price: '$3', special: 'Special' },
       // { name: 'Pesto',              desc: 'House-made pesto sauce, our mozzarella blend, fresh basil',                      price: '$4', special: 'Special' },
@@ -49,4 +51,19 @@ export const MENU_DATA = [
   //     // { name: 'Focaccia Bread',       desc: 'Made in-house',                                    price: '$2'  },
   //   ],
   // },
+];
+
+// Specials that are off the menu right now but are coming back. The homepage
+// strip falls back to this when nothing in MENU_DATA carries `special`, so the
+// section still says what's on the way instead of going dark for a week.
+//
+// Deliberately a separate array rather than a flag on a commented-out item:
+// everything in MENU_DATA is orderable and priced by the server from it, and
+// these are neither. Nothing here can be added to a cart — that's the point.
+// Keep it in sync by hand with the commented-out block above; an item should
+// be in exactly one of the two places.
+export const UPCOMING_SPECIALS = [
+  { name: 'Bianca', desc: 'Ricotta, garlic, olive oil, rosemary',                     price: '$3' },
+  { name: 'Pesto',  desc: 'House-made pesto sauce, our mozzarella blend, fresh basil', price: '$4' },
+  { name: 'Vodka',  desc: 'House-made vodka sauce, our mozzarella blend, fresh basil', price: '$4' },
 ];

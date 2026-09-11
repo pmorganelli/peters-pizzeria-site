@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, mockFetch } from '../../tests/helpers/dom.jsx';
 import { StatusPage } from './StatusPage';
 import { MENU_DATA } from '../data/menu';
@@ -41,9 +41,13 @@ beforeEach(() => {
 });
 
 describe('StatusPage lookup', () => {
-  it('asks for a pickup code or a name in one field', () => {
+  // The field is labelled for the name, because that's the path nearly every
+  // customer takes now — but `?find=` still tries the pickup code first, so a
+  // pasted code keeps working and the sub-copy above the form says so.
+  it('asks for the name in one field', () => {
     mountWith({});
-    expect(screen.getByText(/pickup code or name/i)).toBeTruthy();
+    expect(screen.getByText(/^name$/i)).toBeTruthy();
+    expect(screen.getByPlaceholderText(/the name you gave us/i)).toBeTruthy();
   });
 
   // Ordering is staff-only, so a customer is never sent to /order from here —
@@ -57,7 +61,7 @@ describe('StatusPage lookup', () => {
 
   it('finds a single order straight away without a picker', async () => {
     mountWith({ '/api/orders?find=': { body: { order: TWO[0] } } });
-    fireEvent.change(screen.getByPlaceholderText(/or the name you gave us/i), { target: { value: 'sam' } });
+    fireEvent.change(screen.getByPlaceholderText(/the name you gave us/i), { target: { value: 'sam' } });
     fireEvent.click(screen.getByRole('button', { name: /find my order/i }));
     await waitFor(() => expect(screen.getByText(`#${TWO[0].code}`)).toBeTruthy());
   });
@@ -70,7 +74,7 @@ describe('StatusPage lookup', () => {
     });
     render(<StatusPage nav={vi.fn()} isAdmin={false} />);
 
-    fireEvent.change(screen.getByPlaceholderText(/or the name you gave us/i), { target: { value: 'sam' } });
+    fireEvent.change(screen.getByPlaceholderText(/the name you gave us/i), { target: { value: 'sam' } });
     fireEvent.click(screen.getByRole('button', { name: /find my order/i }));
 
     await waitFor(() => expect(screen.getByText(/which one is yours/i)).toBeTruthy());
@@ -95,7 +99,7 @@ describe('StatusPage lookup', () => {
       '/api/orders?id=': () => new Promise((resolve) => { release = () => resolve({ body: { order: TWO[0] } }); }),
     });
     render(<StatusPage nav={vi.fn()} isAdmin={false} />);
-    fireEvent.change(screen.getByPlaceholderText(/or the name you gave us/i), { target: { value: 'sam' } });
+    fireEvent.change(screen.getByPlaceholderText(/the name you gave us/i), { target: { value: 'sam' } });
     fireEvent.click(screen.getByRole('button', { name: /find my order/i }));
     await waitFor(() => expect(document.querySelectorAll('.status-match')).toHaveLength(2));
 
@@ -111,9 +115,37 @@ describe('StatusPage lookup', () => {
 
   it('surfaces a miss as an error rather than an empty picker', async () => {
     mountWith({ '/api/orders?find=': { status: 404, body: { error: 'No order under that pickup code or name — double-check it, or it may have expired.' } } });
-    fireEvent.change(screen.getByPlaceholderText(/or the name you gave us/i), { target: { value: 'nobody' } });
+    fireEvent.change(screen.getByPlaceholderText(/the name you gave us/i), { target: { value: 'nobody' } });
     fireEvent.click(screen.getByRole('button', { name: /find my order/i }));
     await waitFor(() => expect(screen.getByText(/no order under that pickup code or name/i)).toBeTruthy());
     expect(document.querySelector('.status-match')).toBeNull();
+  });
+});
+
+describe('StatusPage polling', () => {
+  const setHidden = (hidden) => {
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden });
+    document.dispatchEvent(new Event('visibilitychange'));
+  };
+
+  afterEach(() => {
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
+    vi.useRealTimers();
+  });
+
+  it('stops polling in a backgrounded tab and refreshes the moment it comes back', async () => {
+    localStorage.setItem('pp_order_id', TWO[0].id);
+    const fetchSpy = mockFetch({ '/api/orders': { body: { order: TWO[0] } } });
+    render(<StatusPage nav={vi.fn()} isAdmin={false} />);
+    await waitFor(() => expect(screen.getByText(`#${TWO[0].code}`)).toBeTruthy());
+
+    const afterMount = fetchSpy.mock.calls.length;
+    setHidden(true);
+    expect(fetchSpy.mock.calls.length).toBe(afterMount);
+
+    // Coming back refetches straight away rather than waiting out the interval
+    // — someone unlocking their phone at the window wants "Ready" now.
+    setHidden(false);
+    await waitFor(() => expect(fetchSpy.mock.calls.length).toBeGreaterThan(afterMount));
   });
 });

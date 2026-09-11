@@ -3,6 +3,8 @@
 // utils/orders.js and utils/photos.js — so they're testable without pulling
 // in React/GSAP/lucide-react just to reach a few plain functions.
 
+import { readStored, writeStored, removeStored, readStoredJSON, writeStoredJSON } from './storage';
+
 const DEVICE_KEY = 'pp_slice_device:v1';
 // Ids this device posted. Only decides whether to *offer* the delete button —
 // the server independently verifies the device token before removing anything,
@@ -22,54 +24,49 @@ const LEGACY_HANDOFF_KEY = 'pp_slice_code:v1';
 const NAME_KEY = 'pp_slice_name:v1';
 
 export function readMine() {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(MINE_KEY));
-    return new Set(Array.isArray(parsed) ? parsed : []);
-  } catch {
-    return new Set();
-  }
+  const parsed = readStoredJSON(MINE_KEY);
+  return new Set(Array.isArray(parsed) ? parsed : []);
 }
 
 export function writeMine(mine) {
-  localStorage.setItem(MINE_KEY, JSON.stringify([...mine]));
+  writeStoredJSON(MINE_KEY, [...mine]);
 }
 
 export function readHandoff() {
-  const raw = localStorage.getItem(HANDOFF_KEY);
-  if (!raw) return { name: '' };
-  try {
-    const parsed = JSON.parse(raw);
-    return { name: (typeof parsed === 'object' && parsed ? parsed.name : '') ?? '' };
-  } catch {
-    return { name: '' };
-  }
+  const parsed = readStoredJSON(HANDOFF_KEY);
+  return { name: (typeof parsed === 'object' && parsed ? parsed.name : '') ?? '' };
 }
 
 export function clearHandoff() {
-  localStorage.removeItem(HANDOFF_KEY);
+  removeStored(HANDOFF_KEY);
   // A confirmation screen open across the deploy could still have written the
   // old key. Clear it on the same pass so it doesn't sit there forever.
-  localStorage.removeItem(LEGACY_HANDOFF_KEY);
+  removeStored(LEGACY_HANDOFF_KEY);
 }
 
-export const readPosterName = () => localStorage.getItem(NAME_KEY) ?? '';
+export const readPosterName = () => readStored(NAME_KEY) ?? '';
 
 export function writePosterName(name) {
   // An empty name is a real choice — it's how you post anonymously — so it's
   // stored rather than skipped, or the next visit would helpfully re-attach
   // the name you just removed.
-  localStorage.setItem(NAME_KEY, name);
+  writeStored(NAME_KEY, name);
 }
 
+// The server *requires* this on a post (it's what the per-device photo cap is
+// counted on), so it has to survive a browser that refuses storage — hence
+// writeStored's in-memory fallback. On such a browser the token is fresh every
+// reload, which costs the ability to delete a photo posted before that reload
+// and nothing else. Failing to mint one at all would mean no posting.
 export function deviceToken() {
-  let token = localStorage.getItem(DEVICE_KEY);
+  let token = readStored(DEVICE_KEY);
   if (!token) {
     // randomUUID needs a secure context; getRandomValues doesn't, and both
     // beat Math.random for anything that identifies a device.
     const bytes = new Uint8Array(16);
     crypto.getRandomValues(bytes);
     token = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
-    localStorage.setItem(DEVICE_KEY, token);
+    writeStored(DEVICE_KEY, token);
   }
   return token;
 }

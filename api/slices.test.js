@@ -79,21 +79,21 @@ describe('POST /api/slices — availability gates', () => {
 });
 
 describe('POST /api/slices — rate limits', () => {
-  it('trips the per-IP limit (5/hr) before token/body validation', async () => {
+  it('trips the per-IP limit (30/hr) before token/body validation', async () => {
     const results = [];
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 31; i++) {
       results.push(await call(base, '/api/slices', {
         method: 'POST',
         body: { image: '' }, // invalid, but should still count against the limiter
       }));
     }
-    expect(results.slice(0, 5).every((r) => r.status !== 429)).toBe(true);
-    expect(results[5].status).toBe(429);
+    expect(results.slice(0, 30).every((r) => r.status !== 429)).toBe(true);
+    expect(results[30].status).toBe(429);
   });
 
-  it('trips the global limit (60/hr) across many different IPs', async () => {
+  it('trips the global limit (120/hr) across many different IPs', async () => {
     let last;
-    for (let i = 0; i < 61; i++) {
+    for (let i = 0; i < 121; i++) {
       last = await call(base, '/api/slices', {
         method: 'POST',
         body: { image: '' },

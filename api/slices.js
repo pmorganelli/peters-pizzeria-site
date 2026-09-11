@@ -202,10 +202,22 @@ async function create(req, res) {
 
   // Rate limits run before the body is read: the point is to reject a flood
   // without buffering its payload first.
-  if (!(await rateLimit(`slice:${clientIp(req)}`, 5, 3600))) {
+  //
+  // Per-IP was 5/hour, which is a sensible number of photos for one *person*
+  // and a badly wrong one for one *address* — `clientIp` reads
+  // x-forwarded-for, so a dorm on campus wifi shares this budget. Five photos
+  // an hour from an entire building means the wall closes after the second
+  // customer. 30/hour is roughly ten devices' worth at the 3-per-device cap,
+  // which is what the counter in _lib/slices.js is actually for; this one is
+  // here to stop a flood, not to ration a building.
+  //
+  // The global cap bounds real money (Blob storage, ≤1MB a photo) rather than
+  // abuse, so it moves less: 120/hour is ~120MB in the worst hour, against a
+  // service that runs two.
+  if (!(await rateLimit(`slice:${clientIp(req)}`, 30, 3600))) {
     return send(res, 429, { error: 'That is a lot of slice pics — give it an hour and try again.' });
   }
-  if (!(await rateLimit('slice:all', 60, 3600))) {
+  if (!(await rateLimit('slice:all', 120, 3600))) {
     return send(res, 429, { error: 'The wall is busy right now — try again in a few minutes.' });
   }
 
