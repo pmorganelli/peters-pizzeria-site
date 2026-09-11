@@ -11,8 +11,11 @@ import { ArticlePage } from './pages/ArticlePage';
 import { GalleryPage } from './pages/GalleryPage';
 import { OrderPage }   from './pages/OrderPage';
 import { StatusPage }  from './pages/StatusPage';
-import { routeFromPath, pathForRoute, titleForRoute } from './utils/routes';
+import { routeFromPath, pathForRoute } from './utils/routes';
+import { api } from './utils/api';
+import { removeStored } from './utils/storage';
 import { markChunkLoaded, shouldReloadForChunkFailure } from './utils/chunkReload';
+import { metadataForRoute } from './data/routeMetadata';
 
 // Split out of the initial bundle. Everything above is on the path a first-time
 // visitor actually walks (home → menu/blog/gallery → order); everything below
@@ -75,6 +78,7 @@ export default function App() {
   const [lbIndex,  setLbIndex]  = useState(0);
   const [lbOpen,   setLbOpen]   = useState(false);
   const [lbCaptions, setLbCaptions] = useState(null);
+  const [lbAltTexts, setLbAltTexts] = useState(null);
   // Bumped in the same batch as the page swap purely so the rise below always
   // gets a commit to hang off — navigating to the page that's already mounted
   // (article → same article) changes no other state, and a layout effect that
@@ -107,10 +111,32 @@ export default function App() {
   const pageNow = useRef(page);
   useLayoutEffect(() => { pageNow.current = page; }, [page]);
 
+  // Is a staff session signed in? Ordering moved behind the admin login, so
+  // this decides whether the nav shows Order Now at all and what /order
+  // renders — which makes it App state rather than any one page's.
+  //
+  // `null` means "not known yet", and the distinction matters: false is a
+  // claim, and painting the public treatment on an admin's screen only to
+  // swap it out a moment later is worse than showing nothing for that moment.
+  // Nav renders no CTA while it's null; OrderPage holds its reserved space.
+  //
+  // One check for the whole app: the admin board, the community wall and the
+  // order page each used to ask independently.
+  const [isAdmin, setIsAdmin] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    api('/api/login')
+      .then((d) => { if (!cancelled) setIsAdmin(Boolean(d.authenticated)); })
+      // A check that fails reads as signed-out. It only drives what the UI
+      // offers; every write is gated server-side no matter what this says.
+      .catch(() => { if (!cancelled) setIsAdmin(false); });
+    return () => { cancelled = true; };
+  }, []);
+
   // The URL replaced pp_page2 as the restore mechanism. The old key is cleared
   // once so a returning visitor isn't carrying dead state around forever.
   useEffect(() => {
-    localStorage.removeItem('pp_page2');
+    removeStored('pp_page2');
     // Every page scrolls itself to top on mount, so letting the browser also
     // restore a remembered offset on Back just makes the two fight.
     if ('scrollRestoration' in window.history) window.history.scrollRestoration = 'manual';
@@ -123,12 +149,24 @@ export default function App() {
   }, []);
 
   // The tab title doubles as the label on each history entry. Skipped on the
-  // two admin pages: useBoardTitle owns the title there, and it only rewrites
+  // admin board: useBoardTitle owns the title there, and it only rewrites
   // on a count change, so clobbering it here could leave the wrong title up
   // until the next new order.
   useEffect(() => {
-    if (page === 'admin' || page === 'nights') return;
-    document.title = titleForRoute(page, article);
+    if (page === 'admin') return;
+    const metadata = metadataForRoute(page, article);
+    document.title = metadata.title;
+    const setContent = (selector, value) => document.querySelector(selector)?.setAttribute('content', value);
+    setContent('meta[name="description"]', metadata.description);
+    setContent('meta[property="og:title"]', metadata.title);
+    setContent('meta[property="og:description"]', metadata.description);
+    setContent('meta[property="og:type"]', metadata.type);
+    setContent('meta[property="og:url"]', metadata.canonical);
+    setContent('meta[property="og:image"]', metadata.image);
+    setContent('meta[name="twitter:title"]', metadata.title);
+    setContent('meta[name="twitter:description"]', metadata.description);
+    setContent('meta[name="twitter:image"]', metadata.image);
+    document.querySelector('link[rel="canonical"]')?.setAttribute('href', metadata.canonical);
   }, [page, article]);
 
   // Second half of nav()'s swap: the new page is now committed to the DOM
@@ -307,8 +345,8 @@ export default function App() {
 
   const openArticle  = useCallback((post) => nav('article', post), [nav]);
   // `captions` is optional — only the community wall passes one.
-  const openLightbox = useCallback((photos, index, captions = null) => {
-    setLbPhotos(photos); setLbIndex(index); setLbCaptions(captions); setLbOpen(true);
+  const openLightbox = useCallback((photos, index, captions = null, altTexts = null) => {
+    setLbPhotos(photos); setLbIndex(index); setLbCaptions(captions); setLbAltTexts(altTexts); setLbOpen(true);
   }, []);
   const lbPrev = useCallback(() => setLbIndex((i) => (i - 1 + lbPhotos.length) % lbPhotos.length), [lbPhotos]);
   const lbNext = useCallback(() => setLbIndex((i) => (i + 1) % lbPhotos.length), [lbPhotos]);
@@ -320,7 +358,7 @@ export default function App() {
       {/* First thing in the tab order: a keyboard user shouldn't have to walk
           the whole nav on every page. Visible only while focused. */}
       <a className="skip-link" href="#main">Skip to content</a>
-      <Nav page={page} nav={nav} />
+      <Nav page={page} nav={nav} isAdmin={isAdmin} />
 
       {/* Transition styles are applied imperatively in nav() — no style prop,
           so React re-renders never clobber them. tabIndex lets the skip link
@@ -354,15 +392,18 @@ export default function App() {
             collapse the page under the footer for the length of the fetch. */}
         <Suspense fallback={<div className="route-loading" aria-busy="true" />}>
         {page === 'home'    && <HomePage    {...pageProps} />}
-        {page === 'menu'    && <MenuPage    nav={nav} />}
+        {page === 'menu'    && <MenuPage    nav={nav} isAdmin={isAdmin} />}
         {page === 'blog'    && <BlogPage    nav={nav} openArticle={openArticle} />}
         {page === 'article' && <ArticlePage article={article} nav={nav} />}
         {page === 'gallery' && <GalleryPage nav={nav} openLightbox={openLightbox} />}
         {page === 'studio'  && <StudioPage  nav={nav} />}
-        {page === 'order'   && <OrderPage   nav={nav} />}
-        {page === 'status'  && <StatusPage  nav={nav} />}
-        {page === 'slices'  && <SlicesPage  nav={nav} openLightbox={openLightbox} />}
-        {page === 'admin'   && <AdminPage   nav={nav} />}
+        {page === 'order'   && <OrderPage   nav={nav} isAdmin={isAdmin} />}
+        {page === 'status'  && <StatusPage  nav={nav} isAdmin={isAdmin} />}
+        {page === 'slices'  && <SlicesPage  nav={nav} openLightbox={openLightbox} isAdmin={isAdmin} />}
+        {/* The board owns its own login form, so it's the one place that can
+            change the answer mid-session — it reports back rather than
+            leaving the nav a page-load behind. */}
+        {page === 'admin'   && <AdminPage   nav={nav} onAuthChange={setIsAdmin} />}
         {page === 'nights'  && <NightsArchivePage nav={nav} />}
         </Suspense>
         </ErrorBoundary>
@@ -372,6 +413,7 @@ export default function App() {
         <Lightbox
           photos={lbPhotos}
           captions={lbCaptions}
+          altTexts={lbAltTexts}
           index={lbIndex}
           onClose={() => setLbOpen(false)}
           onPrev={lbPrev}

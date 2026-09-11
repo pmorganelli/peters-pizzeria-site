@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
-  readMine, writeMine, readHandoff, clearHandoff, deviceToken, formReducer, EMPTY_FORM,
+  readMine, writeMine, readHandoff, clearHandoff, readPosterName, writePosterName,
+  deviceToken, formReducer, EMPTY_FORM,
 } from './slices.js';
 
 // A minimal Storage stand-in — Node has no global localStorage, and pulling
@@ -104,34 +105,64 @@ describe('readMine / writeMine', () => {
 });
 
 describe('readHandoff / clearHandoff', () => {
-  it('returns empty code/name with nothing stored', () => {
-    expect(readHandoff()).toEqual({ code: '', name: '' });
+  it('returns an empty name with nothing stored', () => {
+    expect(readHandoff()).toEqual({ name: '' });
   });
 
-  it('parses the current {code, name} shape', () => {
-    localStorage.setItem('pp_slice_code:v1', JSON.stringify({ code: 'F4WS', name: 'Jamie' }));
-    expect(readHandoff()).toEqual({ code: 'F4WS', name: 'Jamie' });
+  it('parses the {name} shape the order card writes', () => {
+    localStorage.setItem('pp_slice_who:v1', JSON.stringify({ name: 'Jamie' }));
+    expect(readHandoff()).toEqual({ name: 'Jamie' });
   });
 
   it('fills in a missing name with an empty string', () => {
-    localStorage.setItem('pp_slice_code:v1', JSON.stringify({ code: 'F4WS' }));
-    expect(readHandoff()).toEqual({ code: 'F4WS', name: '' });
+    localStorage.setItem('pp_slice_who:v1', JSON.stringify({}));
+    expect(readHandoff()).toEqual({ name: '' });
   });
 
-  it('tolerates the legacy bare-code string shape (not valid JSON)', () => {
-    localStorage.setItem('pp_slice_code:v1', 'F4WS');
-    expect(readHandoff()).toEqual({ code: 'F4WS', name: '' });
+  it('tolerates a stored value that is not valid JSON', () => {
+    localStorage.setItem('pp_slice_who:v1', 'not json');
+    expect(readHandoff()).toEqual({ name: '' });
   });
 
-  it('tolerates a stored value that happens to parse as a JSON primitive', () => {
-    localStorage.setItem('pp_slice_code:v1', '1234');
-    expect(readHandoff()).toEqual({ code: '1234', name: '' });
+  it('tolerates a stored value that parses as a JSON primitive', () => {
+    localStorage.setItem('pp_slice_who:v1', '1234');
+    expect(readHandoff()).toEqual({ name: '' });
   });
 
   it('clearHandoff removes the key', () => {
+    localStorage.setItem('pp_slice_who:v1', JSON.stringify({ name: 'Jamie' }));
+    clearHandoff();
+    expect(readHandoff()).toEqual({ name: '' });
+  });
+
+  // The key was renamed when the pickup code came out of it. A confirmation
+  // screen left open across the deploy is the one thing that can still write
+  // the old name, so the same pass that clears the new key clears that too —
+  // otherwise it sits in storage for good.
+  it('clearHandoff also removes the pre-rename key', () => {
     localStorage.setItem('pp_slice_code:v1', JSON.stringify({ code: 'F4WS', name: 'Jamie' }));
     clearHandoff();
-    expect(readHandoff()).toEqual({ code: '', name: '' });
+    expect(localStorage.getItem('pp_slice_code:v1')).toBeNull();
+  });
+});
+
+describe('readPosterName / writePosterName', () => {
+  it('returns an empty string before anything has been posted', () => {
+    expect(readPosterName()).toBe('');
+  });
+
+  it('round-trips a name', () => {
+    writePosterName('Jamie');
+    expect(readPosterName()).toBe('Jamie');
+  });
+
+  // Clearing the field is how you go anonymous, so an empty value has to
+  // stick. Skipping the write would helpfully re-attach the name you just
+  // removed on the next visit.
+  it('remembers a cleared name rather than falling back to the old one', () => {
+    writePosterName('Jamie');
+    writePosterName('');
+    expect(readPosterName()).toBe('');
   });
 });
 

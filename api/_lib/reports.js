@@ -25,6 +25,34 @@ function redisClient() {
 
 const memory = globalThis.__ppReportStore ?? (globalThis.__ppReportStore = new Map());
 
+const ADD_REPORT_LUA = `
+local existing = redis.call('GET', KEYS[1])
+local report
+if existing then
+  report = cjson.decode(existing)
+  report.devices = report.devices or {}
+  local found = false
+  for _, device in ipairs(report.devices) do
+    if device == ARGV[2] then found = true break end
+  end
+  if not found then
+    table.insert(report.devices, ARGV[2])
+    report.count = report.count + 1
+  end
+  report.lastAt = tonumber(ARGV[3])
+else
+  report = {
+    sliceId = ARGV[1], count = 1, devices = {ARGV[2]},
+    firstAt = tonumber(ARGV[3]), lastAt = tonumber(ARGV[3])
+  }
+end
+local encoded = cjson.encode(report)
+redis.call('SET', KEYS[1], encoded, 'EX', ARGV[4])
+redis.call('LREM', KEYS[2], 0, ARGV[1])
+redis.call('LPUSH', KEYS[2], ARGV[1])
+redis.call('LTRIM', KEYS[2], 0, ARGV[5])
+return encoded`;
+
 // Merge a new flag into an existing record rather than replacing it. The
 // device hash list is what makes the count trustworthy: one person tapping
 // report ten times (or on ten devices they don't own) shouldn't read as ten
@@ -49,15 +77,12 @@ export async function addReport(sliceId, deviceHash) {
   }
   const redis = redisClient();
   const key = `pp:report:${sliceId}`;
-  const existing = await redis.get(key);
-  const updated = { sliceId, ...merge(existing, deviceHash, at) };
-  await redis.set(key, updated, { ex: REPORT_TTL_SECONDS });
-  // A repeat flag on a photo already in the index must not add a second entry
-  // — LREM first makes LPUSH idempotent without a separate membership read.
-  if (existing) await redis.lrem(INDEX_KEY, 0, sliceId);
-  await redis.lpush(INDEX_KEY, sliceId);
-  await redis.ltrim(INDEX_KEY, 0, MAX_LISTED - 1);
-  return updated;
+  const result = await redis.eval(
+    ADD_REPORT_LUA,
+    [key, INDEX_KEY],
+    [sliceId, deviceHash, at, REPORT_TTL_SECONDS, MAX_LISTED - 1],
+  );
+  return typeof result === 'string' ? JSON.parse(result) : result;
 }
 
 export async function listReports() {

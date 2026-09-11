@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Download } from 'lucide-react';
 import { Footer } from '../components/Footer';
-import { BLOG_POSTS, ALL_PHOTOS } from '../data/posts';
+import { BLOG_POSTS, GALLERY_PHOTOS } from '../data/posts';
 import { responsiveImg, webSrc } from '../utils/photos';
 import { prepareWithSegments, layoutWithLines } from '@chenglou/pretext';
 
@@ -157,12 +157,13 @@ export function StudioPage({ nav }) {
 
           <div className="studio-label">Photo</div>
           <div className="studio-photos">
-            {ALL_PHOTOS.map((src) => (
+            {GALLERY_PHOTOS.map(({ src, alt }) => (
               <button type="button"
                 key={src}
                 className={`studio-photo${photo === src ? ' selected' : ''}`}
                 onClick={() => setPhoto(src)}
-                aria-label="Use this photo"
+                aria-label={`Use photo: ${alt}`}
+                aria-pressed={photo === src}
               >
                 {/* .studio-photos tracks are minmax(72px, 1fr) — these are tiny pickers */}
                 <img {...responsiveImg(src, '110px', [320, 640])} alt="" loading="lazy" decoding="async" />

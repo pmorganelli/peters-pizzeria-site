@@ -112,6 +112,25 @@ updates:
       # patches on the 9.x line still come through.
       - dependency-name: eslint
         update-types: ["version-update:semver-major"]
+      # `@eslint/js` is the same hold as `eslint` above and slipped through it,
+      # because it is a separate package name. It declares a peer on the
+      # matching `eslint` major, so `@eslint/js@10` against the pinned
+      # `eslint@^9` is the identical ERESOLVE on `npm ci` — PR #15 failed
+      # exactly that way and was closed. These two move together or not at all;
+      # drop both holds in the same commit.
+      - dependency-name: "@eslint/js"
+        update-types: ["version-update:semver-major"]
+      # jsdom 30 dropped Node 20, which is what .github/workflows/test.yml runs
+      # (and what this project develops against). It fails at import with
+      # `webidl.util.markAsUncloneable is not a function`, which reads like a
+      # broken install rather than an unsupported runtime — PR #14 failed that
+      # way. It is test-only, so nothing about the deployed site is waiting on
+      # it. Drop this hold when the workflow moves to Node 22+; Node 20 is
+      # itself past end-of-life and Vercel's own default is Node 24, so that
+      # move is worth doing on its own schedule — just not the week of a
+      # service night.
+      - dependency-name: jsdom
+        update-types: ["version-update:semver-major"]
     labels:
       - dependencies
 

@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { readBody, readQuery, send, isAdmin, clientIp } from './_lib/util.js';
+import { BodyTooLargeError, readBody, readQuery, send, isAdmin, clientIp } from './_lib/util.js';
 import { rateLimit } from './_lib/store.js';
 import { getSlice } from './_lib/slices.js';
 import { addReport, listReports, deleteReport } from './_lib/reports.js';
@@ -50,7 +50,9 @@ async function create(req, res) {
   }
 
   let body;
-  try { body = await readBody(req); } catch { return send(res, 400, { error: 'Invalid JSON' }); }
+  try { body = await readBody(req, { maxBytes: MAX_BODY_BYTES }); } catch (err) {
+    return send(res, err instanceof BodyTooLargeError ? 413 : 400, { error: err instanceof BodyTooLargeError ? 'Invalid request.' : 'Invalid JSON' });
+  }
 
   const sliceId = typeof body.sliceId === 'string' ? body.sliceId : '';
   if (!sliceId) return send(res, 400, { error: 'Invalid id' });

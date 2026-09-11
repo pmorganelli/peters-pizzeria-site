@@ -7,7 +7,7 @@ import { hasRedisEnv } from './util.js';
 // a given night made, since the orders behind them will be gone long before
 // anyone wants to look back at a month of Saturdays.
 const INDEX_KEY = 'pp:night-index';
-const MAX_LISTED = 200; // years of Saturdays
+const CLOSE_LOCK_KEY = 'pp:night-close-lock';
 
 function redisClient() {
   const url = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
@@ -24,8 +24,8 @@ export async function createNight(night) {
   }
   const redis = redisClient();
   await redis.set(`pp:night:${night.id}`, night);
+  await redis.lrem(INDEX_KEY, 0, night.id);
   await redis.lpush(INDEX_KEY, night.id);
-  await redis.ltrim(INDEX_KEY, 0, MAX_LISTED - 1);
   return night;
 }
 
@@ -34,10 +34,69 @@ export async function listNights() {
     return [...memory.values()].sort((a, b) => b.closedAt - a.closedAt);
   }
   const redis = redisClient();
-  const ids = await redis.lrange(INDEX_KEY, 0, MAX_LISTED - 1);
+  const ids = await redis.lrange(INDEX_KEY, 0, -1);
   if (!ids.length) return [];
-  const rows = await redis.mget(...ids.map((id) => `pp:night:${id}`));
+  const rows = [];
+  for (let start = 0; start < ids.length; start += 100) {
+    rows.push(...await redis.mget(...ids.slice(start, start + 100).map((id) => `pp:night:${id}`)));
+  }
   return rows.filter(Boolean);
+}
+
+// A short lease serializes close requests across serverless instances. The
+// archive and removal still happen in one Redis script below, so a process
+// crash cannot leave orders cleared without their permanent night record.
+export async function acquireNightCloseLock(token) {
+  if (!hasRedisEnv()) {
+    if (globalThis.__ppNightCloseLock) return null;
+    globalThis.__ppNightCloseLock = token;
+    return async () => {
+      if (globalThis.__ppNightCloseLock === token) delete globalThis.__ppNightCloseLock;
+    };
+  }
+  const redis = redisClient();
+  const claimed = await redis.set(CLOSE_LOCK_KEY, token, { nx: true, ex: 120 });
+  if (!claimed) return null;
+  return async () => {
+    await redis.eval(
+      `if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) end return 0`,
+      [CLOSE_LOCK_KEY],
+      [token],
+    );
+  };
+}
+
+const ARCHIVE_AND_CLEAR_LUA = `
+local existing = redis.call('GET', KEYS[1])
+if existing then return existing end
+local night = cjson.decode(ARGV[1])
+redis.call('SET', KEYS[1], ARGV[1])
+redis.call('LREM', KEYS[2], 0, night.id)
+redis.call('LPUSH', KEYS[2], night.id)
+for _, order in ipairs(night.orders) do
+  redis.call('DEL', 'pp:order:' .. order.id)
+  if order.code then redis.call('DEL', 'pp:order-code:' .. order.code) end
+  redis.call('LREM', KEYS[3], 0, order.id)
+end
+return ARGV[1]`;
+
+export async function archiveNightAndClear(night, orders) {
+  if (!hasRedisEnv()) {
+    memory.set(night.id, night);
+    const orderMemory = globalThis.__ppOrderStore;
+    const codeMemory = globalThis.__ppOrderCodeStore;
+    for (const order of orders) {
+      orderMemory?.delete(order.id);
+      if (order.code) codeMemory?.delete(order.code);
+    }
+    return night;
+  }
+  const result = await redisClient().eval(
+    ARCHIVE_AND_CLEAR_LUA,
+    [`pp:night:${night.id}`, INDEX_KEY, 'pp:order-index'],
+    [JSON.stringify(night)],
+  );
+  return typeof result === 'string' ? JSON.parse(result) : result;
 }
 
 export async function getNight(id) {

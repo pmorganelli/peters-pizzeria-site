@@ -12,7 +12,7 @@ const OPEN_STORE = { open: true, mode: 'open', unavailable: [] };
 
 function openOrderPage(store = OPEN_STORE) {
   mockFetch({ '/api/store': { body: store } });
-  const utils = render(<OrderPage nav={vi.fn()} />);
+  const utils = render(<OrderPage nav={vi.fn()} isAdmin />);
   // The menu only renders once the store check resolves.
   return waitFor(() => {
     expect(screen.getByText(SLICES[0].name)).toBeTruthy();
@@ -36,7 +36,7 @@ beforeEach(() => {
 describe('OrderPage', () => {
   it('shows the closed card instead of the menu when the store is shut', async () => {
     mockFetch({ '/api/store': { body: { open: false, mode: 'closed', hours: null } } });
-    render(<OrderPage nav={vi.fn()} />);
+    render(<OrderPage nav={vi.fn()} isAdmin />);
     await waitFor(() => expect(screen.getByText(/right now/i)).toBeTruthy());
     expect(screen.queryByText(SLICES[0].name)).toBeNull();
   });
@@ -45,7 +45,7 @@ describe('OrderPage', () => {
   // check shouldn't strand a customer in front of a closed sign.
   it('falls open when the store check itself fails', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('offline'); }));
-    render(<OrderPage nav={vi.fn()} />);
+    render(<OrderPage nav={vi.fn()} isAdmin />);
     await waitFor(() => expect(screen.getByText(SLICES[0].name)).toBeTruthy());
   });
 
@@ -218,5 +218,124 @@ describe('OrderPage', () => {
       const saved = JSON.parse(localStorage.getItem('pp_cart:v2'));
       expect(saved[SLICES[0].name]).toHaveLength(1);
     });
+  });
+
+  it('reuses the same idempotency key when an ambiguous submission is retried', async () => {
+    const fetchSpy = mockFetch({
+      '/api/orders': { status: 502, body: { error: 'Temporary upstream error' } },
+      '/api/store': { body: OPEN_STORE },
+    });
+    render(<OrderPage nav={vi.fn()} isAdmin />);
+    await waitFor(() => expect(screen.getByText(SLICES[0].name)).toBeTruthy());
+    addOne(SLICES[0].name);
+    fireEvent.change(screen.getByPlaceholderText("Who's picking up?"), { target: { value: 'Retry Customer' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /place order/i }));
+    await waitFor(() => expect(screen.getByText('Temporary upstream error')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /place order/i }));
+    await waitFor(() => {
+      const posts = fetchSpy.mock.calls.filter(([, init]) => init.method === 'POST');
+      expect(posts).toHaveLength(2);
+      expect(posts[0][1].headers['Idempotency-Key']).toBe(posts[1][1].headers['Idempotency-Key']);
+      expect(JSON.parse(localStorage.getItem('pp_order_attempt:v1')).key).toBe(posts[0][1].headers['Idempotency-Key']);
+    });
+  });
+});
+
+// Orders are taken at the window and typed in by whoever is running the board,
+// so this page is staff-only. Every case above passes `isAdmin` for that
+// reason; these are the ones about the gate itself.
+describe('OrderPage — ordering is staff-only', () => {
+  it('shows the window card instead of the menu to a visitor', async () => {
+    mockFetch({ '/api/store': { body: OPEN_STORE } });
+    render(<OrderPage nav={vi.fn()} isAdmin={false} />);
+    await waitFor(() => expect(screen.getByText(/at the window/i)).toBeTruthy());
+    expect(screen.queryByText(SLICES[0].name)).toBeNull();
+  });
+
+  it('makes no API calls at all for a visitor', async () => {
+    // Nothing behind the card needs the store's hours or a saved order, and
+    // this is otherwise the chattiest page on the site. The saved id is set
+    // deliberately: without it the lookup effect returns early on its own and
+    // the assertion would pass whether or not the gate works.
+    localStorage.setItem('pp_order_id', 'o-whatever');
+    const fetchSpy = mockFetch({ '/api/store': { body: OPEN_STORE } });
+    render(<OrderPage nav={vi.fn()} isAdmin={false} />);
+    await waitFor(() => expect(screen.getByText(/at the window/i)).toBeTruthy());
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('renders neither branch until the session check lands', () => {
+    // `null` is "not known yet". An admin must not watch the customer card get
+    // swapped out from under them, and .order-gate reserves the space either
+    // way, so waiting costs nothing visible.
+    mockFetch({ '/api/store': { body: OPEN_STORE } });
+    render(<OrderPage nav={vi.fn()} isAdmin={null} />);
+    expect(screen.queryByText(/at the window/i)).toBeNull();
+    expect(document.querySelector('.order-grid')).toBeNull();
+    expect(document.querySelector('.order-gate')).toBeTruthy();
+  });
+
+  it('brings up the cart when the session check comes back positive', async () => {
+    mockFetch({ '/api/store': { body: OPEN_STORE } });
+    const { rerender } = render(<OrderPage nav={vi.fn()} isAdmin={null} />);
+    rerender(<OrderPage nav={vi.fn()} isAdmin />);
+    await waitFor(() => expect(screen.getByText(SLICES[0].name)).toBeTruthy());
+  });
+});
+
+// One staff device takes every order at the window now, so anything the form
+// carries from one order to the next lands on the wrong customer — and since
+// a name is what a customer searches on to find their order, a stale one hides
+// theirs and surfaces somebody else's.
+describe('OrderPage between orders on a shared staff device', () => {
+  const ORDER = {
+    id: 'o-1', code: 'AA22', name: 'Sarah', status: 'new',
+    items: [{ name: SLICES[0].name, qty: 1, priceCents: 200 }],
+    totalCents: 200, createdAt: Date.now(), updatedAt: Date.now(),
+  };
+
+  it('never prefills a name, however the last order was filed', async () => {
+    localStorage.setItem('pp_who:v1', JSON.stringify({ name: 'Sarah' }));
+    await openOrderPage();
+    expect(screen.getByPlaceholderText("Who's picking up?").value).toBe('');
+    // …and the dead key doesn't linger in storage either.
+    expect(localStorage.getItem('pp_who:v1')).toBeNull();
+  });
+
+  it('clears the name once an order is placed', async () => {
+    mockFetch({
+      '/api/store': { body: OPEN_STORE },
+      '/api/orders': { status: 201, body: { order: ORDER } },
+    });
+    render(<OrderPage nav={vi.fn()} isAdmin />);
+    await waitFor(() => expect(screen.getByText(SLICES[0].name)).toBeTruthy());
+    addOne(SLICES[0].name);
+    fireEvent.change(screen.getByPlaceholderText("Who's picking up?"), { target: { value: 'Sarah' } });
+    fireEvent.click(screen.getByRole('button', { name: /place order/i }));
+
+    // The confirmation replaces the form; going back to a fresh order must not
+    // bring Sarah with it.
+    await waitFor(() => expect(screen.getByText(`#${ORDER.code}`)).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /start another order/i }));
+    await waitFor(() => expect(screen.getByText(SLICES[0].name)).toBeTruthy());
+    expect(screen.getByPlaceholderText("Who's picking up?").value).toBe('');
+  });
+
+  it('tells staff what to do when the session expires mid-service', async () => {
+    mockFetch({
+      '/api/store': { body: OPEN_STORE },
+      '/api/orders': { status: 401, body: { error: 'Admin login required' } },
+    });
+    render(<OrderPage nav={vi.fn()} isAdmin />);
+    await waitFor(() => expect(screen.getByText(SLICES[0].name)).toBeTruthy());
+    addOne(SLICES[0].name);
+    fireEvent.change(screen.getByPlaceholderText("Who's picking up?"), { target: { value: 'Sarah' } });
+    fireEvent.click(screen.getByRole('button', { name: /place order/i }));
+
+    // Not the server's "Admin login required", which says nothing to whoever
+    // is standing at the window with a queue.
+    await waitFor(() => expect(screen.getByText(/session expired/i)).toBeTruthy());
+    expect(screen.getByText(/cart is saved/i)).toBeTruthy();
   });
 });

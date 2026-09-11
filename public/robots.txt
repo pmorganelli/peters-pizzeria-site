@@ -6,5 +6,8 @@ Allow: /
 # out of search results.
 Disallow: /admin
 Disallow: /studio
+# Staff take orders at the window and type them in here; a visitor only gets a
+# card saying so. Kept out of search along with the sitemap (gen-sitemap.mjs).
+Disallow: /order
 
 Sitemap: https://peters-pizzeria-site.vercel.app/sitemap.xml

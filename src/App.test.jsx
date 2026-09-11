@@ -13,7 +13,7 @@ function stubApi(overrides = {}) {
     '': { body: {} },
     '/api/store': { body: { open: true, mode: 'open', unavailable: [] } },
     '/api/slices': { body: { slices: [] } },
-    '/api/login': { body: { authed: false } },
+    '/api/login': { body: { authenticated: false } },
     '/api/orders': { body: { orders: [] } },
     ...overrides,
   });
@@ -103,9 +103,45 @@ describe('App routing', () => {
     await waitForPage('.hero-title');
     const before = window.history.length;
 
-    fireEvent.click(screen.getAllByRole('button', { name: /order now/i })[0]);
-    await waitFor(() => expect(window.location.pathname).toBe(PAGE_PATHS.order));
+    // Was the Order Now button until that went staff-only — any nav link
+    // exercises the same push, and this one is on screen for everybody.
+    fireEvent.click(screen.getAllByRole('button', { name: /^menu$/i })[0]);
+    await waitFor(() => expect(window.location.pathname).toBe(PAGE_PATHS.menu));
     expect(window.history.length).toBeGreaterThanOrEqual(before);
+  });
+});
+
+// Ordering moved behind the admin login: orders are taken at the window and
+// typed in by whoever is running the board. The server refuses an
+// unauthenticated POST outright, and these are the two halves of the UI that
+// have to agree with it.
+describe('ordering is staff-only', () => {
+  it('shows a visitor no Order Now button and no cart at /order', async () => {
+    visit(PAGE_PATHS.order);
+    await waitForPage('.order-page');
+    await waitFor(() => expect(screen.getByText(/at the window/i)).toBeTruthy());
+    expect(screen.queryByRole('button', { name: /order now/i })).toBeNull();
+    expect(document.querySelector('.order-grid')).toBeNull();
+  });
+
+  // The slot itself always renders — the nav is laid out against a button on
+  // the right, and dropping it entirely pulled the bar off balance. Only the
+  // label and destination move with the session.
+  it('keeps the nav CTA slot filled for a visitor, pointing at the menu', async () => {
+    visit('/');
+    await waitForPage('.hero-title');
+    const cta = document.querySelector('.nav-order-btn');
+    expect(cta).toBeTruthy();
+    expect(cta.textContent).toMatch(/see the menu/i);
+    fireEvent.click(cta);
+    await waitFor(() => expect(window.location.pathname).toBe(PAGE_PATHS.menu));
+  });
+
+  it('gives a signed-in admin the button and the cart', async () => {
+    stubApi({ '/api/login': { body: { authenticated: true } } });
+    visit(PAGE_PATHS.order);
+    await waitFor(() => expect(screen.getByRole('button', { name: /order now/i })).toBeTruthy());
+    await waitFor(() => expect(document.querySelector('.order-grid')).toBeTruthy());
   });
 });
 

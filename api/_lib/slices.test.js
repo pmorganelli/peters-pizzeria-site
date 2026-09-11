@@ -16,11 +16,19 @@ describe('createSlice / getSlice', () => {
   it('round-trips a stored slice', async () => {
     const slice = { id: 's1', url: 'https://x/1.jpg', createdAt: Date.now() };
     await createSlice(slice);
-    expect(await getSlice('s1')).toEqual(slice);
+    expect(await getSlice('s1')).toMatchObject(slice);
   });
 
   it('returns null for an unknown id', async () => {
     expect(await getSlice('nope')).toBeNull();
+  });
+
+  it('hides expired posts while keeping them discoverable for cleanup', async () => {
+    const createdAt = Date.now() - (91 * 24 * 60 * 60 * 1000);
+    await createSlice({ id: 'expired', url: 'https://x/old.jpg', createdAt });
+    expect(await getSlice('expired')).toBeNull();
+    expect(await listSlices()).toEqual([]);
+    expect(await getSlice('expired', { includeExpired: true })).toMatchObject({ id: 'expired' });
   });
 });
 
@@ -29,17 +37,30 @@ describe('listSlices', () => {
     await createSlice({ id: 'a', createdAt: 1000 });
     await createSlice({ id: 'b', createdAt: 3000 });
     await createSlice({ id: 'c', createdAt: 2000 });
-    expect((await listSlices()).map((s) => s.id)).toEqual(['b', 'c', 'a']);
+    expect((await listSlices({ now: 4000 })).map((s) => s.id)).toEqual(['b', 'c', 'a']);
   });
 
   it('is empty with nothing stored', async () => {
     expect(await listSlices()).toEqual([]);
   });
+
+  it('caps a listing without trimming the retained index', async () => {
+    await createSlice({ id: 'a', createdAt: 1000 });
+    await createSlice({ id: 'b', createdAt: 3000 });
+    await createSlice({ id: 'c', createdAt: 2000 });
+    expect((await listSlices({ now: 4000, limit: 2 })).map((s) => s.id)).toEqual(['b', 'c']);
+    expect((await listSlices({ now: 4000, includeExpired: true })).map((s) => s.id)).toEqual(['b', 'c', 'a']);
+  });
+
+  it('rejects invalid listing limits', async () => {
+    await expect(listSlices({ limit: -1 })).rejects.toThrow(/limit/);
+    await expect(listSlices({ limit: 1.5 })).rejects.toThrow(/limit/);
+  });
 });
 
 describe('setSliceHidden', () => {
   it('toggles hidden while preserving other fields', async () => {
-    await createSlice({ id: 's1', url: 'https://x/1.jpg', caption: 'nice', hidden: false, createdAt: 1 });
+    await createSlice({ id: 's1', url: 'https://x/1.jpg', caption: 'nice', hidden: false, createdAt: Date.now() });
     const hidden = await setSliceHidden('s1', true);
     expect(hidden).toMatchObject({ id: 's1', url: 'https://x/1.jpg', caption: 'nice', hidden: true });
     const shown = await setSliceHidden('s1', false);

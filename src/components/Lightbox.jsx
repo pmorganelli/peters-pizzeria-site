@@ -14,7 +14,7 @@ const LB_FALLBACK_WIDTH = 1280;
 
 // `captions` is optional and parallel to `photos` — the community wall passes
 // one, the gallery doesn't. Each entry is { name, caption, age } or null.
-export function Lightbox({ photos, index, onClose, onPrev, onNext, captions }) {
+export function Lightbox({ photos, index, onClose, onPrev, onNext, captions, altTexts }) {
   const touchX = useRef(null);
   const dialogRef = useRef(null);
   // A photo with neither a name nor a caption gets no bar at all, rather than
@@ -133,7 +133,7 @@ export function Lightbox({ photos, index, onClose, onPrev, onNext, captions }) {
            a warning, which is why it used to be written `fetchpriority`. */
         fetchPriority="high"
         decoding="sync"
-        alt="Enlarged view"
+        alt={altTexts?.[index] ?? 'Enlarged view'}
       />
       {caption && (
         <div className="lb-caption">

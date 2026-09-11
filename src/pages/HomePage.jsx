@@ -4,7 +4,7 @@ import { Footer } from '../components/Footer';
 import { LogoBadge } from '../components/LogoBadge';
 import { useScrollReveal } from '../hooks/useScrollReveal';
 import { POSTS_BY_DATE } from '../data/posts';
-import { MENU_DATA } from '../data/menu';
+import { MENU_DATA, UPCOMING_SPECIALS } from '../data/menu';
 import { api } from '../utils/api';
 import { responsiveImg } from '../utils/photos';
 
@@ -23,6 +23,16 @@ const COMMUNITY_PHOTOS = ['/photos/img_1082.jpeg', '/photos/img_6789.jpeg', '/ph
 const SPECIALS = MENU_DATA.flatMap((section) =>
   section.items.flatMap((it) => (it.special ? [{ tag: it.special, ...it }] : []))
 );
+// Weeks where nothing is tagged `special` fall back to the ones coming back
+// (UPCOMING_SPECIALS in menu.js). The section keeps its shape either way — same
+// heading, same card grid — because a dark strip that vanishes for a week reads
+// as a broken page rather than a quiet one. The difference is that these cards
+// are not buttons: the items aren't on the menu, so there's nowhere to send
+// anyone, and they can't be sold out because they can't be ordered.
+const SHOW_UPCOMING = SPECIALS.length === 0;
+const SPECIAL_CARDS = SHOW_UPCOMING
+  ? UPCOMING_SPECIALS.map((it) => ({ tag: 'Coming soon', ...it }))
+  : SPECIALS;
 
 const LATEST_POSTS = POSTS_BY_DATE.slice(0, 3);
 
@@ -69,7 +79,7 @@ export function HomePage({ nav, openArticle, openLightbox }) {
         <div className="hero-img" />
         <div className="hero-overlay" />
         <div className="hero-badge" aria-hidden="true"><LogoBadge size={128} /></div>
-        <div className="hero-pill">Re-opening: Fall 2026</div>
+        <div className="hero-pill">Re-opening: THIS SATURDAY!</div>
         {/* Non-breaking spaces inside each segment: the label may only wrap at the dots */}
         <div className="hero-label">Somerville,&nbsp;MA · Est.&nbsp;2025</div>
         <h1 className="hero-title">Handmade<br />with <em>love.</em></h1>
@@ -153,26 +163,41 @@ export function HomePage({ nav, openArticle, openLightbox }) {
           <div>
             <div className="section-label">From the Kitchen</div>
             <h2 className="section-title" style={{ color: 'var(--cream)' }}>
-              This week&apos;s <em style={{ color: 'var(--red)' }}>specials.</em>
+              {SHOW_UPCOMING
+                ? <>The specials <em style={{ color: 'var(--red)' }}>coming soon.</em></>
+                : <>This week&apos;s <em style={{ color: 'var(--red)' }}>specials.</em></>}
             </h2>
           </div>
           <button type="button" className="specials-see-all" onClick={() => nav('menu')}>Full Menu <ArrowRight size={13} /></button>
         </div>
         <div className="specials-grid">
-          {SPECIALS.map((s, i) => {
-            const soldOut = unavailable.has(s.name);
-            return (
-              <button type="button"
-                key={s.name}
-                className={`special-card reveal reveal-delay-${i + 1}${soldOut ? ' special-sold-out' : ''}`}
-                ref={ref(3 + i)}
-                onClick={() => nav('menu')}
-                aria-label={`${s.tag}: ${s.name} — ${soldOut ? 'sold out' : s.price}`}
-              >
+          {SPECIAL_CARDS.map((s, i) => {
+            const soldOut = !SHOW_UPCOMING && unavailable.has(s.name);
+            const body = (
+              <>
                 <div className="special-tag">{s.tag}{soldOut && <span className="special-soldout-tag"> · Sold out</span>}</div>
                 <div className="special-name">{s.name}</div>
                 <div className="special-desc">{s.desc}</div>
                 <div className="special-price">{s.price}</div>
+              </>
+            );
+            const className = `special-card reveal reveal-delay-${i + 1}${soldOut ? ' special-sold-out' : ''}`;
+            // A card for something that isn't on the menu yet has nowhere to
+            // go, so it's a plain div — a button that navigates to a page not
+            // listing the item is worse than no button at all.
+            return SHOW_UPCOMING ? (
+              <div key={s.name} className={`${className} special-card-soon`} ref={ref(3 + i)}>
+                {body}
+              </div>
+            ) : (
+              <button type="button"
+                key={s.name}
+                className={className}
+                ref={ref(3 + i)}
+                onClick={() => nav('menu')}
+                aria-label={`${s.tag}: ${s.name} — ${soldOut ? 'sold out' : s.price}`}
+              >
+                {body}
               </button>
             );
           })}

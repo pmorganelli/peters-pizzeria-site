@@ -18,6 +18,7 @@ export default defineConfig({
   plugins: [react()],
   test: {
     environment: 'node',
+    setupFiles: ['./tests/setup.js'],
     include: ['**/*.test.js', '**/*.test.jsx'],
     exclude: ['node_modules/**', 'dist/**'],
     // Each test file gets its own module registry, so the in-memory Map
