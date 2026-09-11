@@ -109,8 +109,52 @@ HttpOnly cookie rather than a mocked `/api/login`.
 - [ ] Slice Status signed out: nothing under the lookup form (the opening-hours
       line is gone), and "Start another order" on a tracked order should drop
       back to the lookup form rather than navigating anywhere.
+- [ ] **Two orders back to back on the staff device.** Place one for a name,
+      then start another and confirm the name field is *empty* — it used to
+      carry over, and a name is now what the customer searches on.
+- [ ] Log out on another tab mid-order, then place the order: the message
+      should tell staff to log in again and say the cart is saved. Log in and
+      confirm the cart really is still there.
 - [ ] `POST /api/orders` from `curl` with no cookie → 401. Confirm the same
       request with a *tampered* cookie value is also 401, not a 500.
+
+## First-night capacity (`api/orders.js`, `api/slices.js`)
+
+The per-IP limiters are really per-*network* — campus wifi is one
+x-forwarded-for address — and two of them were resized for that. The numbers
+are reasoned, not measured against a real crowd, so this is the section to
+revisit after night one with the actual Upstash command counts in hand.
+
+- [ ] **Count the lookups.** After service, check how many `?find=` requests
+      landed and from how many distinct IPs. If one address carried most of
+      them and got anywhere near 300 in a ten-minute window, raise
+      `FIND_PER_IP` before the next night rather than after.
+- [ ] Same for slice uploads against `30/IP/hr`, and for order intake against
+      `ORDERS_PER_IP` (60) — the last of those is now a backstop behind the
+      admin session rather than the thing customers hit, so it should be
+      nowhere near its limit.
+- [ ] **Watch the Upstash command count** over the whole service. Every
+      customer's phone polls `?id=` every 8s while their order is live, and
+      every open community wall polls too. Status polling now skips a hidden
+      tab, which should take most of it out, but the real number is worth
+      seeing once before assuming the budget is comfortable.
+- [ ] Deliberately trip each 429 once from a phone and read the message as a
+      customer would.
+
+## Storage-blocked browsers (`src/utils/storage.js`)
+
+Automated coverage simulates the throwing `localStorage`; what it can't do is
+be Safari.
+
+- [ ] On a real iPhone, Settings → Safari → Advanced → **Block All Cookies**,
+      then load the site. It must render — before the wrapper this was the
+      crash page — and the community wall must still accept a photo.
+- [ ] Same device, an iOS **private** window: post a photo, confirm the delete
+      button works on it immediately, and accept that it disappears after a
+      reload (the device token can't persist). That's the documented trade,
+      not a bug.
+- [ ] With cookies blocked, place a staff order and confirm the cart survives
+      navigating away and back *within* the session but not across a reload.
 
 ## Name lookup on Slice Status (`StatusPage.jsx`, `api/orders.js`)
 
