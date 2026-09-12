@@ -211,7 +211,7 @@ export function StatusPage({ nav, isAdmin }) {
             <div className="order-closed-icon" aria-hidden="true"><Pizza size={20} /></div>
             <h2 className="confirm-title">Let&apos;s find <em>your slices.</em></h2>
             <p className="order-closed-sub">
-              Enter your pickup code, or the name you gave us at the window.
+              Enter the name you gave us at the window.
               We&apos;ll track it for you live until it&apos;s ready for pickup!
             </p>
             {lookupForm}

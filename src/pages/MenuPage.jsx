@@ -111,7 +111,6 @@ export function MenuPage({ nav, isAdmin }) {
                 </div>
               ))}
             </div>
-            <div className="menu-items-soon">Back on a future Saturday — not available tonight.</div>
           </div>
         )}
 
