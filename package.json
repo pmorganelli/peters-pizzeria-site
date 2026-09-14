@@ -16,12 +16,12 @@
     "lint:fix": "eslint . --fix"
   },
   "dependencies": {
-    "@chenglou/pretext": "^0.0.8",
+    "@chenglou/pretext": "^0.0.9",
     "@gsap/react": "^2.1.2",
-    "@upstash/redis": "^1.38.3",
+    "@upstash/redis": "^1.38.4",
     "@vercel/blob": "^2.8.0",
     "gsap": "^3.15.0",
-    "lucide-react": "^1.38.0",
+    "lucide-react": "^1.42.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
