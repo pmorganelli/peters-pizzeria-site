@@ -4,6 +4,7 @@ import { Footer } from '../components/Footer';
 import { ReportsPanel, TakedownAlert } from '../components/ReportsPanel';
 import { useTakedownRequests } from '../hooks/useTakedownRequests';
 import { useBoardTitle } from '../hooks/useBoardTitle';
+import { useDoughStock } from '../hooks/useDoughStock';
 import { MENU_DATA } from '../data/menu';
 import { api } from '../utils/api';
 import { DAY_NAMES, addonLabel, displayName, fmtMoney, fmtTime, formatOrderItems, ageLabel, orderLineKey } from '../utils/orders';
@@ -339,14 +340,10 @@ export function AdminPage({ nav, onAuthChange }) {
   const [notice, setNotice] = useState('');
   const [storeInfo, setStoreInfo] = useState(null);
   const [draft, setDraft] = useState({ day: 6, start: '19:00', end: '20:30' });
-  // Strings, not numbers: '' is how the panel says "don't count this dough",
-  // and a number-typed state can't hold the difference between empty and zero.
-  const [doughDraft, setDoughDraft] = useState({ ny: '', neapolitan: '' });
   const [savingStore, setSavingStore] = useState(false);
   const [storeError, setStoreError] = useState('');
   const [closingNight, setClosingNight] = useState(false);
   const draftSeeded = useRef(false);
-  const doughSeeded = useRef(false);
   // Bumped by every mutation (advance, 86 toggle, hours save). A poll snapshot
   // taken before a mutation is stale — applying it would visually revert the
   // change, and a re-tap would then persist the wrong state to the server.
@@ -383,6 +380,31 @@ export function AdminPage({ nav, onAuthChange }) {
     unavailable: reportsUnavailable, setUnavailable: setReportsUnavailable,
   } = useTakedownRequests({ epochRef, onAuthError: sessionExpired });
 
+  // Declared above `load` on purpose: load() seeds the dough boxes through
+  // useDoughStock, and that hook needs this function at render time. A
+  // useCallback rather than a plain arrow so the hook's own callbacks aren't
+  // rebuilt on every poll.
+  const saveStore = useCallback(async (next) => {
+    setSavingStore(true);
+    setStoreError('');
+    epochRef.current += 1; // invalidate polls in flight before this save
+    try {
+      const status = await api('/api/store', { method: 'PATCH', body: next });
+      epochRef.current += 1; // …and polls whose GET raced the PATCH server-side
+      setStoreInfo(status);
+    } catch (err) {
+      if (err.status === 401) logout('Session expired — log in again.');
+      else setStoreError(err.message || 'Could not save — try again.');
+    } finally {
+      setSavingStore(false);
+    }
+  }, [logout]);
+
+  const {
+    draft: doughDraft, setDraft: setDoughDraft,
+    seed: seedDough, save: saveDough, stop: stopCounting,
+  } = useDoughStock({ saveStore, onError: setStoreError });
+
   const load = useCallback(async () => {
     if (!authed) return;
     const snapshot = epochRef.current;
@@ -414,14 +436,7 @@ export function AdminPage({ nav, onAuthChange }) {
         draftSeeded.current = true;
         setDraft({ day: status.hours.day, start: status.hours.start, end: status.hours.end });
       }
-      // Same rule for the dough boxes — the 5s poll must not overwrite a
-      // half-typed count. The *readout* beside them keeps updating on every
-      // poll, which is the part that has to stay live during service.
-      if (!doughSeeded.current) {
-        doughSeeded.current = true;
-        setDoughDraft(Object.fromEntries(
-          DOUGH_TYPES.map((type) => [type, status.dough?.[type] ? String(status.dough[type].balls) : ''])));
-      }
+      seedDough(status.dough);
     } catch (err) {
       // As with successful polls, an issued-but-unsettled request must not
       // suppress this result. Ignore only errors older than applied state.
@@ -429,23 +444,7 @@ export function AdminPage({ nav, onAuthChange }) {
         logout('Session expired — log in again.');
       }
     }
-  }, [authed, logout, setReports, setReportsUnavailable]);
-
-  const saveStore = async (next) => {
-    setSavingStore(true);
-    setStoreError('');
-    epochRef.current += 1; // invalidate polls in flight before this save
-    try {
-      const status = await api('/api/store', { method: 'PATCH', body: next });
-      epochRef.current += 1; // …and polls whose GET raced the PATCH server-side
-      setStoreInfo(status);
-    } catch (err) {
-      if (err.status === 401) logout('Session expired — log in again.');
-      else setStoreError(err.message || 'Could not save — try again.');
-    } finally {
-      setSavingStore(false);
-    }
-  };
+  }, [authed, logout, seedDough, setReports, setReportsUnavailable]);
 
   const currentHours = () => ({
     day: Number(draft.day),
@@ -458,28 +457,6 @@ export function AdminPage({ nav, onAuthChange }) {
     saveStore({ availability: { name, unavailable: !unavailableSet.has(name) } });
   };
 
-  // Blank stays blank — an omitted dough type is how the API is told to stop
-  // capping that one. Validated here as well as server-side so a typo comes
-  // back instantly instead of as a round-tripped 400.
-  const saveDough = () => {
-    const dough = {};
-    for (const type of DOUGH_TYPES) {
-      const raw = String(doughDraft[type] ?? '').trim();
-      if (raw === '') continue;
-      const balls = Number(raw);
-      if (!Number.isInteger(balls) || balls < 0 || balls > MAX_DOUGH_BALLS) {
-        setStoreError(`Dough counts must be whole numbers of balls, 0–${MAX_DOUGH_BALLS}.`);
-        return;
-      }
-      dough[type] = balls;
-    }
-    saveStore({ dough });
-  };
-
-  const stopCounting = () => {
-    setDoughDraft(Object.fromEntries(DOUGH_TYPES.map((type) => [type, ''])));
-    saveStore({ dough: {} });
-  };
 
   const closeNight = async () => {
     if (!orders || orders.length === 0 || closingNight) return;
