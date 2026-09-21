@@ -1,15 +1,25 @@
 export const MENU_DATA = [
   {
     category: 'Saturday Slices',
+    // `dough` ties a slice to one of the two dough pools staff count at the
+    // start of the night (see src/utils/dough.js). It is what lets the board
+    // refuse the eighth slice off a seven-slice pool, so a slice without it
+    // consumes no dough and can be sold without limit — add the field when you
+    // add the item, including to the commented-out ones below, or a slice that
+    // comes back next week comes back untracked.
+    //
+    // Everything on the menu right now is cut from New York rounds (8 slices a
+    // ball); Neapolitan (4 a ball) is wired up end to end and waiting for its
+    // first slice.
     items: [
       // maxQty lives here for now because Margherita — which normally carries
       // it — is commented out below. Move it back when Margherita returns
       // rather than leaving two capped slices: `CAPPED_ITEM` in
       // tests/helpers/fixtures.js is "whichever slice has its own maxQty", and
       // the per-item cap tests go quiet if no slice has one at all.
-      { name: 'Chef\'s Choice',     desc: "Pepperoni slice with hot honey, stracciatella, and fresh basil",         price: '$4', maxQty: 4 },
-      { name: 'Cheese',             desc: 'House-made sauce, our mozzarella blend, fresh basil, pecorino romano, & parmigiano reggiano',                   price: '$2'    },
-      { name: 'Pepperoni',          desc: 'Pepperoni, house-made sauce, our mozzarella blend, fresh basil, pecorino romano, & parmigiano reggiano',            price: '$2.50' },
+      { name: 'Chef\'s Choice',     desc: "Pepperoni slice with hot honey, stracciatella, and fresh basil",         price: '$4', dough: 'ny', maxQty: 4 },
+      { name: 'Cheese',             desc: 'House-made sauce, our mozzarella blend, fresh basil, pecorino romano, & parmigiano reggiano',                   price: '$2',    dough: 'ny' },
+      { name: 'Pepperoni',          desc: 'Pepperoni, house-made sauce, our mozzarella blend, fresh basil, pecorino romano, & parmigiano reggiano',            price: '$2.50', dough: 'ny' },
       // ── Off this week, back in a future one ──────────────────────────
       // Commented out rather than deleted so the descriptions and prices come
       // back verbatim. Nothing else needs touching to restore one: the order
@@ -22,11 +32,11 @@ export const MENU_DATA = [
       // *also* listed in UPCOMING_SPECIALS so the homepage can still show what
       // is coming back — uncommenting one here means deleting it from there,
       // or it appears twice.
-      // { name: 'Margherita',         desc: 'House-made sauce, fior di latte, basil',                             price: '$4', maxQty: 4 },
-      // { name: 'Bianca',             desc: 'Ricotta, garlic, olive oil, rosemary',                            price: '$3', special: 'Special' },
-      // { name: 'Pesto',              desc: 'House-made pesto sauce, our mozzarella blend, fresh basil',                      price: '$4', special: 'Special' },
-      // { name: 'Vodka',              desc: 'House-made vodka sauce, our mozzarella blend, fresh basil',                      price: '$4', special: 'Special' },
-      // { name: 'Nduja & Hot Honey',  desc: 'Spicy Calabrian nduja, house hot honey, stracciatella', price: '$4', special: 'Slice of the Week' },
+      // { name: 'Margherita',         desc: 'House-made sauce, fior di latte, basil',                             price: '$4', dough: 'ny', maxQty: 4 },
+      // { name: 'Bianca',             desc: 'Ricotta, garlic, olive oil, rosemary',                            price: '$3', dough: 'ny', special: 'Special' },
+      // { name: 'Pesto',              desc: 'House-made pesto sauce, our mozzarella blend, fresh basil',                      price: '$4', dough: 'ny', special: 'Special' },
+      // { name: 'Vodka',              desc: 'House-made vodka sauce, our mozzarella blend, fresh basil',                      price: '$4', dough: 'ny', special: 'Special' },
+      // { name: 'Nduja & Hot Honey',  desc: 'Spicy Calabrian nduja, house hot honey, stracciatella', price: '$4', dough: 'ny', special: 'Slice of the Week' },
     ],
   },
   {

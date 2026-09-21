@@ -429,3 +429,32 @@ re-investigate:
 
 If a suppression ever stops being needed, delete it rather than leaving it —
 a stale suppression hides the next real finding on that line.
+
+## Dough stock (`AdminPage.jsx` dough panel, `api/orders.js`)
+
+The counter itself is covered by the suite — the pool maths, the refusal, the
+cancel refund and the night-close reset all run against the real handlers. What
+isn't is the panel as a thing two people use mid-service on a phone.
+
+- [ ] **Layout.** The two dough rows sit side by side on a laptop and stack
+      below 768px, with the readout staying under its own input rather than
+      wrapping onto the neighbour's. Check the number fields don't zoom the
+      board on focus on a real iPhone (they're bumped to 16px under
+      `pointer: coarse`, which jsdom can't verify).
+- [ ] **A real night, start to finish.** Count dough in → watch the readout on
+      the board count down as orders land → confirm the order page's
+      "N New York left" line agrees with it within one poll (5s board, and the
+      order page only re-reads `/api/store` on load or after a rejection).
+- [ ] **Two devices at the window.** With one slice left in the pool, submit
+      from both phones at the same moment. One gets the order, the other gets
+      the 409 with the count in it — never both. This is the case the whole
+      feature exists for and the one the in-memory test store can only
+      approximate.
+- [ ] **Running out mid-service.** When the pool hits zero, every slice cut
+      from that dough greys out on `/order`, `/menu` and the homepage specials
+      strip, and the stepper's `+` is dead rather than merely ignored.
+- [ ] **Lowering the count below what's sold.** Set 3 balls, sell 20 slices,
+      then save 2 balls. The board should show 0 left and stop selling, not
+      show a negative number or resurrect capacity.
+- [ ] **Close and reopen.** Closing the night empties both boxes; the next
+      night starts untracked (unlimited) until someone counts in again.

@@ -6,6 +6,7 @@ import { useScrollReveal } from '../hooks/useScrollReveal';
 import { POSTS_BY_DATE } from '../data/posts';
 import { MENU_DATA, UPCOMING_SPECIALS } from '../data/menu';
 import { api } from '../utils/api';
+import { soldOutNames } from '../utils/dough';
 import { responsiveImg } from '../utils/photos';
 
 
@@ -49,7 +50,7 @@ export function HomePage({ nav, openArticle, openLightbox }) {
   useEffect(() => {
     let cancelled = false;
     api('/api/store')
-      .then((d) => { if (!cancelled) setUnavailable(new Set(d.unavailable || [])); })
+      .then((d) => { if (!cancelled) setUnavailable(soldOutNames(d)); })
       .catch(() => {});
     return () => { cancelled = true; };
   }, []);
@@ -79,7 +80,7 @@ export function HomePage({ nav, openArticle, openLightbox }) {
         <div className="hero-img" />
         <div className="hero-overlay" />
         <div className="hero-badge" aria-hidden="true"><LogoBadge size={128} /></div>
-        <div className="hero-pill">Re-opening: THIS SATURDAY!</div>
+        <div className="hero-pill">Open for the Fall!</div>
         {/* Non-breaking spaces inside each segment: the label may only wrap at the dots */}
         <div className="hero-label">Somerville,&nbsp;MA · Est.&nbsp;2025</div>
         <h1 className="hero-title">Handmade<br />with <em>love.</em></h1>

@@ -4,7 +4,9 @@ import ordersHandler from './orders.js';
 import loginHandler from './login.js';
 import { startServer, call } from '../tests/helpers/server.js';
 import { resetEnv } from '../tests/helpers/env.js';
-import { openStore, adminCookie, insertOrder } from '../tests/helpers/fixtures.js';
+import { openStore, adminCookie, insertOrder, DOUGH_ITEM, DOUGH_TYPE } from '../tests/helpers/fixtures.js';
+import storeHandler from './store.js';
+import { SLICES_PER_BALL } from '../src/utils/dough.js';
 
 let server;
 let base;
@@ -12,7 +14,10 @@ let base;
 beforeEach(async () => {
   resetEnv();
   await openStore();
-  server = await startServer({ '/api/nights': nightsHandler, '/api/orders': ordersHandler, '/api/login': loginHandler });
+  server = await startServer({
+    '/api/nights': nightsHandler, '/api/orders': ordersHandler,
+    '/api/login': loginHandler, '/api/store': storeHandler,
+  });
   base = server.url;
 });
 
@@ -214,5 +219,45 @@ describe('unsupported methods', () => {
     const cookie = await adminCookie(base);
     const { status } = await call(base, '/api/nights', { method: 'PUT', headers: { Cookie: cookie } });
     expect(status).toBe(405);
+  });
+});
+
+// Staff count dough in at the start of every night, so closing has to hand
+// both halves back to zero — the ball count *and* the slices-sold counter.
+// Carrying either one forward breaks the next service: a stale ball count
+// oversells against dough that isn't there, and a stale sold-counter refuses
+// orders against a pool that was spent a week ago.
+describe('POST /api/nights — dough reset', () => {
+  const PER_BALL = SLICES_PER_BALL[DOUGH_TYPE];
+
+  it('clears tonight\'s dough count and its slices-sold tally', async () => {
+    const cookie = await adminCookie(base);
+    await call(base, '/api/store', { method: 'PATCH', headers: { Cookie: cookie }, body: { dough: { [DOUGH_TYPE]: 1 } } });
+    await call(base, '/api/orders', {
+      method: 'POST', headers: { Cookie: cookie },
+      body: { name: 'Test Customer', items: [{ name: DOUGH_ITEM.name, qty: 2 }] },
+    });
+    expect((await call(base, '/api/store')).body.dough[DOUGH_TYPE].used).toBe(2);
+
+    const { status } = await call(base, '/api/nights', { method: 'POST', headers: { Cookie: cookie } });
+    expect(status).toBe(201);
+
+    // Untracked, not zero balls — zero would refuse every order next Saturday
+    // until someone typed a number in.
+    expect((await call(base, '/api/store')).body.dough).toEqual({});
+
+    // And the counter is genuinely back to nothing: a full ball's worth sells
+    // again once the next night's dough is entered.
+    await call(base, '/api/store', { method: 'PATCH', headers: { Cookie: cookie }, body: { dough: { [DOUGH_TYPE]: 1 } } });
+    const { body } = await call(base, '/api/store');
+    expect(body.dough[DOUGH_TYPE].remaining).toBe(PER_BALL);
+  });
+
+  it('leaves the storefront mode and hours alone', async () => {
+    const cookie = await adminCookie(base);
+    await insertOrder({ status: 'done' });
+    await call(base, '/api/store', { method: 'PATCH', headers: { Cookie: cookie }, body: { mode: 'open' } });
+    await call(base, '/api/nights', { method: 'POST', headers: { Cookie: cookie } });
+    expect((await call(base, '/api/store')).body.mode).toBe('open');
   });
 });

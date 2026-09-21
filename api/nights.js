@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { send, isAdmin, readQuery } from './_lib/util.js';
-import { listOrders } from './_lib/store.js';
+import { listOrders, patchSettings, clearDoughUsed } from './_lib/store.js';
 import { acquireNightCloseLock, archiveNightAndClear, listNights, getNight, deleteNight } from './_lib/nights.js';
 
 function makeId(orders) {
@@ -71,6 +71,26 @@ async function close(req, res) {
       orders: orders.map(archiveOrder),
     };
     const archived = await archiveNightAndClear(night, orders);
+
+    // Tonight's dough goes with tonight's orders. Staff count balls in at the
+    // start of every night, so carrying a stock figure (or a slices-sold
+    // counter whose orders have just been archived and deleted) into next
+    // Saturday would either oversell or, worse, quietly refuse orders against
+    // a pool that was already spent a week ago.
+    //
+    // Cleared to `{}` — untracked — rather than to zero balls: zero means sold
+    // out and would refuse every order until someone typed a number in.
+    //
+    // Deliberately outside the archive's atomic boundary and deliberately not
+    // allowed to fail the request: the archive is committed by this point and
+    // a 500 here would have the board looking un-closed. The counter carries a
+    // three-day sliding TTL and nights are a week apart, so the worst case
+    // heals itself well before the next service.
+    await Promise.all([
+      patchSettings({ dough: {} }),
+      clearDoughUsed(),
+    ]).catch((err) => console.error('night close dough reset error:', err));
+
     return send(res, 201, { night: archived });
   } finally {
     // A transient lock-release failure must not replace a successfully

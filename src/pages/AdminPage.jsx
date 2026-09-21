@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Archive, Check, Flame, LogOut, Moon, RotateCcw, Store, UtensilsCrossed, X } from 'lucide-react';
+import { Archive, Check, Flame, LogOut, Moon, RotateCcw, Store, UtensilsCrossed, Wheat, X } from 'lucide-react';
 import { Footer } from '../components/Footer';
 import { ReportsPanel, TakedownAlert } from '../components/ReportsPanel';
 import { useTakedownRequests } from '../hooks/useTakedownRequests';
@@ -7,6 +7,7 @@ import { useBoardTitle } from '../hooks/useBoardTitle';
 import { MENU_DATA } from '../data/menu';
 import { api } from '../utils/api';
 import { DAY_NAMES, addonLabel, displayName, fmtMoney, fmtTime, formatOrderItems, ageLabel, orderLineKey } from '../utils/orders';
+import { DOUGH_LABELS, DOUGH_TYPES, MAX_DOUGH_BALLS, SLICES_PER_BALL } from '../utils/dough';
 
 const POLL_MS = 5000;
 const PIZZA_CATEGORY = MENU_DATA[0].category;
@@ -162,6 +163,72 @@ function StorePanel({ storeInfo, savingStore, draft, setDraft, saveStore, curren
   );
 }
 
+// Start-of-night stock. Staff count dough *balls* because that's what's in the
+// fridge; everything downstream works in slices, and this panel is where the
+// two meet — hence the "× 8" spelled out next to each field rather than a bare
+// number whose units you have to remember.
+//
+// A blank field means that dough isn't being counted tonight, which is not the
+// same as zero and is why this can't just be two numbers defaulting to 0: zero
+// balls is "sold out, refuse everything", and a board that started there would
+// stop service until someone typed into it.
+function DoughPanel({ doughInfo, draft, setDraft, savingStore, saveDough, stopCounting }) {
+  const counting = Object.keys(doughInfo ?? {}).length > 0;
+  return (
+    <div className="dough-panel">
+      <div className="store-panel-label"><Wheat size={13} /> Dough — count the balls in before service</div>
+      <div className="dough-rows">
+        {DOUGH_TYPES.map((type) => {
+          const live = doughInfo?.[type];
+          return (
+            <div key={type} className="dough-row">
+              <label className="dough-field">
+                <span className="dough-field-name">{DOUGH_LABELS[type]}</span>
+                <input
+                  type="number"
+                  min="0"
+                  max={MAX_DOUGH_BALLS}
+                  inputMode="numeric"
+                  placeholder="—"
+                  value={draft[type]}
+                  aria-label={`${DOUGH_LABELS[type]} dough balls`}
+                  onChange={(e) => setDraft((d) => ({ ...d, [type]: e.target.value }))}
+                />
+                <span className="dough-unit">balls × {SLICES_PER_BALL[type]}</span>
+              </label>
+              <div className="dough-readout">
+                {live ? (
+                  <>
+                    <strong className={live.remaining === 0 ? 'dough-out' : undefined}>
+                      {live.remaining} slice{live.remaining === 1 ? '' : 's'} left
+                    </strong>
+                    <span className="dough-spent">{live.used} of {live.slices} sold</span>
+                  </>
+                ) : (
+                  <span className="dough-untracked">Not counted — sells without a limit</span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="dough-actions">
+        <button type="button" className="store-save" disabled={savingStore} onClick={saveDough}>
+          Save dough
+        </button>
+        {counting && (
+          <button type="button" className="dough-stop" disabled={savingStore} onClick={stopCounting}>
+            Stop counting
+          </button>
+        )}
+      </div>
+      <div className="dough-note">
+        Leave a box empty to sell that dough without a cap. Closing the night clears both.
+      </div>
+    </div>
+  );
+}
+
 function AvailabilityPanel({ unavailableSet, savingStore, toggleItem }) {
   return (
     <div className="avail-panel">
@@ -272,10 +339,14 @@ export function AdminPage({ nav, onAuthChange }) {
   const [notice, setNotice] = useState('');
   const [storeInfo, setStoreInfo] = useState(null);
   const [draft, setDraft] = useState({ day: 6, start: '19:00', end: '20:30' });
+  // Strings, not numbers: '' is how the panel says "don't count this dough",
+  // and a number-typed state can't hold the difference between empty and zero.
+  const [doughDraft, setDoughDraft] = useState({ ny: '', neapolitan: '' });
   const [savingStore, setSavingStore] = useState(false);
   const [storeError, setStoreError] = useState('');
   const [closingNight, setClosingNight] = useState(false);
   const draftSeeded = useRef(false);
+  const doughSeeded = useRef(false);
   // Bumped by every mutation (advance, 86 toggle, hours save). A poll snapshot
   // taken before a mutation is stale — applying it would visually revert the
   // change, and a re-tap would then persist the wrong state to the server.
@@ -343,6 +414,14 @@ export function AdminPage({ nav, onAuthChange }) {
         draftSeeded.current = true;
         setDraft({ day: status.hours.day, start: status.hours.start, end: status.hours.end });
       }
+      // Same rule for the dough boxes — the 5s poll must not overwrite a
+      // half-typed count. The *readout* beside them keeps updating on every
+      // poll, which is the part that has to stay live during service.
+      if (!doughSeeded.current) {
+        doughSeeded.current = true;
+        setDoughDraft(Object.fromEntries(
+          DOUGH_TYPES.map((type) => [type, status.dough?.[type] ? String(status.dough[type].balls) : ''])));
+      }
     } catch (err) {
       // As with successful polls, an issued-but-unsettled request must not
       // suppress this result. Ignore only errors older than applied state.
@@ -377,6 +456,29 @@ export function AdminPage({ nav, onAuthChange }) {
 
   const toggleItem = (name) => {
     saveStore({ availability: { name, unavailable: !unavailableSet.has(name) } });
+  };
+
+  // Blank stays blank — an omitted dough type is how the API is told to stop
+  // capping that one. Validated here as well as server-side so a typo comes
+  // back instantly instead of as a round-tripped 400.
+  const saveDough = () => {
+    const dough = {};
+    for (const type of DOUGH_TYPES) {
+      const raw = String(doughDraft[type] ?? '').trim();
+      if (raw === '') continue;
+      const balls = Number(raw);
+      if (!Number.isInteger(balls) || balls < 0 || balls > MAX_DOUGH_BALLS) {
+        setStoreError(`Dough counts must be whole numbers of balls, 0–${MAX_DOUGH_BALLS}.`);
+        return;
+      }
+      dough[type] = balls;
+    }
+    saveStore({ dough });
+  };
+
+  const stopCounting = () => {
+    setDoughDraft(Object.fromEntries(DOUGH_TYPES.map((type) => [type, ''])));
+    saveStore({ dough: {} });
   };
 
   const closeNight = async () => {
@@ -526,6 +628,13 @@ export function AdminPage({ nav, onAuthChange }) {
         <StorePanel
           storeInfo={storeInfo} savingStore={savingStore}
           draft={draft} setDraft={setDraft} saveStore={saveStore} currentHours={currentHours}
+        />
+      )}
+
+      {storeInfo && (
+        <DoughPanel
+          doughInfo={storeInfo.dough} draft={doughDraft} setDraft={setDoughDraft}
+          savingStore={savingStore} saveDough={saveDough} stopCounting={stopCounting}
         />
       )}
 

@@ -1015,6 +1015,14 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 44px 60p
   padding-top: 22px; border-top: 2px solid var(--green);
 }
 .order-menu > div:first-of-type .order-cat { margin-top: 0; padding-top: 0; border-top: none; }
+/* Tonight's remaining slices, under the slice heading. Absent entirely when
+   staff aren't counting dough, so it must not reserve space. */
+.order-cat-stock {
+  display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0 0 14px;
+  font-family: var(--ui); font-size: 10px; letter-spacing: var(--track-label);
+  text-transform: uppercase; color: var(--green);
+}
+.order-cat-stock .order-stock-out { color: var(--red); }
 .order-row-soldout .order-row-text, .order-row-soldout .order-row-price { opacity: 0.45; }
 .order-row-soldout .order-row-name { text-decoration: line-through; text-decoration-thickness: 1px; }
 .order-soldout-chip {
@@ -1307,6 +1315,43 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 44px 60p
 }
 .store-save:hover { background: var(--gold); color: var(--ink); }
 .store-save:disabled { opacity: 0.6; cursor: wait; }
+
+/* Dough stock panel — start-of-night ball counts.
+   Two fixed columns rather than auto-fit: the count is exactly two rows and
+   always will be until a third dough exists, and a track count that changes
+   with the viewport would move the readout out from under its own input. */
+.dough-panel {
+  padding: 18px 24px 20px; margin-bottom: 20px;
+  background: rgba(255,255,255,0.03); border: 1px solid rgba(254,245,239,0.12);
+}
+.dough-rows { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 40px; }
+.dough-row { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.dough-field { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.dough-field-name { font-family: var(--serif); font-size: 16px; color: var(--cream); min-width: 88px; }
+.dough-field input {
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(254,245,239,0.18); border-radius: 3px;
+  color: var(--cream); font-family: var(--ui); font-size: 13px; padding: 7px 8px; width: 68px;
+  color-scheme: dark;
+}
+.dough-unit { font-family: var(--ui); font-size: 10px; letter-spacing: var(--track-label); text-transform: uppercase; color: rgba(254,245,239,0.35); }
+.dough-readout { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; font-family: var(--ui); font-size: 11px; letter-spacing: var(--track-label); }
+.dough-readout strong { color: var(--green-light); font-weight: 500; }
+.dough-readout .dough-out { color: var(--red-light); }
+.dough-spent { color: rgba(254,245,239,0.4); }
+.dough-untracked { color: rgba(254,245,239,0.35); font-style: italic; }
+.dough-actions { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
+.dough-stop {
+  font-family: var(--ui); font-size: 10px; letter-spacing: var(--track-label); text-transform: uppercase;
+  color: rgba(254,245,239,0.45); border-bottom: 1px solid rgba(254,245,239,0.2); padding-bottom: 2px;
+  transition: color 0.2s;
+}
+.dough-stop:hover { color: var(--cream); }
+.dough-stop:disabled { opacity: 0.6; cursor: wait; }
+.dough-note { font-family: var(--serif); font-size: 13px; color: rgba(254,245,239,0.4); margin-top: 10px; }
+/* iOS zooms the board on focus below 16px */
+@media (pointer: coarse) {
+  .dough-field input { font-size: 16px; }
+}
 
 /* Availability (86) panel */
 .avail-panel {
@@ -1732,6 +1777,7 @@ body, .story-section, .home-latest, .menu-page, .blog-page, .article-page {
   .store-modes { width: 100%; }
   .store-modes button { flex: 1; }
   .store-schedule { flex-wrap: wrap; }
+  .dough-rows { grid-template-columns: minmax(0, 1fr); gap: 18px; }
   .board { grid-template-columns: 1fr; }
   .board-col { min-height: 0; }
   .finished-row { grid-template-columns: 52px 1fr auto auto; }

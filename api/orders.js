@@ -6,6 +6,7 @@ import {
   listOrders, setOrderStatus, getSettings, rateLimit,
 } from './_lib/store.js';
 import { isOpenNow } from './_lib/hours.js';
+import { DOUGH_LABELS, doughSlicesFor } from '../src/utils/dough.js';
 
 // ── Order intake caps ──────────────────────────────────────────────────────
 // Intake is admin-only now (see create() below), so these are no longer the
@@ -80,6 +81,12 @@ function validateItems(rawItems) {
     const qty = Number(raw?.qty);
     if (!entry || !Number.isInteger(qty) || qty < 1 || qty > entry.maxQty) return null;
     const item = { name: entry.name, category: entry.category, priceCents: entry.priceCents, qty };
+    // Only set when the item actually draws on a dough pool. Assigning null
+    // here instead would be worse than useless: it survives into the stored
+    // JSON, and Redis's cjson decodes a JSON null as a truthy sentinel rather
+    // than nil — the cancel-refund loop in store.js would then try to credit a
+    // pool named by that sentinel and take the whole EVAL down with it.
+    if (entry.dough) item.dough = entry.dough;
     // Optional per-line add-ons: only on slices, only real add-on items, no dupes
     if (raw.addons !== undefined) {
       if (!Array.isArray(raw.addons) || raw.addons.length > 8) return null;
@@ -164,6 +171,10 @@ async function create(req, res) {
   if (!items) return send(res, 400, { error: 'Your cart has an item we did not recognize — please refresh and try again.' });
 
   const totalCents = items.reduce((sum, it) => sum + lineTotal(it), 0);
+  // Slices this order takes out of each dough pool. Computed here, enforced in
+  // the store — see the dough block in CREATE_ORDER_LUA for why the check and
+  // the commit cannot be separate round trips.
+  const doughSlices = doughSlicesFor(items);
 
   const idempotencyKey = String(req.headers['idempotency-key'] ?? '');
   if (idempotencyKey && !IDEMPOTENCY_KEY.test(idempotencyKey)) {
@@ -217,8 +228,23 @@ async function create(req, res) {
       createdAt: now,
       updatedAt: now,
     };
-    const stored = await createOrder(order, { idempotencyKey: idempotencyKey || null, fingerprint });
+    const stored = await createOrder(order, { idempotencyKey: idempotencyKey || null, fingerprint, doughSlices });
     if (stored.reason === 'code_conflict') continue;
+    // `dough:<type>:<slices left>` — the pool ran out between building this
+    // cart and submitting it (or it was already short and the client's copy of
+    // the count was stale). Say how many are actually left, since whoever is
+    // at the window can usually just sell fewer rather than nothing.
+    if (typeof stored.reason === 'string' && stored.reason.startsWith('dough:')) {
+      const [, dough, left] = stored.reason.split(':');
+      const remaining = Number(left) || 0;
+      return send(res, 409, {
+        error: remaining === 0
+          ? `We're out of ${DOUGH_LABELS[dough] ?? dough} dough for tonight — that slice is sold out.`
+          : `Only ${remaining} ${DOUGH_LABELS[dough] ?? dough} slice${remaining === 1 ? '' : 's'} left tonight — trim the order and try again.`,
+        doughShort: dough,
+        remaining,
+      });
+    }
     if (stored.reason === 'capacity') {
       return send(res, 503, { error: 'The order board is full right now — please order at the window.' });
     }

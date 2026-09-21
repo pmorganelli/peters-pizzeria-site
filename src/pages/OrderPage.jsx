@@ -6,6 +6,7 @@ import { OrderStatusCard } from '../components/OrderStatusCard';
 import { MENU_DATA } from '../data/menu';
 import { api } from '../utils/api';
 import { DAY_NAMES, DEFAULT_MAX_QTY, addonLabel, clampCartQty, displayName, fmtMoney, fmtTime, parsePriceCents } from '../utils/orders';
+import { DOUGH_BY_ITEM, DOUGH_LABELS, doughSlicesFor, soldOutNames } from '../utils/dough';
 import { readStored, readStoredJSON, writeStored, writeStoredJSON, removeStored } from '../utils/storage';
 
 const SAVED_KEY = 'pp_order_id';
@@ -59,8 +60,11 @@ function readCart() {
 
 function Stepper({ qty, max, onChange }) {
   if (!qty) {
+    // max can be 0 with nothing of this item in the cart: the dough pool is
+    // shared, so another slice cut from the same dough may already have taken
+    // every remaining one. The item isn't sold out — the pool is spoken for.
     return (
-      <button type="button" className="order-add-btn" onClick={() => onChange(1)}>
+      <button type="button" className="order-add-btn" disabled={max < 1} onClick={() => onChange(1)}>
         <Plus size={12} /> Add
       </button>
     );
@@ -74,17 +78,36 @@ function Stepper({ qty, max, onChange }) {
   );
 }
 
-function MenuList({ cart, unavailable, setQty, toggleAddon }) {
+// Tonight's remaining slices, per dough type that staff are actually counting.
+// Rendered under the slice heading rather than on each row: the pool is shared
+// by every slice cut from that dough, so a per-row number would read as a
+// per-row allowance and invite someone to add three of each.
+function DoughStock({ dough }) {
+  const tracked = Object.entries(dough ?? {});
+  if (tracked.length === 0) return null; // not counting tonight — say nothing
+  return (
+    <div className="order-cat-stock">
+      {tracked.map(([type, { remaining }]) => (
+        <span key={type} className={remaining === 0 ? 'order-stock-out' : undefined}>
+          {remaining === 0 ? `${DOUGH_LABELS[type]} sold out` : `${remaining} ${DOUGH_LABELS[type]} left`}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function MenuList({ cart, unavailable, dough, maxFor, setQty, toggleAddon }) {
   return (
     <div className="order-menu">
       {ORDERABLE_SECTIONS.map((section) => (
         <div key={section.category}>
           <div className="order-cat">{section.category}</div>
+          {section.category === PIZZA_CATEGORY && <DoughStock dough={dough} />}
           {section.items.map((item) => {
             const soldOut = unavailable.has(item.name);
             const units = cart[item.name] ?? [];
             const showAddons = section.category === PIZZA_CATEGORY && !soldOut && units.length > 0;
-            const maxQty = item.maxQty ?? DEFAULT_MAX_QTY;
+            const maxQty = maxFor(item);
             return (
               <div key={item.name}>
                 <div className={`order-row${soldOut ? ' order-row-soldout' : ''}${showAddons ? ' order-row-open' : ''}`}>
@@ -379,7 +402,9 @@ export function OrderPage({ nav, isAdmin }) {
       }),
     }));
 
-  const unavailable = new Set(store?.unavailable || []);
+  // Manual 86s and dough-exhausted slices in one set — MenuList, the cart
+  // grouping below and the "sold out today" note all read from it.
+  const unavailable = soldOutNames(store);
 
   // Group each item's units by identical add-on sets → the order lines shown
   // in the summary and sent to the API. Sold-out add-ons are stripped.
@@ -411,6 +436,24 @@ export function OrderPage({ nav, isAdmin }) {
       }
     }
   }
+  // How high the stepper may go for one item. The dough pool is shared, so the
+  // ceiling has to account for slices *other* items have already taken out of
+  // it — otherwise two slices off the same dough could each offer the last one.
+  //
+  // This is a courtesy, not the guarantee: the server re-checks the pool inside
+  // the same script that writes the order (see CREATE_ORDER_LUA). This count
+  // comes from the last /api/store poll and is stale the moment another device
+  // takes an order.
+  const cartDough = doughSlicesFor(cartLines);
+  const maxFor = (item) => {
+    const base = item.maxQty ?? DEFAULT_MAX_QTY;
+    const pool = store?.dough?.[DOUGH_BY_ITEM.get(item.name)];
+    if (!pool) return base; // untracked dough, or not a slice
+    const mine = cart[item.name]?.length ?? 0;
+    const headroom = Math.max(0, pool.remaining - (cartDough[DOUGH_BY_ITEM.get(item.name)] ?? 0));
+    return Math.max(0, Math.min(base, mine + headroom));
+  };
+
   const removeLine = (line) =>
     setCart((c) => {
       const key = line.addons.join('|');
@@ -474,7 +517,11 @@ export function OrderPage({ nav, isAdmin }) {
       }
       // The store may have closed or an item sold out while the cart was built
       if (e.status === 403) setStore((s) => ({ ...(s || { mode: 'closed', hours: null }), open: false }));
-      else if (e.status === 400) api('/api/store').then(setStore).catch(() => {});
+      // 400: an item sold out while the cart was built. 409: the dough pool
+      // ran out under us (another device got there first). Either way the
+      // client's copy of what's left is provably stale — re-read it so the
+      // steppers and the sold-out chips catch up with the message above them.
+      else if (e.status === 400 || e.status === 409) api('/api/store').then(setStore).catch(() => {});
     } finally {
       setPlacing(false);
     }
@@ -526,7 +573,10 @@ export function OrderPage({ nav, isAdmin }) {
           <ClosedCard store={store} nav={nav} />
         ) : (
           <div className="order-grid">
-            <MenuList cart={cart} unavailable={unavailable} setQty={setQty} toggleAddon={toggleAddon} />
+            <MenuList
+              cart={cart} unavailable={unavailable} dough={store.dough}
+              maxFor={maxFor} setQty={setQty} toggleAddon={toggleAddon}
+            />
             <OrderSummaryPanel
               cartLines={cartLines} removedFromCart={removedFromCart} totalCents={totalCents} removeLine={removeLine}
               name={name} setName={setName} notes={notes} setNotes={setNotes}

@@ -3,6 +3,7 @@ import { saveSettings, createOrder } from '../../api/_lib/store.js';
 import { DEFAULT_SETTINGS } from '../../api/_lib/hours.js';
 import { MENU_DATA } from '../../src/data/menu.js';
 import { parsePriceCents } from '../../src/utils/orders.js';
+import { isDoughType } from '../../src/utils/dough.js';
 
 // ── Menu-derived fixtures ─────────────────────────────────────────────
 // Read off the real menu rather than hardcoded. Prices are recomputed
@@ -22,6 +23,22 @@ export const TEST_ITEM_NAME = TEST_ITEM.name;
 const TEST_ITEM_CENTS = parsePriceCents(TEST_ITEM.price);
 // The one carrying a lower maxQty, for the per-item cap tests.
 export const CAPPED_ITEM = SLICE_SECTION.items.find((i) => i.maxQty !== undefined);
+
+// ── Dough-stock fixtures ──────────────────────────────────────────────
+// A slice that draws on a dough pool, and a second one cut from the *same*
+// dough. The pool is shared across every slice made from that ball, so proving
+// it is counted per pool rather than per item needs two of them.
+//
+// Derived like everything else here — and the dough tests assert these exist
+// before using them, because "no slice carries a dough" would make the server
+// accept everything and every one of those cases would pass while proving
+// nothing.
+export const DOUGH_ITEM = isDoughType(TEST_ITEM.dough)
+  ? TEST_ITEM
+  : SLICE_SECTION.items.find((i) => isDoughType(i.dough));
+export const DOUGH_TYPE = DOUGH_ITEM?.dough;
+export const SAME_DOUGH_ITEM = SLICE_SECTION.items.find(
+  (i) => i !== DOUGH_ITEM && i.dough === DOUGH_TYPE);
 
 // Order creation 403s unless the store is "open" — DEFAULT_SETTINGS.mode is
 // 'auto' and follows a real weekly window, which would make tests flaky

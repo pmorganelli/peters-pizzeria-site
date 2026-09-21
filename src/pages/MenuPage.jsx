@@ -8,6 +8,7 @@ import { LineReveal } from '../components/LineReveal';
 import { useScrollReveal } from '../hooks/useScrollReveal';
 import { MENU_DATA, UPCOMING_SPECIALS } from '../data/menu';
 import { api } from '../utils/api';
+import { soldOutNames } from '../utils/dough';
 import { responsiveImg } from '../utils/photos';
 
 gsap.registerPlugin(useGSAP, ScrollTrigger);
@@ -23,7 +24,9 @@ export function MenuPage({ nav, isAdmin }) {
   useEffect(() => {
     let cancelled = false;
     api('/api/store')
-      .then((d) => { if (!cancelled) setUnavailable(new Set(d.unavailable || [])); })
+      // Both kinds of sold-out in one set: the manual 86 list and any slice
+      // whose dough pool has run out tonight. See utils/dough.js.
+      .then((d) => { if (!cancelled) setUnavailable(soldOutNames(d)); })
       .catch(() => {});
     return () => { cancelled = true; };
   }, []);
