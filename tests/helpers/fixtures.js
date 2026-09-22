@@ -44,8 +44,13 @@ export const SAME_DOUGH_ITEM = SLICE_SECTION.items.find(
 // 'auto' and follows a real weekly window, which would make tests flaky
 // depending on when they happen to run. Force it open instead of mocking
 // time.
+//
+// A dough override is stamped as saved just now, the way patchSettings()
+// stamps a real save — a ball count with no `doughSetAt` reads as last week's
+// and is ignored, which would leave every dough test selling without a limit.
 export async function openStore(overrides = {}) {
-  await saveSettings({ ...DEFAULT_SETTINGS, mode: 'open', ...overrides });
+  const stamp = overrides.dough !== undefined ? { doughSetAt: Date.now() } : {};
+  await saveSettings({ ...DEFAULT_SETTINGS, mode: 'open', ...stamp, ...overrides });
 }
 
 // Places a real order through the real handler + store (in-memory fallback),

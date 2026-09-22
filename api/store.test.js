@@ -1,9 +1,10 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import storeHandler from './store.js';
 import ordersHandler from './orders.js';
 import loginHandler from './login.js';
 import { startServer, call } from '../tests/helpers/server.js';
 import { resetEnv } from '../tests/helpers/env.js';
+import { ORDER_TTL_SECONDS } from './_lib/store.js';
 import { openStore, adminCookie, DOUGH_ITEM, DOUGH_TYPE } from '../tests/helpers/fixtures.js';
 import { MAX_DOUGH_BALLS, SLICES_PER_BALL, DOUGH_TYPES } from '../src/utils/dough.js';
 
@@ -190,5 +191,36 @@ describe('PATCH /api/store — dough', () => {
     const { body } = await getStoreAdmin();
     expect(body.unavailable).toContain(DOUGH_ITEM.name);
     expect(body.dough[DOUGH_TYPE].balls).toBe(3);
+  });
+});
+
+// Closing the night clears the ball count, but that reset is best-effort and
+// a night nobody closes never runs it. pp:settings never expires, so without
+// an age limit on the count itself, next Saturday would open selling against
+// last week's balls next to a slices-sold counter whose TTL *had* run out.
+describe('a ball count from an earlier night', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  const later = (ms) => {
+    const now = Date.now();
+    vi.spyOn(Date, 'now').mockReturnValue(now + ms);
+  };
+
+  it('reads as untracked once it outlives the orders it was counted for', async () => {
+    await patchStore({ dough: { [DOUGH_TYPE]: 0 } }); // sold out
+    later(ORDER_TTL_SECONDS * 1000 + 1);
+    expect((await getStoreAdmin()).body.dough).toEqual({});
+    // And intake agrees with the readout: the stale zero no longer refuses.
+    const { status } = await call(base, '/api/orders', {
+      method: 'POST', headers: { Cookie: cookie },
+      body: { name: 'Next Week', items: [{ name: DOUGH_ITEM.name, qty: 1 }] },
+    });
+    expect(status).toBe(201);
+  });
+
+  it('still holds within the night it was counted for', async () => {
+    await patchStore({ dough: { [DOUGH_TYPE]: 0 } });
+    later(6 * 60 * 60 * 1000); // a long service
+    expect((await getStoreAdmin()).body.dough[DOUGH_TYPE].balls).toBe(0);
   });
 });

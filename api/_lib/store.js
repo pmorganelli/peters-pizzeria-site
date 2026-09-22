@@ -120,7 +120,12 @@ if settingsRaw then
   -- pcall: a settings key that somehow isn't JSON must not 500 every order.
   -- Untracked dough (the default) is the safe reading of "we can't tell".
   local ok, decoded = pcall(cjson.decode, settingsRaw)
-  if ok and type(decoded) == 'table' and type(decoded.dough) == 'table' then stock = decoded.dough end
+  if ok and type(decoded) == 'table' and type(decoded.dough) == 'table' then
+    -- A count older than one order lifetime is last week's, not tonight's:
+    -- read it as untracked. Mirrors freshDoughStock() in JS — see there.
+    local setAt = tonumber(decoded.doughSetAt)
+    if setAt and tonumber(ARGV[8]) - setAt <= tonumber(ARGV[9]) then stock = decoded.dough end
+  end
 end
 if stock then
   for dough, qty in pairs(want) do
@@ -355,7 +360,7 @@ function normalizeSettings(stored) {
     ...DEFAULT_SETTINGS,
     ...(stored ?? {}),
     unavailable: Array.isArray(unavailable) ? unavailable : [],
-    dough: normalizeDoughStock(stored?.dough),
+    dough: freshDoughStock(stored),
     hours: { ...DEFAULT_SETTINGS.hours, ...(stored?.hours ?? {}) },
   };
 }
@@ -369,6 +374,23 @@ function normalizeSettings(stored) {
 // documented above for `unavailable`: an empty dough map means "tracking
 // nothing", and `{}` is exactly how that should decode. It still goes through
 // this function so the *contents* are checked.
+// A ball count carries the time it was saved (`doughSetAt`, stamped by
+// patchSettings) and reads as untracked once it is older than one order
+// lifetime — the same horizon the slices-sold counter's TTL gives it. Closing
+// the night clears both explicitly, but that reset is best-effort and a night
+// nobody closes never runs it at all; without an expiry here the count would
+// sit in pp:settings (which never expires) until next Saturday, next to a
+// counter that *had* expired, and the board would open selling against dough
+// that isn't there. Untracked rather than zero, for the reason on
+// DEFAULT_SETTINGS.dough. A count with no timestamp is treated as stale.
+//
+// CREATE_ORDER_LUA applies the same rule to the raw key; keep the two in step.
+function freshDoughStock(stored) {
+  const setAt = Number(stored?.doughSetAt);
+  if (!Number.isFinite(setAt) || Date.now() - setAt > ORDER_TTL_MS) return {};
+  return normalizeDoughStock(stored?.dough);
+}
+
 function normalizeDoughStock(stored) {
   const dough = {};
   if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return dough;
@@ -392,6 +414,7 @@ local settings = {
   mode = stored.mode or defaults.mode,
   unavailable = stored.unavailable or defaults.unavailable,
   dough = stored.dough or defaults.dough,
+  doughSetAt = stored.doughSetAt,
   hours = stored.hours or defaults.hours
 }
 for key, value in pairs(defaults.hours) do
@@ -405,7 +428,10 @@ if patch.unavailable ~= nil then settings.unavailable = patch.unavailable end
 -- neither), and an omitted type means "stop tracking this one", which a merge
 -- could never express. Field-level atomicity against mode/hours/availability
 -- is preserved — those are separate keys on the patch.
-if patch.dough ~= nil then settings.dough = patch.dough end
+if patch.dough ~= nil then
+  settings.dough = patch.dough
+  settings.doughSetAt = patch.doughSetAt
+end
 if patch.availability ~= nil then
   local next = {}
   local found = false
@@ -428,6 +454,8 @@ redis.call('SET', KEYS[1], encoded)
 return encoded`;
 
 export async function patchSettings(patch) {
+  // Every dough save restarts the count's lifetime — see freshDoughStock().
+  if (patch.dough !== undefined) patch = { ...patch, doughSetAt: Date.now() };
   if (!hasRedisEnv()) {
     // Keep the in-memory fallback synchronous through its read-modify-write,
     // matching the single-operation guarantee of the Redis Lua path.
@@ -436,7 +464,10 @@ export async function patchSettings(patch) {
     if (patch.mode !== undefined) next.mode = patch.mode;
     if (patch.hours !== undefined) next.hours = patch.hours;
     if (patch.unavailable !== undefined) next.unavailable = patch.unavailable;
-    if (patch.dough !== undefined) next.dough = normalizeDoughStock(patch.dough);
+    if (patch.dough !== undefined) {
+      next.dough = normalizeDoughStock(patch.dough);
+      next.doughSetAt = patch.doughSetAt;
+    }
     if (patch.availability !== undefined) {
       const unavailable = new Set(current.unavailable ?? []);
       if (patch.availability.unavailable) unavailable.add(patch.availability.name);

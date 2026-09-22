@@ -83,9 +83,11 @@ async function close(req, res) {
     //
     // Deliberately outside the archive's atomic boundary and deliberately not
     // allowed to fail the request: the archive is committed by this point and
-    // a 500 here would have the board looking un-closed. The counter carries a
-    // three-day sliding TTL and nights are a week apart, so the worst case
-    // heals itself well before the next service.
+    // a 500 here would have the board looking un-closed. Both halves age out
+    // on their own if this fails (or nobody closes the night): the counter
+    // carries a three-day sliding TTL, and a ball count older than that reads
+    // as untracked (freshDoughStock() in api/_lib/store.js). Nights are a week
+    // apart, so the worst case heals itself well before the next service.
     await Promise.all([
       patchSettings({ dough: {} }),
       clearDoughUsed(),
