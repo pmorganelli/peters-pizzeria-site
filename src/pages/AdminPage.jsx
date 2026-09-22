@@ -491,10 +491,12 @@ export function AdminPage({ nav, onAuthChange }) {
       await api('/api/nights', { method: 'POST' });
       epochRef.current += 1;
       setOrders([]);
-      // The server just cleared tonight's dough back to untracked; blank the
-      // boxes to match rather than leaving last night's counts sitting in a
-      // panel that now reports nothing is being counted.
+      // The server just cleared tonight's dough back to untracked. Blank the
+      // boxes *and* the readout beside them together — the next poll is up to
+      // 5s away, and until it lands the panel would otherwise show empty boxes
+      // next to last night's "slices left", with Stop counting still offered.
       resetDough();
+      setStoreInfo((info) => info && { ...info, dough: {} });
     } catch (err) {
       if (err.status === 401) logout('Session expired — log in again.');
       // A 409 means the race still won between our fresh read and the POST —
