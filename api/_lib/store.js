@@ -520,13 +520,15 @@ local order = cjson.decode(cur)
 if (order.status == 'done' or order.status == 'cancelled') and order.status ~= ARGV[1] then
   return 'terminal:' .. order.status
 end
--- Cancelling hands the slices back to tonight's pool — the board only offers
--- cancel on a brand-new order, so nothing has been fired and the dough is
--- really still there. Guarded on the *previous* status, which stops a stale
--- tab (or a double tap) crediting the same order twice: the only transition
--- that refunds is not-cancelled → cancelled. Marking an order picked up
--- refunds nothing, because that slice was made and sold.
-if ARGV[1] == 'cancelled' and order.status ~= 'cancelled' then
+-- Cancelling a *new* order hands its slices back to tonight's pool: nothing
+-- has been fired, so the dough is really still there. Guarded on the previous
+-- status being exactly 'new', and not merely "not cancelled yet" — the board
+-- only offers cancel on a new order, but a stale tab still showing it as new
+-- can cancel one another device has already moved to firing or ready, and
+-- that dough is in the oven. Refunding it would let the pool sell slices it
+-- doesn't have. The same guard stops a double tap crediting twice (the second
+-- sees 'cancelled'). Marking an order picked up refunds nothing either.
+if ARGV[1] == 'cancelled' and order.status == 'new' then
   local back = {}
   for _, item in ipairs(order.items or {}) do
     if type(item.dough) == 'string' and type(item.qty) == 'number' then
@@ -561,7 +563,7 @@ export async function setOrderStatus(id, status) {
     if ((existing.status === 'done' || existing.status === 'cancelled') && existing.status !== status) {
       return { conflict: existing.status };
     }
-    if (status === 'cancelled' && existing.status !== 'cancelled') {
+    if (status === 'cancelled' && existing.status === 'new') {
       for (const [dough, qty] of Object.entries(doughOnOrder(existing))) {
         doughMemory.set(dough, Math.max(0, (doughMemory.get(dough) ?? 0) - qty));
       }

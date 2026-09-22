@@ -463,6 +463,19 @@ describe('POST /api/orders — dough stock', () => {
     expect(status).toBe(409);
   });
 
+  // The board only offers cancel on a new order, but a stale tab still showing
+  // one as new can cancel it after another device has fired it. That dough is
+  // in the oven, so the cancel must go through without putting it back.
+  it('keeps the slices spent when an order already in the oven is cancelled', async () => {
+    await setStock(1);
+    const { body: placed } = await orderSlices(DOUGH_ITEM, PER_BALL);
+    await call(base, `/api/orders?id=${encodeURIComponent(placed.order.id)}`, {
+      method: 'PATCH', headers: { Cookie: cookie }, body: { status: 'firing' },
+    });
+    expect((await cancel(placed.order.id)).status).toBe(200);
+    expect((await orderSlices(DOUGH_ITEM, 1, 'Nope')).status).toBe(409);
+  });
+
   it('keeps the slices spent once an order is picked up', async () => {
     await setStock(1);
     const { body: placed } = await orderSlices(DOUGH_ITEM, PER_BALL);
