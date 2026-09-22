@@ -237,7 +237,7 @@ describe('POST /api/nights — dough reset', () => {
       method: 'POST', headers: { Cookie: cookie },
       body: { name: 'Test Customer', items: [{ name: DOUGH_ITEM.name, qty: 2 }] },
     });
-    expect((await call(base, '/api/store')).body.dough[DOUGH_TYPE].used).toBe(2);
+    expect((await call(base, '/api/store', { headers: { Cookie: cookie } })).body.dough[DOUGH_TYPE].used).toBe(2);
 
     const { status } = await call(base, '/api/nights', { method: 'POST', headers: { Cookie: cookie } });
     expect(status).toBe(201);

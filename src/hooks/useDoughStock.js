@@ -54,5 +54,15 @@ export function useDoughStock({ saveStore, onError }) {
     saveStore({ dough: {} });
   }, [saveStore]);
 
-  return { draft, setDraft, seed, save, stop };
+  // Closing the night clears the stock server-side, so the boxes have to come
+  // back to blank with it — and re-arm the seed, since the next poll is now
+  // carrying the new night's (empty) count rather than a half-typed one worth
+  // protecting. Without this the panel keeps showing last night's ball counts
+  // next to a readout that says the dough isn't being tracked at all.
+  const reset = useCallback(() => {
+    setDraft(blankDraft());
+    seeded.current = false;
+  }, []);
+
+  return { draft, setDraft, seed, save, stop, reset };
 }

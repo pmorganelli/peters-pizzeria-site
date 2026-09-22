@@ -2,20 +2,32 @@ import { BodyTooLargeError, readBody, send, isAdmin } from './_lib/util.js';
 import { getSettings, patchSettings, getDoughUsed } from './_lib/store.js';
 import { isOpenNow, validateSettings } from './_lib/hours.js';
 import { catalog } from './_lib/catalog.js';
-import { MAX_DOUGH_BALLS, doughStatus, isDoughType } from '../src/utils/dough.js';
+import { MAX_DOUGH_BALLS, SLICES_PER_BALL, DOUGH_LABELS, doughStatus, isDoughType } from '../src/utils/dough.js';
 
-// `dough` is public on purpose. It carries no revenue and no customer data —
-// just how many slices are left — and the order page needs it to grey out a
-// slice whose pool has run dry, exactly as it already does for the 86 list. A
-// dough type the staff haven't counted in is absent from the map rather than
-// zero; every consumer reads absent as "not tracking".
-const publicView = (settings, doughUsed) => ({
-  open: isOpenNow(settings),
-  mode: settings.mode,
-  hours: settings.hours,
-  unavailable: settings.unavailable ?? [],
-  dough: doughStatus(settings.dough, doughUsed),
-});
+// `dough` is public on purpose, but only the one field the public needs.
+// `remaining` is what greys out a slice whose pool has run dry, exactly as the
+// 86 list already does, and the home, menu and order pages all read it. The
+// other three — `balls`, `slices`, `used` — belong to the admin panel alone,
+// and an unauthenticated poller holding tonight's inventory *and* its running
+// slices-sold count holds a rough revenue figure, refreshed every five
+// seconds. The board reads this same endpoint with its session cookie, so it
+// keeps the full shape without a second request.
+//
+// A dough type the staff haven't counted in is absent from the map rather
+// than zero, in both shapes; every consumer reads absent as "not tracking".
+const publicDough = (status) => Object.fromEntries(
+  Object.entries(status).map(([type, s]) => [type, { remaining: s.remaining }]));
+
+const storeView = (settings, doughUsed, admin) => {
+  const dough = doughStatus(settings.dough, doughUsed);
+  return {
+    open: isOpenNow(settings),
+    mode: settings.mode,
+    hours: settings.hours,
+    unavailable: settings.unavailable ?? [],
+    dough: admin ? dough : publicDough(dough),
+  };
+};
 
 // Dough balls counted in at the start of the night. Whole map or nothing: an
 // omitted type means "stop tracking that one" (back to unlimited), which is
@@ -53,7 +65,7 @@ export default async function handler(req, res) {
     if (req.method === 'GET') {
       // Public: the order page and homepage need open status + sold-out items
       const [settings, used] = await Promise.all([getSettings(), getDoughUsed()]);
-      return send(res, 200, publicView(settings, used));
+      return send(res, 200, storeView(settings, used, isAdmin(req)));
     }
     if (req.method === 'PATCH') {
       if (!isAdmin(req)) return send(res, 401, { error: 'Admin login required' });
@@ -79,6 +91,22 @@ export default async function handler(req, res) {
       if (body.dough !== undefined) {
         const v = validateDough(body.dough);
         if (v === null) return send(res, 400, { error: `Dough counts must be whole numbers of balls, 0–${MAX_DOUGH_BALLS}.` });
+        // A count is tonight's **total**, not "balls I just added", and the
+        // slices-sold counter is never rebased against it. So a total whose
+        // capacity is below what the pool has already sold leaves `remaining`
+        // floored at 0 — typing a smaller number than the night's true total
+        // doesn't add dough, it 86s the pool site-wide and starts 409ing
+        // intake, with nothing but a nonsensical "24 of 16 sold" on the panel
+        // to say why. Refuse it and name the figure they have to clear.
+        const sold = await getDoughUsed();
+        for (const [type, balls] of Object.entries(v)) {
+          const spent = Math.max(0, Number(sold?.[type]) || 0);
+          if (balls * SLICES_PER_BALL[type] >= spent) continue;
+          const need = Math.ceil(spent / SLICES_PER_BALL[type]);
+          return send(res, 400, {
+            error: `${DOUGH_LABELS[type]} has already sold ${spent} slice${spent === 1 ? '' : 's'} tonight. Count in the night's total — at least ${need} ball${need === 1 ? '' : 's'} — or use Stop counting.`,
+          });
+        }
         patch.dough = v;
       }
       if (body.availability !== undefined) {
@@ -93,7 +121,7 @@ export default async function handler(req, res) {
       // Re-read the counter rather than assuming it's unchanged: setting
       // tonight's dough is the moment staff most want to see what's actually
       // left, and orders may well have landed while the panel was open.
-      return send(res, 200, publicView(next, await getDoughUsed()));
+      return send(res, 200, storeView(next, await getDoughUsed(), true));
     }
     return send(res, 405, { error: 'Method not allowed' });
   } catch (err) {

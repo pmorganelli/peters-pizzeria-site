@@ -533,12 +533,19 @@ if ARGV[1] == 'cancelled' and order.status ~= 'cancelled' then
       back[item.dough] = (back[item.dough] or 0) + item.qty
     end
   end
+  local credited = false
   for dough, qty in pairs(back) do
     -- Floor at zero: an order written before dough tracking existed, or one
     -- whose counter has since expired, must not push the pool negative and
     -- hand out free capacity.
     if redis.call('HINCRBY', KEYS[2], dough, -qty) < 0 then redis.call('HSET', KEYS[2], dough, 0) end
+    credited = true
   end
+  -- HINCRBY *creates* the hash when it is missing, which it is whenever the
+  -- counter has expired or the night was closed under a still-live order — so
+  -- a refund can resurrect the key with no TTL at all and leave it behind
+  -- forever. Re-arm the same sliding expiry the create path sets.
+  if credited then redis.call('EXPIRE', KEYS[2], ARGV[3]) end
 end
 order.status = ARGV[1]
 order.updatedAt = tonumber(ARGV[2])
@@ -564,7 +571,7 @@ export async function setOrderStatus(id, status) {
     return { order: updated };
   }
   const res = await redisClient().eval(
-    SET_STATUS_LUA, [`pp:order:${id}`, DOUGH_USED_KEY], [status, Date.now()]);
+    SET_STATUS_LUA, [`pp:order:${id}`, DOUGH_USED_KEY], [status, Date.now(), ORDER_TTL_SECONDS]);
   if (res === null) return { order: null };
   if (typeof res === 'string' && res.startsWith('terminal:')) return { conflict: res.slice('terminal:'.length) };
   // The SDK auto-parses JSON results; a raw string means parsing was disabled

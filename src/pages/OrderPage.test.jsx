@@ -406,4 +406,40 @@ describe('OrderPage — dough stock', () => {
     const other = within(rowFor(SAME_DOUGH.name)).getByRole('button', { name: /^Add$/i });
     expect(other.disabled).toBe(true);
   });
+
+  // Nothing else on the happy path re-reads /api/store, and with ordering
+  // staff-only one device takes every order at the window — so the order just
+  // placed is what has to move this page's copy of the count. Without the
+  // refetch the readout and the stepper caps sit at their page-load numbers
+  // for the whole night, on the very device spending the dough.
+  it('re-reads the pool after an order is placed', async () => {
+    const label = DOUGH_LABELS[DOUGH_SLICE.dough];
+    let placed = false;
+    mockFetch({
+      '/api/store': () => ({ body: withStock(placed ? 3 : 5) }),
+      '/api/orders': () => {
+        placed = true;
+        return {
+          status: 201,
+          body: {
+            order: {
+              id: 'o-dough', code: 'BB33', name: 'Dough', status: 'new',
+              items: [{ name: DOUGH_SLICE.name, qty: 1, priceCents: 200 }],
+              totalCents: 200, createdAt: Date.now(), updatedAt: Date.now(),
+            },
+          },
+        };
+      },
+    });
+    render(<OrderPage nav={vi.fn()} isAdmin />);
+    await waitFor(() => expect(screen.getByText(`5 ${label} left`)).toBeTruthy());
+
+    addOne(DOUGH_SLICE.name);
+    fireEvent.change(screen.getByPlaceholderText("Who's picking up?"), { target: { value: 'Dough' } });
+    fireEvent.click(screen.getByRole('button', { name: /place order/i }));
+    await waitFor(() => expect(screen.getByText('#BB33')).toBeTruthy());
+
+    fireEvent.click(screen.getByRole('button', { name: /start another order/i }));
+    await waitFor(() => expect(screen.getByText(`3 ${label} left`)).toBeTruthy());
+  });
 });

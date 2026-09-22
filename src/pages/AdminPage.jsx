@@ -164,7 +164,7 @@ function StorePanel({ storeInfo, savingStore, draft, setDraft, saveStore, curren
   );
 }
 
-// Start-of-night stock. Staff count dough *balls* because that's what's in the
+// Tonight's stock. Staff count dough *balls* because that's what's in the
 // fridge; everything downstream works in slices, and this panel is where the
 // two meet — hence the "× 8" spelled out next to each field rather than a bare
 // number whose units you have to remember.
@@ -173,11 +173,18 @@ function StorePanel({ storeInfo, savingStore, draft, setDraft, saveStore, curren
 // same as zero and is why this can't just be two numbers defaulting to 0: zero
 // balls is "sold out, refuse everything", and a board that started there would
 // stop service until someone typed into it.
+//
+// **Each box is the night's running total, not a delta**, and the copy has to
+// keep saying so. The slices-sold counter is never rebased, so a staffer who
+// bakes two more balls mid-night and types `2` hasn't added dough — they've
+// set capacity below what's already gone, which greys the pool out everywhere
+// and starts refusing orders. The server rejects that save (api/store.js) and
+// this panel says what the number means before they type it.
 function DoughPanel({ doughInfo, draft, setDraft, savingStore, saveDough, stopCounting }) {
   const counting = Object.keys(doughInfo ?? {}).length > 0;
   return (
     <div className="dough-panel">
-      <div className="store-panel-label"><Wheat size={13} /> Dough — count the balls in before service</div>
+      <div className="store-panel-label"><Wheat size={13} /> Dough — tonight&rsquo;s total balls</div>
       <div className="dough-rows">
         {DOUGH_TYPES.map((type) => {
           const live = doughInfo?.[type];
@@ -224,6 +231,7 @@ function DoughPanel({ doughInfo, draft, setDraft, savingStore, saveDough, stopCo
         )}
       </div>
       <div className="dough-note">
+        Each box is the night&rsquo;s total, not what you just added — baked two more? Type the new total.
         Leave a box empty to sell that dough without a cap. Closing the night clears both.
       </div>
     </div>
@@ -402,7 +410,7 @@ export function AdminPage({ nav, onAuthChange }) {
 
   const {
     draft: doughDraft, setDraft: setDoughDraft,
-    seed: seedDough, save: saveDough, stop: stopCounting,
+    seed: seedDough, save: saveDough, stop: stopCounting, reset: resetDough,
   } = useDoughStock({ saveStore, onError: setStoreError });
 
   const load = useCallback(async () => {
@@ -481,6 +489,10 @@ export function AdminPage({ nav, onAuthChange }) {
       await api('/api/nights', { method: 'POST' });
       epochRef.current += 1;
       setOrders([]);
+      // The server just cleared tonight's dough back to untracked; blank the
+      // boxes to match rather than leaving last night's counts sitting in a
+      // panel that now reports nothing is being counted.
+      resetDough();
     } catch (err) {
       if (err.status === 401) logout('Session expired — log in again.');
       // A 409 means the race still won between our fresh read and the POST —

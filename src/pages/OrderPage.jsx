@@ -503,6 +503,13 @@ export function OrderPage({ nav, isAdmin }) {
       setCart({});
       setName('');
       setNotes('');
+      // The order we just placed came out of tonight's dough, so this device's
+      // copy of what's left is now wrong by exactly this order. Nothing else
+      // re-reads /api/store on the happy path — one staff device takes every
+      // order at the window, so without this the "N left" line under the slice
+      // heading and the stepper caps would sit at their page-load values all
+      // night, on the very device spending the dough.
+      api('/api/store').then(setStore).catch(() => {});
     } catch (e) {
       // A 401 here means the staff session went away between loading the page
       // and placing the order — a 30-day expiry landing mid-service, or
@@ -531,6 +538,11 @@ export function OrderPage({ nav, isAdmin }) {
     removeStored(SAVED_KEY);
     removeStored(ATTEMPT_KEY);
     setOrder(null);
+    // Coming back to the menu is the other moment the dough counts have to be
+    // current: the confirmation screen can sit open for the length of a bake,
+    // and another device (or a cancel on the board) moves the pool underneath
+    // it the whole time.
+    api('/api/store').then(setStore).catch(() => {});
   };
 
   return (
