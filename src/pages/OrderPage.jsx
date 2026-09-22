@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowDown, ArrowRight, Clock, Minus, Plus, Store, X } from 'lucide-react';
 import { Footer } from '../components/Footer';
 import { LineReveal } from '../components/LineReveal';
@@ -316,16 +316,30 @@ export function OrderPage({ nav, isAdmin }) {
   const [loadingSaved, setLoadingSaved] = useState(() => Boolean(readStored(SAVED_KEY)));
   const [store, setStore] = useState(null);
 
+  // Every read of /api/store goes through here, numbered, and a response is
+  // applied only if nothing newer has been applied already. Several reads can
+  // be in flight at once — the one fired when an order lands and the one
+  // fired by "Start another order" a second later — and whichever resolves
+  // last would otherwise win even when it is the older answer, putting back a
+  // larger dough count than another device has since left and offering
+  // slices the server will 409. Same issued/applied rule as the board's poll.
+  const storeIssued = useRef(0);
+  const storeApplied = useRef(0);
+  const refreshStore = useCallback((fallback) => {
+    const seq = ++storeIssued.current;
+    const apply = (next) => {
+      if (seq <= storeApplied.current) return;
+      storeApplied.current = seq;
+      setStore(next);
+    };
+    return api('/api/store').then(apply, () => { if (fallback) apply(fallback); });
+  }, []);
+
   // Open/closed status. If the check itself fails, fail open — the server
   // still enforces hours on submission.
   useEffect(() => {
-    if (isAdmin !== true) return undefined;
-    let cancelled = false;
-    api('/api/store')
-      .then((d) => { if (!cancelled) setStore(d); })
-      .catch(() => { if (!cancelled) setStore({ open: true, mode: 'open' }); });
-    return () => { cancelled = true; };
-  }, [isAdmin]);
+    if (isAdmin === true) refreshStore({ open: true, mode: 'open' });
+  }, [isAdmin, refreshStore]);
 
   useEffect(() => { removeStored(LEGACY_WHO_KEY); }, []);
   useEffect(() => { window.scrollTo(0, 0); }, [order?.id]);
@@ -509,7 +523,7 @@ export function OrderPage({ nav, isAdmin }) {
       // order at the window, so without this the "N left" line under the slice
       // heading and the stepper caps would sit at their page-load values all
       // night, on the very device spending the dough.
-      api('/api/store').then(setStore).catch(() => {});
+      refreshStore();
     } catch (e) {
       // A 401 here means the staff session went away between loading the page
       // and placing the order — a 30-day expiry landing mid-service, or
@@ -528,7 +542,7 @@ export function OrderPage({ nav, isAdmin }) {
       // ran out under us (another device got there first). Either way the
       // client's copy of what's left is provably stale — re-read it so the
       // steppers and the sold-out chips catch up with the message above them.
-      else if (e.status === 400 || e.status === 409) api('/api/store').then(setStore).catch(() => {});
+      else if (e.status === 400 || e.status === 409) refreshStore();
     } finally {
       setPlacing(false);
     }
@@ -542,7 +556,7 @@ export function OrderPage({ nav, isAdmin }) {
     // current: the confirmation screen can sit open for the length of a bake,
     // and another device (or a cancel on the board) moves the pool underneath
     // it the whole time.
-    api('/api/store').then(setStore).catch(() => {});
+    refreshStore();
   };
 
   return (

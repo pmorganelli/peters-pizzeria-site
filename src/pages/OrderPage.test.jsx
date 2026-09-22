@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, within, mockFetch } from '../../tests/helpers/dom.jsx';
+import { act, render, screen, fireEvent, waitFor, within, mockFetch } from '../../tests/helpers/dom.jsx';
 import { OrderPage } from './OrderPage';
 import { MENU_DATA } from '../data/menu';
 import { DEFAULT_MAX_QTY } from '../utils/orders';
@@ -407,39 +407,76 @@ describe('OrderPage — dough stock', () => {
     expect(other.disabled).toBe(true);
   });
 
+  const placedOrder = () => ({
+    status: 201,
+    body: {
+      order: {
+        id: 'o-dough', code: 'BB33', name: 'Dough', status: 'new',
+        items: [{ name: DOUGH_SLICE.name, qty: 1, priceCents: 200 }],
+        totalCents: 200, createdAt: Date.now(), updatedAt: Date.now(),
+      },
+    },
+  });
+  const placeOne = async () => {
+    addOne(DOUGH_SLICE.name);
+    fireEvent.change(screen.getByPlaceholderText("Who's picking up?"), { target: { value: 'Dough' } });
+    fireEvent.click(screen.getByRole('button', { name: /place order/i }));
+    await waitFor(() => expect(screen.getByText('#BB33')).toBeTruthy());
+  };
+
   // Nothing else on the happy path re-reads /api/store, and with ordering
   // staff-only one device takes every order at the window — so the order just
   // placed is what has to move this page's copy of the count. Without the
   // refetch the readout and the stepper caps sit at their page-load numbers
   // for the whole night, on the very device spending the dough.
+  //
+  // The read is counted *before* Start another order is pressed: that button
+  // does its own read, and a test that only looked at the menu afterwards
+  // stayed green with the refetch in place() deleted.
   it('re-reads the pool after an order is placed', async () => {
     const label = DOUGH_LABELS[DOUGH_SLICE.dough];
     let placed = false;
+    let reads = 0;
     mockFetch({
-      '/api/store': () => ({ body: withStock(placed ? 3 : 5) }),
-      '/api/orders': () => {
-        placed = true;
-        return {
-          status: 201,
-          body: {
-            order: {
-              id: 'o-dough', code: 'BB33', name: 'Dough', status: 'new',
-              items: [{ name: DOUGH_SLICE.name, qty: 1, priceCents: 200 }],
-              totalCents: 200, createdAt: Date.now(), updatedAt: Date.now(),
-            },
-          },
-        };
-      },
+      '/api/store': () => { reads += 1; return { body: withStock(placed ? 3 : 5) }; },
+      '/api/orders': () => { placed = true; return placedOrder(); },
     });
     render(<OrderPage nav={vi.fn()} isAdmin />);
     await waitFor(() => expect(screen.getByText(`5 ${label} left`)).toBeTruthy());
 
-    addOne(DOUGH_SLICE.name);
-    fireEvent.change(screen.getByPlaceholderText("Who's picking up?"), { target: { value: 'Dough' } });
-    fireEvent.click(screen.getByRole('button', { name: /place order/i }));
-    await waitFor(() => expect(screen.getByText('#BB33')).toBeTruthy());
+    await placeOne();
+    await waitFor(() => expect(reads).toBe(2));
 
     fireEvent.click(screen.getByRole('button', { name: /start another order/i }));
     await waitFor(() => expect(screen.getByText(`3 ${label} left`)).toBeTruthy());
+  });
+
+  // Placing an order and pressing Start another order each fire a read, and
+  // nothing makes them land in order. The older answer arriving last must not
+  // put back a count another device has since spent.
+  it('keeps the newest pool count when reads land out of order', async () => {
+    const label = DOUGH_LABELS[DOUGH_SLICE.dough];
+    const held = [];
+    let reads = 0;
+    mockFetch({
+      '/api/store': () => {
+        reads += 1;
+        if (reads === 1) return { body: withStock(5) };
+        return new Promise((resolve) => { held.push(resolve); });
+      },
+      '/api/orders': placedOrder,
+    });
+    render(<OrderPage nav={vi.fn()} isAdmin />);
+    await waitFor(() => expect(screen.getByText(`5 ${label} left`)).toBeTruthy());
+
+    await placeOne();
+    await waitFor(() => expect(held).toHaveLength(1)); // place()'s read
+    fireEvent.click(screen.getByRole('button', { name: /start another order/i }));
+    await waitFor(() => expect(held).toHaveLength(2)); // newOrder()'s read
+
+    await act(async () => { held[1]({ body: withStock(2) }); });
+    await waitFor(() => expect(screen.getByText(`2 ${label} left`)).toBeTruthy());
+    await act(async () => { held[0]({ body: withStock(3) }); });
+    expect(screen.getByText(`2 ${label} left`)).toBeTruthy();
   });
 });
