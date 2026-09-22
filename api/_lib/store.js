@@ -1,7 +1,7 @@
 import { Redis } from '@upstash/redis';
 import { hasRedisEnv } from './util.js';
 import { DEFAULT_SETTINGS } from './hours.js';
-import { SLICES_PER_BALL, isDoughType } from '../../src/utils/dough.js';
+import { SLICES_PER_BALL, doughSlicesFor, doughStatus, isDoughType } from '../../src/utils/dough.js';
 
 // Orders live in Upstash Redis in production (provisioned via the Vercel
 // Marketplace). When no Redis env vars are present — local dev, or a deploy
@@ -164,26 +164,23 @@ return 'created'`;
 // the order fits — kept in this shape so both storage paths hand api/orders.js
 // one thing to parse.
 function doughShortfall(stock, used, want) {
+  const status = doughStatus(stock, used);
   for (const [dough, qty] of Object.entries(want)) {
-    const balls = stock?.[dough];
-    if (!Number.isFinite(balls)) continue; // untracked → unlimited
-    const capacity = balls * (SLICES_PER_BALL[dough] ?? 0);
-    const spent = Math.max(0, Number(used?.[dough]) || 0);
-    if (spent + qty > capacity) return `dough:${dough}:${Math.max(0, capacity - spent)}`;
+    const pool = status[dough];
+    if (!pool) continue; // untracked → unlimited
+    if (qty > pool.remaining) return `dough:${dough}:${pool.remaining}`;
   }
   return null;
 }
 
-// Slices to put back when an order is cancelled, read off the stored order
-// rather than the live menu (see the `dough` note in api/_lib/catalog.js).
-function doughOnOrder(order) {
-  const back = {};
-  for (const item of order?.items ?? []) {
-    if (!isDoughType(item.dough) || !Number.isFinite(item.qty)) continue;
-    back[item.dough] = (back[item.dough] ?? 0) + item.qty;
-  }
-  return back;
-}
+// Slices to put back when an order is cancelled. Only lines stamped with a
+// `dough` at intake count — doughSlicesFor() would otherwise fall back to the
+// live menu for an unstamped line, and an order placed before tracking
+// existed never debited the pool, so "refunding" it from today's menu would
+// hand out capacity that was never taken. SET_STATUS_LUA reads the same
+// stamped field and nothing else; keep the two in step.
+const doughOnOrder = (order) =>
+  doughSlicesFor((order?.items ?? []).filter((item) => isDoughType(item.dough)));
 
 export async function createOrder(order, { idempotencyKey = null, fingerprint = '', doughSlices = {} } = {}) {
   if (!hasRedisEnv()) {
@@ -406,7 +403,33 @@ export async function saveSettings(settings) {
   return settings;
 }
 
+// Thrown by patchSettings() when a ball total's capacity is under what that
+// pool has already sold tonight. See the check in PATCH_SETTINGS_LUA.
+export class DoughBelowSoldError extends Error {
+  constructor(type, sold) {
+    super(`dough total below slices already sold: ${type}`);
+    this.type = type;
+    this.sold = sold;
+  }
+}
+
 const PATCH_SETTINGS_LUA = `
+-- A ball count is tonight's running *total*, and the slices-sold counter is
+-- never rebased against it — so a total whose capacity is under what the
+-- pool has already sold floors 'remaining' at 0, 86s the pool site-wide and
+-- starts 409ing intake. Refuse it here, reading the counter in the same
+-- script that writes the count: checked in the handler as a separate round
+-- trip, an order landing between the read and the write could still push
+-- 'sold' past the new capacity. An omitted type (stop counting) carries no
+-- total, so it is never refused — that is the way out of a miscount.
+local patch = cjson.decode(ARGV[2])
+if type(patch.dough) == 'table' then
+  local perBall = cjson.decode(ARGV[3])
+  for dough, balls in pairs(patch.dough) do
+    local sold = tonumber(redis.call('HGET', KEYS[2], dough)) or 0
+    if balls * (perBall[dough] or 0) < sold then return 'dough_below:' .. dough .. ':' .. sold end
+  end
+end
 local current = redis.call('GET', KEYS[1])
 local defaults = cjson.decode(ARGV[1])
 local stored = current and cjson.decode(current) or {}
@@ -420,7 +443,6 @@ local settings = {
 for key, value in pairs(defaults.hours) do
   if settings.hours[key] == nil then settings.hours[key] = value end
 end
-local patch = cjson.decode(ARGV[2])
 if patch.mode ~= nil then settings.mode = patch.mode end
 if patch.hours ~= nil then settings.hours = patch.hours end
 if patch.unavailable ~= nil then settings.unavailable = patch.unavailable end
@@ -459,6 +481,12 @@ export async function patchSettings(patch) {
   if (!hasRedisEnv()) {
     // Keep the in-memory fallback synchronous through its read-modify-write,
     // matching the single-operation guarantee of the Redis Lua path.
+    if (patch.dough !== undefined) {
+      const pools = doughStatus(normalizeDoughStock(patch.dough), Object.fromEntries(doughMemory));
+      for (const [type, pool] of Object.entries(pools)) {
+        if (pool.used > pool.slices) throw new DoughBelowSoldError(type, pool.used);
+      }
+    }
     const current = normalizeSettings(globalThis.__ppSettings);
     const next = { ...current };
     if (patch.mode !== undefined) next.mode = patch.mode;
@@ -479,9 +507,13 @@ export async function patchSettings(patch) {
   }
   const result = await redisClient().eval(
     PATCH_SETTINGS_LUA,
-    [SETTINGS_KEY],
-    [JSON.stringify(DEFAULT_SETTINGS), JSON.stringify(patch)],
+    [SETTINGS_KEY, DOUGH_USED_KEY],
+    [JSON.stringify(DEFAULT_SETTINGS), JSON.stringify(patch), SLICES_PER_BALL_JSON],
   );
+  if (typeof result === 'string' && result.startsWith('dough_below:')) {
+    const [, type, sold] = result.split(':');
+    throw new DoughBelowSoldError(type, Number(sold));
+  }
   // Through normalizeSettings for the same reason getSettings is: the script
   // hands back exactly what it stored, empty-list-as-`{}` included, and this
   // return value is what the admin board renders after a save.

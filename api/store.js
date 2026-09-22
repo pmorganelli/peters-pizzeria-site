@@ -1,5 +1,5 @@
 import { BodyTooLargeError, readBody, send, isAdmin } from './_lib/util.js';
-import { getSettings, patchSettings, getDoughUsed } from './_lib/store.js';
+import { getSettings, patchSettings, getDoughUsed, DoughBelowSoldError } from './_lib/store.js';
 import { isOpenNow, validateSettings } from './_lib/hours.js';
 import { catalog } from './_lib/catalog.js';
 import { MAX_DOUGH_BALLS, SLICES_PER_BALL, DOUGH_LABELS, doughStatus, isDoughType } from '../src/utils/dough.js';
@@ -75,9 +75,11 @@ export default async function handler(req, res) {
       }
 
       // Partial update: hours/mode and the 86 list can be patched independently
-      const existing = await getSettings();
       const patch = {};
       if (body.mode !== undefined || body.hours !== undefined) {
+        // Only a mode/hours change needs the current values (to validate the
+        // pair together); a dough or availability save skips the read.
+        const existing = await getSettings();
         const v = validateSettings({ mode: body.mode ?? existing.mode, hours: body.hours ?? existing.hours });
         if (!v) return send(res, 400, { error: 'Invalid store settings' });
         if (body.mode !== undefined) patch.mode = v.mode;
@@ -91,22 +93,10 @@ export default async function handler(req, res) {
       if (body.dough !== undefined) {
         const v = validateDough(body.dough);
         if (v === null) return send(res, 400, { error: `Dough counts must be whole numbers of balls, 0–${MAX_DOUGH_BALLS}.` });
-        // A count is tonight's **total**, not "balls I just added", and the
-        // slices-sold counter is never rebased against it. So a total whose
-        // capacity is below what the pool has already sold leaves `remaining`
-        // floored at 0 — typing a smaller number than the night's true total
-        // doesn't add dough, it 86s the pool site-wide and starts 409ing
-        // intake, with nothing but a nonsensical "24 of 16 sold" on the panel
-        // to say why. Refuse it and name the figure they have to clear.
-        const sold = await getDoughUsed();
-        for (const [type, balls] of Object.entries(v)) {
-          const spent = Math.max(0, Number(sold?.[type]) || 0);
-          if (balls * SLICES_PER_BALL[type] >= spent) continue;
-          const need = Math.ceil(spent / SLICES_PER_BALL[type]);
-          return send(res, 400, {
-            error: `${DOUGH_LABELS[type]} has already sold ${spent} slice${spent === 1 ? '' : 's'} tonight. Count in the night's total — at least ${need} ball${need === 1 ? '' : 's'} — or use Stop counting.`,
-          });
-        }
+        // A total below what the pool has already sold is refused by
+        // patchSettings() itself (DoughBelowSoldError, caught below), inside
+        // the same atomic write — see PATCH_SETTINGS_LUA for why it can't be
+        // a read-then-write here.
         patch.dough = v;
       }
       if (body.availability !== undefined) {
@@ -117,7 +107,19 @@ export default async function handler(req, res) {
         patch.availability = { name, unavailable };
       }
       if (!Object.keys(patch).length) return send(res, 400, { error: 'No valid settings supplied' });
-      const next = await patchSettings(patch);
+      let next;
+      try {
+        next = await patchSettings(patch);
+      } catch (err) {
+        if (!(err instanceof DoughBelowSoldError)) throw err;
+        // Name the figure to clear: the only other clue would be a
+        // nonsensical "24 of 16 sold" on the panel.
+        const { type, sold } = err;
+        const need = Math.ceil(sold / SLICES_PER_BALL[type]);
+        return send(res, 400, {
+          error: `${DOUGH_LABELS[type]} has already sold ${sold} slice${sold === 1 ? '' : 's'} tonight. Count in the night's total — at least ${need} ball${need === 1 ? '' : 's'} — or use Stop counting.`,
+        });
+      }
       // Re-read the counter rather than assuming it's unchanged: setting
       // tonight's dough is the moment staff most want to see what's actually
       // left, and orders may well have landed while the panel was open.
