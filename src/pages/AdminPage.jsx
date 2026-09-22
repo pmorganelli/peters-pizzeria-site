@@ -180,7 +180,7 @@ function StorePanel({ storeInfo, savingStore, draft, setDraft, saveStore, curren
 // set capacity below what's already gone, which greys the pool out everywhere
 // and starts refusing orders. The server rejects that save (api/store.js) and
 // this panel says what the number means before they type it.
-function DoughPanel({ doughInfo, draft, setDraft, savingStore, saveDough, stopCounting }) {
+function DoughPanel({ doughInfo, draft, editDough, savingStore, saveDough, stopCounting }) {
   const counting = Object.keys(doughInfo ?? {}).length > 0;
   return (
     <div className="dough-panel">
@@ -200,7 +200,7 @@ function DoughPanel({ doughInfo, draft, setDraft, savingStore, saveDough, stopCo
                   placeholder="—"
                   value={draft[type]}
                   aria-label={`${DOUGH_LABELS[type]} dough balls`}
-                  onChange={(e) => setDraft((d) => ({ ...d, [type]: e.target.value }))}
+                  onChange={(e) => editDough(type, e.target.value)}
                 />
                 <span className="dough-unit">balls × {SLICES_PER_BALL[type]}</span>
               </label>
@@ -388,7 +388,7 @@ export function AdminPage({ nav, onAuthChange }) {
     unavailable: reportsUnavailable, setUnavailable: setReportsUnavailable,
   } = useTakedownRequests({ epochRef, onAuthError: sessionExpired });
 
-  // Declared above `load` on purpose: load() seeds the dough boxes through
+  // Declared above `load` on purpose: load() syncs the dough boxes through
   // useDoughStock, and that hook needs this function at render time. A
   // useCallback rather than a plain arrow so the hook's own callbacks aren't
   // rebuilt on every poll.
@@ -400,17 +400,19 @@ export function AdminPage({ nav, onAuthChange }) {
       const status = await api('/api/store', { method: 'PATCH', body: next });
       epochRef.current += 1; // …and polls whose GET raced the PATCH server-side
       setStoreInfo(status);
+      return true;
     } catch (err) {
       if (err.status === 401) logout('Session expired — log in again.');
       else setStoreError(err.message || 'Could not save — try again.');
+      return false;
     } finally {
       setSavingStore(false);
     }
   }, [logout]);
 
   const {
-    draft: doughDraft, setDraft: setDoughDraft,
-    seed: seedDough, save: saveDough, stop: stopCounting, reset: resetDough,
+    draft: doughDraft, edit: editDough,
+    sync: syncDough, save: saveDough, stop: stopCounting, reset: resetDough,
   } = useDoughStock({ saveStore, onError: setStoreError });
 
   const load = useCallback(async () => {
@@ -444,7 +446,7 @@ export function AdminPage({ nav, onAuthChange }) {
         draftSeeded.current = true;
         setDraft({ day: status.hours.day, start: status.hours.start, end: status.hours.end });
       }
-      seedDough(status.dough);
+      syncDough(status.dough);
     } catch (err) {
       // As with successful polls, an issued-but-unsettled request must not
       // suppress this result. Ignore only errors older than applied state.
@@ -452,7 +454,7 @@ export function AdminPage({ nav, onAuthChange }) {
         logout('Session expired — log in again.');
       }
     }
-  }, [authed, logout, seedDough, setReports, setReportsUnavailable]);
+  }, [authed, logout, syncDough, setReports, setReportsUnavailable]);
 
   const currentHours = () => ({
     day: Number(draft.day),
@@ -622,7 +624,7 @@ export function AdminPage({ nav, onAuthChange }) {
 
       {storeInfo && (
         <DoughPanel
-          doughInfo={storeInfo.dough} draft={doughDraft} setDraft={setDoughDraft}
+          doughInfo={storeInfo.dough} draft={doughDraft} editDough={editDough}
           savingStore={savingStore} saveDough={saveDough} stopCounting={stopCounting}
         />
       )}
