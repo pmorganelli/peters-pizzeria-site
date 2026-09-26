@@ -3,3 +3,10 @@
 # production and are fetchable at /.DS_Store.
 .DS_Store
 **/.DS_Store
+
+# Vercel turns every .js file under api/ into its own serverless function —
+# including colocated tests. Six api/*.test.js files alongside seven real
+# endpoints is 13 functions, one over the Hobby plan's cap of 12. Tests never
+# run in a deployment, so none of them should ship.
+*.test.js
+*.test.jsx
