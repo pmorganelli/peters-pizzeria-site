@@ -26,6 +26,7 @@ export function resetEnv() {
   globalThis.__ppNightStore?.clear();
   globalThis.__ppReportStore?.clear();
   globalThis.__ppRate?.clear();
+  globalThis.__ppDoughUsed?.clear();
   delete globalThis.__ppSettings;
   delete globalThis.__ppNightCloseLock;
 }

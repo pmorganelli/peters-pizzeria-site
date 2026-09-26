@@ -3,10 +3,20 @@ import ordersHandler from './orders.js';
 import loginHandler from './login.js';
 import { startServer, call } from '../tests/helpers/server.js';
 import { resetEnv } from '../tests/helpers/env.js';
-import { openStore, adminCookie, insertOrder, TEST_ITEM_NAME, CAPPED_ITEM } from '../tests/helpers/fixtures.js';
+import {
+  openStore, adminCookie, insertOrder, TEST_ITEM_NAME, CAPPED_ITEM,
+  DOUGH_ITEM, DOUGH_TYPE, SAME_DOUGH_ITEM,
+} from '../tests/helpers/fixtures.js';
 import { saveSettings } from './_lib/store.js';
 import { DEFAULT_SETTINGS } from './_lib/hours.js';
 import { DEFAULT_MAX_QTY } from '../src/utils/orders.js';
+import { SLICES_PER_BALL } from '../src/utils/dough.js';
+import { MENU_DATA } from '../src/data/menu.js';
+import { ADDON_CATEGORY } from './_lib/catalog.js';
+
+// Derived, not typed — same rule as TEST_ITEM_NAME. A renamed add-on would
+// otherwise 400 as unrecognized and look like the rejection under test.
+const ADDON_NAME = MENU_DATA.find((s) => s.category === ADDON_CATEGORY)?.items[0]?.name;
 
 let server;
 let base;
@@ -338,5 +348,160 @@ describe('POST /api/orders — empty 86 list stored as an object', () => {
     await saveSettings({ ...DEFAULT_SETTINGS, mode: 'open', unavailable: {} });
     const { status } = await postOrder({ name: 'Test', items: [{ name: TEST_ITEM_NAME, qty: 1 }] });
     expect(status).toBe(201);
+  });
+});
+
+
+// ── Dough stock ───────────────────────────────────────────────────────
+// The counter that stops the board selling the ninth slice off an eight-slice
+// ball. Everything here goes through the real handler and the real store, so
+// the check under test is the one inside createOrder — not a re-implementation.
+describe('POST /api/orders — dough stock', () => {
+  const PER_BALL = SLICES_PER_BALL[DOUGH_TYPE];
+  const DOUGH_CAP = DOUGH_ITEM?.maxQty ?? DEFAULT_MAX_QTY;
+  const setStock = (balls) => openStore({ dough: { [DOUGH_TYPE]: balls } });
+  const orderSlices = (item, qty, name = 'Test Customer') =>
+    postOrder({ name, items: [{ name: item.name, qty }] });
+  const cancel = (id) =>
+    call(base, `/api/orders?id=${encodeURIComponent(id)}`, {
+      method: 'PATCH', headers: { Cookie: cookie }, body: { status: 'cancelled' },
+    });
+
+  // Everything below is vacuous if the menu has no dough-bearing slice: the
+  // server would accept every order because nothing is being tracked, and each
+  // case would pass green while testing nothing. Assert the shape first.
+  it('has two slices cut from one dough to test against', () => {
+    expect(DOUGH_ITEM).toBeDefined();
+    expect(SAME_DOUGH_ITEM).toBeDefined();
+    expect(PER_BALL).toBeGreaterThan(1);
+    // The cases below fill a one-ball pool in a single order, then leave room
+    // for a second slice to spill over it.
+    expect(DOUGH_CAP).toBeGreaterThanOrEqual(PER_BALL);
+    expect(SAME_DOUGH_ITEM.maxQty ?? DEFAULT_MAX_QTY).toBeGreaterThanOrEqual(2);
+  });
+
+  it('refuses the order that would oversell the pool and says how many are left', async () => {
+    await setStock(1);
+    expect((await orderSlices(DOUGH_ITEM, PER_BALL)).status).toBe(201);
+
+    const { status, body } = await orderSlices(DOUGH_ITEM, 1, 'One Too Many');
+    expect(status).toBe(409);
+    expect(body.doughShort).toBe(DOUGH_TYPE);
+    expect(body.remaining).toBe(0);
+  });
+
+  it('shares one pool across different slices cut from that dough', async () => {
+    await setStock(1);
+    expect((await orderSlices(DOUGH_ITEM, PER_BALL - 1)).status).toBe(201);
+
+    // One slice left in the pool, and this asks for two of a *different* item.
+    // A per-item counter would wave this through.
+    const { status, body } = await orderSlices(SAME_DOUGH_ITEM, 2, 'Spillover');
+    expect(status).toBe(409);
+    expect(body.remaining).toBe(1);
+  });
+
+  it('adds up every line in one order rather than checking them one at a time', async () => {
+    await setStock(1);
+    // Neither line alone exceeds the pool; together they are one slice over.
+    const { status, body } = await postOrder({
+      name: 'Two Lines',
+      items: [
+        { name: DOUGH_ITEM.name, qty: PER_BALL - 1 },
+        { name: SAME_DOUGH_ITEM.name, qty: 2 },
+      ],
+    });
+    expect(status).toBe(409);
+    expect(body.doughShort).toBe(DOUGH_TYPE);
+  });
+
+  it('sells without a limit when the dough has not been counted in', async () => {
+    await openStore(); // DEFAULT_SETTINGS.dough is {} — tracking nothing
+    // Comfortably more slices than any single-ball pool would allow.
+    for (let i = 0; i < 4; i += 1) {
+      expect((await orderSlices(DOUGH_ITEM, DOUGH_CAP, `Customer ${i}`)).status).toBe(201);
+    }
+  });
+
+  // The distinction the whole feature rests on: absent means "not counting",
+  // zero means "none left". Collapse them and either the board refuses every
+  // order on a night nobody entered dough, or it happily sells from an empty
+  // pool.
+  it('treats zero balls as sold out, not as untracked', async () => {
+    await setStock(0);
+    const { status, body } = await orderSlices(DOUGH_ITEM, 1);
+    expect(status).toBe(409);
+    expect(body.remaining).toBe(0);
+  });
+
+  it('puts the slices back when an order is cancelled', async () => {
+    await setStock(1);
+    const { body: placed } = await orderSlices(DOUGH_ITEM, PER_BALL);
+    expect((await orderSlices(DOUGH_ITEM, 1, 'Blocked')).status).toBe(409);
+
+    expect((await cancel(placed.order.id)).status).toBe(200);
+    expect((await orderSlices(DOUGH_ITEM, 1, 'After Cancel')).status).toBe(201);
+  });
+
+  // Two orders, not one: cancelling the *only* order twice is floored at zero
+  // and looks correct even with the double-refund guard removed. It takes a
+  // second live order for the over-credit to have somewhere to show up — this
+  // test was written the easy way first and passed against the bug.
+  it('refunds a cancelled order once, however many times it is cancelled', async () => {
+    await setStock(1);
+    const half = Math.floor(PER_BALL / 2);
+    const { body: placed } = await orderSlices(DOUGH_ITEM, half, 'Cancels');
+    expect((await orderSlices(DOUGH_ITEM, PER_BALL - half, 'Stays')).status).toBe(201);
+
+    await cancel(placed.order.id);
+    await cancel(placed.order.id); // a stale tab, or a double tap
+
+    // Only the cancelled order's slices came back — the one still on the
+    // board is still holding its own.
+    expect((await orderSlices(DOUGH_ITEM, half, 'Refill')).status).toBe(201);
+    const { status } = await orderSlices(DOUGH_ITEM, 1, 'Over Again');
+    expect(status).toBe(409);
+  });
+
+  // The board only offers cancel on a new order, but a stale tab still showing
+  // one as new can cancel it after another device has fired it. That dough is
+  // in the oven, so the cancel must go through without putting it back.
+  it('keeps the slices spent when an order already in the oven is cancelled', async () => {
+    await setStock(1);
+    const { body: placed } = await orderSlices(DOUGH_ITEM, PER_BALL);
+    await call(base, `/api/orders?id=${encodeURIComponent(placed.order.id)}`, {
+      method: 'PATCH', headers: { Cookie: cookie }, body: { status: 'firing' },
+    });
+    expect((await cancel(placed.order.id)).status).toBe(200);
+    expect((await orderSlices(DOUGH_ITEM, 1, 'Nope')).status).toBe(409);
+  });
+
+  it('keeps the slices spent once an order is picked up', async () => {
+    await setStock(1);
+    const { body: placed } = await orderSlices(DOUGH_ITEM, PER_BALL);
+    await call(base, `/api/orders?id=${encodeURIComponent(placed.order.id)}`, {
+      method: 'PATCH', headers: { Cookie: cookie }, body: { status: 'done' },
+    });
+    // Those slices were made and sold — completing an order must not restock.
+    expect((await orderSlices(DOUGH_ITEM, 1, 'Nope')).status).toBe(409);
+  });
+
+  it('stamps the dough onto the stored line so a cancel refunds the right pool', async () => {
+    await setStock(1);
+    const { body } = await orderSlices(DOUGH_ITEM, 1);
+    const line = body.order.items.find((it) => it.name === DOUGH_ITEM.name);
+    expect(line.dough).toBe(DOUGH_TYPE);
+  });
+
+  it('leaves add-on lines without a dough, so a topping never eats a slice', async () => {
+    await setStock(1);
+    const { body } = await postOrder({
+      name: 'With Addons',
+      items: [{ name: DOUGH_ITEM.name, qty: PER_BALL, addons: [ADDON_NAME] }],
+    });
+    expect(body.order.items[0].addons).toHaveLength(1);
+    // The add-on is priced per slice but consumes no dough of its own: the
+    // pool is exactly full, not over.
+    expect(body.order.items[0].addons[0].dough).toBeUndefined();
   });
 });

@@ -1,6 +1,7 @@
 import { Redis } from '@upstash/redis';
 import { hasRedisEnv } from './util.js';
 import { DEFAULT_SETTINGS } from './hours.js';
+import { SLICES_PER_BALL, doughSlicesFor, doughStatus, isDoughType } from '../../src/utils/dough.js';
 
 // Orders live in Upstash Redis in production (provisioned via the Vercel
 // Marketplace). When no Redis env vars are present — local dev, or a deploy
@@ -27,6 +28,20 @@ export const MAX_LIVE_ORDERS = 300;
 const CODE_EPOCH_KEY = 'pp:order-code-epoch';
 const ORDER_TTL_MS = ORDER_TTL_SECONDS * 1000;
 
+// Slices committed against tonight's dough, per dough type. A hash rather than
+// a field on pp:settings because every order placed touches it and almost
+// nothing touches the rest of settings — folding it in would mean decoding and
+// re-encoding the whole settings blob inside the order-create script, on every
+// order, for a two-integer update.
+//
+// Carries a sliding TTL of one order lifetime (set on each increment). The
+// counter is only meaningful while the orders behind it are live, and the TTL
+// is what guarantees it can never outlive them and quietly shrink a later
+// night's capacity — "close for the night" clears it explicitly, this is the
+// backstop for a night nobody closed.
+const DOUGH_USED_KEY = 'pp:dough-used';
+const SLICES_PER_BALL_JSON = JSON.stringify(SLICES_PER_BALL);
+
 // Missing epoch means the first post-cutover order hasn't landed yet, so the
 // board can still be holding nothing but pre-index orders — scan.
 async function legacyCodesPossible(redis) {
@@ -44,6 +59,7 @@ function redisClient() {
 const memory = globalThis.__ppOrderStore ?? (globalThis.__ppOrderStore = new Map());
 const codeMemory = globalThis.__ppOrderCodeStore ?? (globalThis.__ppOrderCodeStore = new Map());
 const idempotencyMemory = globalThis.__ppOrderIdempotency ?? (globalThis.__ppOrderIdempotency = new Map());
+const doughMemory = globalThis.__ppDoughUsed ?? (globalThis.__ppDoughUsed = new Map());
 
 // Capacity, pickup-code uniqueness, idempotency, and the index write are one
 // operation. Without this boundary, concurrent serverless invocations can both
@@ -87,15 +103,86 @@ end
 if redis.call('LLEN', KEYS[2]) >= tonumber(ARGV[3]) then return 'capacity' end
 if codeReserved == 1 then return 'code_conflict' end
 
+-- Dough stock. This is the whole point of putting the check in here rather
+-- than in the handler: two staff devices typing the last slice at the same
+-- moment both read "1 left" if the read and the write are separate round
+-- trips, and both orders land. Checking and committing inside one script is
+-- what makes overselling impossible rather than merely unlikely.
+--
+-- It sits *below* the code and capacity checks deliberately. A code_conflict
+-- sends the caller back around with a fresh code, and a pool debited on an
+-- attempt that never became an order would leak a slice per retry.
+local want = cjson.decode(ARGV[10])
+local perBall = cjson.decode(ARGV[11])
+local settingsRaw = redis.call('GET', KEYS[6])
+local stock = nil
+if settingsRaw then
+  -- pcall: a settings key that somehow isn't JSON must not 500 every order.
+  -- Untracked dough (the default) is the safe reading of "we can't tell".
+  local ok, decoded = pcall(cjson.decode, settingsRaw)
+  if ok and type(decoded) == 'table' and type(decoded.dough) == 'table' then
+    -- A count older than one order lifetime is last week's, not tonight's:
+    -- read it as untracked. Mirrors freshDoughStock() in JS — see there.
+    local setAt = tonumber(decoded.doughSetAt)
+    if setAt and tonumber(ARGV[8]) - setAt <= tonumber(ARGV[9]) then stock = decoded.dough end
+  end
+end
+if stock then
+  for dough, qty in pairs(want) do
+    local balls = stock[dough]
+    -- A dough type absent from settings is untracked, not zero — skip it.
+    if type(balls) == 'number' then
+      local capacity = balls * (perBall[dough] or 0)
+      local spent = tonumber(redis.call('HGET', KEYS[7], dough)) or 0
+      if spent + qty > capacity then
+        local left = capacity - spent
+        if left < 0 then left = 0 end
+        return 'dough:' .. dough .. ':' .. left
+      end
+    end
+  end
+end
+
 redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[2])
 redis.call('SET', KEYS[3], ARGV[4], 'EX', ARGV[2])
 redis.call('LPUSH', KEYS[2], ARGV[4])
 if ARGV[6] == '1' then
   redis.call('SET', KEYS[4], cjson.encode({ orderId = ARGV[4], fingerprint = ARGV[5] }), 'EX', ARGV[2])
 end
+local committed = false
+for dough, qty in pairs(want) do
+  redis.call('HINCRBY', KEYS[7], dough, qty)
+  committed = true
+end
+-- Sliding, so the counter expires with the last order that touched it rather
+-- than outliving the board and eating into a later night's capacity.
+if committed then redis.call('EXPIRE', KEYS[7], ARGV[2]) end
 return 'created'`;
 
-export async function createOrder(order, { idempotencyKey = null, fingerprint = '' } = {}) {
+// The in-memory twin of the Lua gate above. Returns the same
+// `dough:<type>:<slices left>` reason string the script returns, or null when
+// the order fits — kept in this shape so both storage paths hand api/orders.js
+// one thing to parse.
+function doughShortfall(stock, used, want) {
+  const status = doughStatus(stock, used);
+  for (const [dough, qty] of Object.entries(want)) {
+    const pool = status[dough];
+    if (!pool) continue; // untracked → unlimited
+    if (qty > pool.remaining) return `dough:${dough}:${pool.remaining}`;
+  }
+  return null;
+}
+
+// Slices to put back when an order is cancelled. Only lines stamped with a
+// `dough` at intake count — doughSlicesFor() would otherwise fall back to the
+// live menu for an unstamped line, and an order placed before tracking
+// existed never debited the pool, so "refunding" it from today's menu would
+// hand out capacity that was never taken. SET_STATUS_LUA reads the same
+// stamped field and nothing else; keep the two in step.
+const doughOnOrder = (order) =>
+  doughSlicesFor((order?.items ?? []).filter((item) => isDoughType(item.dough)));
+
+export async function createOrder(order, { idempotencyKey = null, fingerprint = '', doughSlices = {} } = {}) {
   if (!hasRedisEnv()) {
     if (idempotencyKey && idempotencyMemory.has(idempotencyKey)) {
       const saved = idempotencyMemory.get(idempotencyKey);
@@ -111,9 +198,15 @@ export async function createOrder(order, { idempotencyKey = null, fingerprint = 
       return { reason: 'code_conflict' };
     }
     if (memory.size >= MAX_LIVE_ORDERS) return { reason: 'capacity' };
+    const short = doughShortfall(
+      normalizeSettings(globalThis.__ppSettings).dough, Object.fromEntries(doughMemory), doughSlices);
+    if (short) return { reason: short };
     memory.set(order.id, order);
     codeMemory.set(order.code, order.id);
     if (idempotencyKey) idempotencyMemory.set(idempotencyKey, { orderId: order.id, fingerprint });
+    for (const [dough, qty] of Object.entries(doughSlices)) {
+      doughMemory.set(dough, (doughMemory.get(dough) ?? 0) + qty);
+    }
     return { order, created: true };
   }
   const redis = redisClient();
@@ -125,6 +218,8 @@ export async function createOrder(order, { idempotencyKey = null, fingerprint = 
       `pp:order-code:${order.code}`,
       `pp:order-idempotency:${idempotencyKey ?? order.id}`,
       CODE_EPOCH_KEY,
+      SETTINGS_KEY,
+      DOUGH_USED_KEY,
     ],
     [
       JSON.stringify(order),
@@ -136,6 +231,8 @@ export async function createOrder(order, { idempotencyKey = null, fingerprint = 
       order.code,
       Date.now(),
       ORDER_TTL_MS,
+      JSON.stringify(doughSlices),
+      SLICES_PER_BALL_JSON,
     ],
   );
   if (typeof result === 'string' && result.startsWith('existing:')) {
@@ -260,8 +357,44 @@ function normalizeSettings(stored) {
     ...DEFAULT_SETTINGS,
     ...(stored ?? {}),
     unavailable: Array.isArray(unavailable) ? unavailable : [],
+    dough: freshDoughStock(stored),
     hours: { ...DEFAULT_SETTINGS.hours, ...(stored?.hours ?? {}) },
   };
+}
+
+// Only real dough types with a real ball count survive. Everything downstream
+// treats "key present" as "we are counting this one" and multiplies the value
+// by a slices-per-ball figure, so a stray key or a non-integer must not make
+// it out of here — an undercount reads as sold out and stops the night.
+//
+// Note the field is an object, which sidesteps the empty-array-as-`{}` trap
+// documented above for `unavailable`: an empty dough map means "tracking
+// nothing", and `{}` is exactly how that should decode. It still goes through
+// this function so the *contents* are checked.
+// A ball count carries the time it was saved (`doughSetAt`, stamped by
+// patchSettings) and reads as untracked once it is older than one order
+// lifetime — the same horizon the slices-sold counter's TTL gives it. Closing
+// the night clears both explicitly, but that reset is best-effort and a night
+// nobody closes never runs it at all; without an expiry here the count would
+// sit in pp:settings (which never expires) until next Saturday, next to a
+// counter that *had* expired, and the board would open selling against dough
+// that isn't there. Untracked rather than zero, for the reason on
+// DEFAULT_SETTINGS.dough. A count with no timestamp is treated as stale.
+//
+// CREATE_ORDER_LUA applies the same rule to the raw key; keep the two in step.
+function freshDoughStock(stored) {
+  const setAt = Number(stored?.doughSetAt);
+  if (!Number.isFinite(setAt) || Date.now() - setAt > ORDER_TTL_MS) return {};
+  return normalizeDoughStock(stored?.dough);
+}
+
+function normalizeDoughStock(stored) {
+  const dough = {};
+  if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return dough;
+  for (const [type, balls] of Object.entries(stored)) {
+    if (isDoughType(type) && Number.isInteger(balls) && balls >= 0) dough[type] = balls;
+  }
+  return dough;
 }
 
 export async function saveSettings(settings) {
@@ -270,22 +403,57 @@ export async function saveSettings(settings) {
   return settings;
 }
 
+// Thrown by patchSettings() when a ball total's capacity is under what that
+// pool has already sold tonight. See the check in PATCH_SETTINGS_LUA.
+export class DoughBelowSoldError extends Error {
+  constructor(type, sold) {
+    super(`dough total below slices already sold: ${type}`);
+    this.type = type;
+    this.sold = sold;
+  }
+}
+
 const PATCH_SETTINGS_LUA = `
+-- A ball count is tonight's running *total*, and the slices-sold counter is
+-- never rebased against it — so a total whose capacity is under what the
+-- pool has already sold floors 'remaining' at 0, 86s the pool site-wide and
+-- starts 409ing intake. Refuse it here, reading the counter in the same
+-- script that writes the count: checked in the handler as a separate round
+-- trip, an order landing between the read and the write could still push
+-- 'sold' past the new capacity. An omitted type (stop counting) carries no
+-- total, so it is never refused — that is the way out of a miscount.
+local patch = cjson.decode(ARGV[2])
+if type(patch.dough) == 'table' then
+  local perBall = cjson.decode(ARGV[3])
+  for dough, balls in pairs(patch.dough) do
+    local sold = tonumber(redis.call('HGET', KEYS[2], dough)) or 0
+    if balls * (perBall[dough] or 0) < sold then return 'dough_below:' .. dough .. ':' .. sold end
+  end
+end
 local current = redis.call('GET', KEYS[1])
 local defaults = cjson.decode(ARGV[1])
 local stored = current and cjson.decode(current) or {}
 local settings = {
   mode = stored.mode or defaults.mode,
   unavailable = stored.unavailable or defaults.unavailable,
+  dough = stored.dough or defaults.dough,
+  doughSetAt = stored.doughSetAt,
   hours = stored.hours or defaults.hours
 }
 for key, value in pairs(defaults.hours) do
   if settings.hours[key] == nil then settings.hours[key] = value end
 end
-local patch = cjson.decode(ARGV[2])
 if patch.mode ~= nil then settings.mode = patch.mode end
 if patch.hours ~= nil then settings.hours = patch.hours end
 if patch.unavailable ~= nil then settings.unavailable = patch.unavailable end
+-- Whole-map replace, not a merge: the panel always sends both dough types (or
+-- neither), and an omitted type means "stop tracking this one", which a merge
+-- could never express. Field-level atomicity against mode/hours/availability
+-- is preserved — those are separate keys on the patch.
+if patch.dough ~= nil then
+  settings.dough = patch.dough
+  settings.doughSetAt = patch.doughSetAt
+end
 if patch.availability ~= nil then
   local next = {}
   local found = false
@@ -308,14 +476,26 @@ redis.call('SET', KEYS[1], encoded)
 return encoded`;
 
 export async function patchSettings(patch) {
+  // Every dough save restarts the count's lifetime — see freshDoughStock().
+  if (patch.dough !== undefined) patch = { ...patch, doughSetAt: Date.now() };
   if (!hasRedisEnv()) {
     // Keep the in-memory fallback synchronous through its read-modify-write,
     // matching the single-operation guarantee of the Redis Lua path.
+    if (patch.dough !== undefined) {
+      const pools = doughStatus(normalizeDoughStock(patch.dough), Object.fromEntries(doughMemory));
+      for (const [type, pool] of Object.entries(pools)) {
+        if (pool.used > pool.slices) throw new DoughBelowSoldError(type, pool.used);
+      }
+    }
     const current = normalizeSettings(globalThis.__ppSettings);
     const next = { ...current };
     if (patch.mode !== undefined) next.mode = patch.mode;
     if (patch.hours !== undefined) next.hours = patch.hours;
     if (patch.unavailable !== undefined) next.unavailable = patch.unavailable;
+    if (patch.dough !== undefined) {
+      next.dough = normalizeDoughStock(patch.dough);
+      next.doughSetAt = patch.doughSetAt;
+    }
     if (patch.availability !== undefined) {
       const unavailable = new Set(current.unavailable ?? []);
       if (patch.availability.unavailable) unavailable.add(patch.availability.name);
@@ -327,13 +507,43 @@ export async function patchSettings(patch) {
   }
   const result = await redisClient().eval(
     PATCH_SETTINGS_LUA,
-    [SETTINGS_KEY],
-    [JSON.stringify(DEFAULT_SETTINGS), JSON.stringify(patch)],
+    [SETTINGS_KEY, DOUGH_USED_KEY],
+    [JSON.stringify(DEFAULT_SETTINGS), JSON.stringify(patch), SLICES_PER_BALL_JSON],
   );
+  if (typeof result === 'string' && result.startsWith('dough_below:')) {
+    const [, type, sold] = result.split(':');
+    throw new DoughBelowSoldError(type, Number(sold));
+  }
   // Through normalizeSettings for the same reason getSettings is: the script
   // hands back exactly what it stored, empty-list-as-`{}` included, and this
   // return value is what the admin board renders after a save.
   return normalizeSettings(typeof result === 'string' ? JSON.parse(result) : result);
+}
+
+// ── Dough counter ─────────────────────────────────────────────────────
+// Slices already committed tonight, per dough type. Read-only — the counter is
+// only ever *written* inside the order-create and status-change scripts, where
+// the write is atomic with the thing that justifies it. Anything that reads
+// this and then writes based on what it saw has reintroduced the race the Lua
+// exists to close.
+
+export async function getDoughUsed() {
+  if (!hasRedisEnv()) return Object.fromEntries(doughMemory);
+  const raw = await redisClient().hgetall(DOUGH_USED_KEY);
+  const used = {};
+  for (const [dough, value] of Object.entries(raw ?? {})) {
+    const count = Number(value);
+    if (isDoughType(dough) && Number.isFinite(count)) used[dough] = Math.max(0, count);
+  }
+  return used;
+}
+
+// Zeroes the counter. Called by "close for the night" alongside clearing the
+// stock itself — the orders it was counting are archived and gone by then, so
+// a carried-over count would silently shrink next Saturday's capacity.
+export async function clearDoughUsed() {
+  if (!hasRedisEnv()) { doughMemory.clear(); return; }
+  await redisClient().del(DOUGH_USED_KEY);
 }
 
 // ── Rate limiting (fixed window, per key) ─────────────────────────────
@@ -373,6 +583,35 @@ local order = cjson.decode(cur)
 if (order.status == 'done' or order.status == 'cancelled') and order.status ~= ARGV[1] then
   return 'terminal:' .. order.status
 end
+-- Cancelling a *new* order hands its slices back to tonight's pool: nothing
+-- has been fired, so the dough is really still there. Guarded on the previous
+-- status being exactly 'new', and not merely "not cancelled yet" — the board
+-- only offers cancel on a new order, but a stale tab still showing it as new
+-- can cancel one another device has already moved to firing or ready, and
+-- that dough is in the oven. Refunding it would let the pool sell slices it
+-- doesn't have. The same guard stops a double tap crediting twice (the second
+-- sees 'cancelled'). Marking an order picked up refunds nothing either.
+if ARGV[1] == 'cancelled' and order.status == 'new' then
+  local back = {}
+  for _, item in ipairs(order.items or {}) do
+    if type(item.dough) == 'string' and type(item.qty) == 'number' then
+      back[item.dough] = (back[item.dough] or 0) + item.qty
+    end
+  end
+  local credited = false
+  for dough, qty in pairs(back) do
+    -- Floor at zero: an order written before dough tracking existed, or one
+    -- whose counter has since expired, must not push the pool negative and
+    -- hand out free capacity.
+    if redis.call('HINCRBY', KEYS[2], dough, -qty) < 0 then redis.call('HSET', KEYS[2], dough, 0) end
+    credited = true
+  end
+  -- HINCRBY *creates* the hash when it is missing, which it is whenever the
+  -- counter has expired or the night was closed under a still-live order — so
+  -- a refund can resurrect the key with no TTL at all and leave it behind
+  -- forever. Re-arm the same sliding expiry the create path sets.
+  if credited then redis.call('EXPIRE', KEYS[2], ARGV[3]) end
+end
 order.status = ARGV[1]
 order.updatedAt = tonumber(ARGV[2])
 local encoded = cjson.encode(order)
@@ -387,11 +626,17 @@ export async function setOrderStatus(id, status) {
     if ((existing.status === 'done' || existing.status === 'cancelled') && existing.status !== status) {
       return { conflict: existing.status };
     }
+    if (status === 'cancelled' && existing.status === 'new') {
+      for (const [dough, qty] of Object.entries(doughOnOrder(existing))) {
+        doughMemory.set(dough, Math.max(0, (doughMemory.get(dough) ?? 0) - qty));
+      }
+    }
     const updated = { ...existing, status, updatedAt: Date.now() };
     memory.set(id, updated);
     return { order: updated };
   }
-  const res = await redisClient().eval(SET_STATUS_LUA, [`pp:order:${id}`], [status, Date.now()]);
+  const res = await redisClient().eval(
+    SET_STATUS_LUA, [`pp:order:${id}`, DOUGH_USED_KEY], [status, Date.now(), ORDER_TTL_SECONDS]);
   if (res === null) return { order: null };
   if (typeof res === 'string' && res.startsWith('terminal:')) return { conflict: res.slice('terminal:'.length) };
   // The SDK auto-parses JSON results; a raw string means parsing was disabled

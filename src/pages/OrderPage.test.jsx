@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, within, mockFetch } from '../../tests/helpers/dom.jsx';
+import { act, render, screen, fireEvent, waitFor, within, mockFetch } from '../../tests/helpers/dom.jsx';
 import { OrderPage } from './OrderPage';
 import { MENU_DATA } from '../data/menu';
 import { DEFAULT_MAX_QTY } from '../utils/orders';
+import { DOUGH_LABELS, SLICES_PER_BALL, isDoughType } from '../utils/dough';
 
 const ADDONS = MENU_DATA.find((c) => c.category === 'Add Ons').items;
 const SLICES = MENU_DATA.find((c) => c.category === 'Saturday Slices').items;
@@ -337,5 +338,145 @@ describe('OrderPage between orders on a shared staff device', () => {
     // is standing at the window with a queue.
     await waitFor(() => expect(screen.getByText(/session expired/i)).toBeTruthy());
     expect(screen.getByText(/cart is saved/i)).toBeTruthy();
+  });
+});
+
+// ── Dough stock ───────────────────────────────────────────────────────
+// The server is what actually prevents overselling (see api/orders.test.js).
+// These cover the half that decides what staff can even tap at the window.
+describe('OrderPage — dough stock', () => {
+  const DOUGH_SLICE = SLICES.find((i) => isDoughType(i.dough));
+  const SAME_DOUGH = SLICES.find((i) => i !== DOUGH_SLICE && i.dough === DOUGH_SLICE?.dough);
+
+  // Without a dough-bearing slice every case below would assert against a
+  // page that simply never caps anything, and pass.
+  it('has two slices cut from one dough on the menu', () => {
+    expect(DOUGH_SLICE).toBeDefined();
+    expect(SAME_DOUGH).toBeDefined();
+  });
+
+  const withStock = (remaining) => ({
+    ...OPEN_STORE,
+    dough: {
+      [DOUGH_SLICE.dough]: {
+        balls: 1, slices: SLICES_PER_BALL[DOUGH_SLICE.dough], used: 0, remaining,
+      },
+    },
+  });
+
+  it('says nothing about stock when staff are not counting dough', async () => {
+    await openOrderPage();
+    expect(document.querySelector('.order-cat-stock')).toBeNull();
+  });
+
+  it('shows how many slices are left once dough is counted in', async () => {
+    await openOrderPage(withStock(5));
+    expect(screen.getByText(`5 ${DOUGH_LABELS[DOUGH_SLICE.dough]} left`)).toBeTruthy();
+  });
+
+  it('greys out every slice cut from an exhausted dough', async () => {
+    await openOrderPage(withStock(0));
+    // Both slices share the pool, so both go — this is the case a per-item
+    // sold-out list would get wrong.
+    for (const slice of [DOUGH_SLICE, SAME_DOUGH]) {
+      expect(within(rowFor(slice.name)).getByText(/sold out/i)).toBeTruthy();
+      expect(within(rowFor(slice.name)).queryByRole('button', { name: /^Add$/i })).toBeNull();
+    }
+  });
+
+  it('stops the stepper at what is left rather than at maxQty', async () => {
+    await openOrderPage(withStock(2));
+    addOne(DOUGH_SLICE.name);
+    const row = rowFor(DOUGH_SLICE.name);
+    fireEvent.click(within(row).getByRole('button', { name: /add one/i }));
+    await waitFor(() => expect(within(rowFor(DOUGH_SLICE.name)).getByText('2')).toBeTruthy());
+    // Two slices in, two left in the pool — and the item's own cap is higher.
+    expect(DOUGH_SLICE.maxQty ?? DEFAULT_MAX_QTY).toBeGreaterThan(2);
+    expect(within(rowFor(DOUGH_SLICE.name)).getByRole('button', { name: /add one/i }).disabled).toBe(true);
+  });
+
+  // The pool is shared, so slices already taken by one item have to come off
+  // what a *different* item may add. A per-row cap would let each of them
+  // offer the last slice.
+  it('counts slices another item has already taken out of the same pool', async () => {
+    await openOrderPage(withStock(1));
+    addOne(DOUGH_SLICE.name);
+    await waitFor(() => expect(within(rowFor(DOUGH_SLICE.name)).getByText('1')).toBeTruthy());
+
+    const other = within(rowFor(SAME_DOUGH.name)).getByRole('button', { name: /^Add$/i });
+    expect(other.disabled).toBe(true);
+  });
+
+  const placedOrder = () => ({
+    status: 201,
+    body: {
+      order: {
+        id: 'o-dough', code: 'BB33', name: 'Dough', status: 'new',
+        items: [{ name: DOUGH_SLICE.name, qty: 1, priceCents: 200 }],
+        totalCents: 200, createdAt: Date.now(), updatedAt: Date.now(),
+      },
+    },
+  });
+  const placeOne = async () => {
+    addOne(DOUGH_SLICE.name);
+    fireEvent.change(screen.getByPlaceholderText("Who's picking up?"), { target: { value: 'Dough' } });
+    fireEvent.click(screen.getByRole('button', { name: /place order/i }));
+    await waitFor(() => expect(screen.getByText('#BB33')).toBeTruthy());
+  };
+
+  // Nothing else on the happy path re-reads /api/store, and with ordering
+  // staff-only one device takes every order at the window — so the order just
+  // placed is what has to move this page's copy of the count. Without the
+  // refetch the readout and the stepper caps sit at their page-load numbers
+  // for the whole night, on the very device spending the dough.
+  //
+  // The read is counted *before* Start another order is pressed: that button
+  // does its own read, and a test that only looked at the menu afterwards
+  // stayed green with the refetch in place() deleted.
+  it('re-reads the pool after an order is placed', async () => {
+    const label = DOUGH_LABELS[DOUGH_SLICE.dough];
+    let placed = false;
+    let reads = 0;
+    mockFetch({
+      '/api/store': () => { reads += 1; return { body: withStock(placed ? 3 : 5) }; },
+      '/api/orders': () => { placed = true; return placedOrder(); },
+    });
+    render(<OrderPage nav={vi.fn()} isAdmin />);
+    await waitFor(() => expect(screen.getByText(`5 ${label} left`)).toBeTruthy());
+
+    await placeOne();
+    await waitFor(() => expect(reads).toBe(2));
+
+    fireEvent.click(screen.getByRole('button', { name: /start another order/i }));
+    await waitFor(() => expect(screen.getByText(`3 ${label} left`)).toBeTruthy());
+  });
+
+  // Placing an order and pressing Start another order each fire a read, and
+  // nothing makes them land in order. The older answer arriving last must not
+  // put back a count another device has since spent.
+  it('keeps the newest pool count when reads land out of order', async () => {
+    const label = DOUGH_LABELS[DOUGH_SLICE.dough];
+    const held = [];
+    let reads = 0;
+    mockFetch({
+      '/api/store': () => {
+        reads += 1;
+        if (reads === 1) return { body: withStock(5) };
+        return new Promise((resolve) => { held.push(resolve); });
+      },
+      '/api/orders': placedOrder,
+    });
+    render(<OrderPage nav={vi.fn()} isAdmin />);
+    await waitFor(() => expect(screen.getByText(`5 ${label} left`)).toBeTruthy());
+
+    await placeOne();
+    await waitFor(() => expect(held).toHaveLength(1)); // place()'s read
+    fireEvent.click(screen.getByRole('button', { name: /start another order/i }));
+    await waitFor(() => expect(held).toHaveLength(2)); // newOrder()'s read
+
+    await act(async () => { held[1]({ body: withStock(2) }); });
+    await waitFor(() => expect(screen.getByText(`2 ${label} left`)).toBeTruthy());
+    await act(async () => { held[0]({ body: withStock(3) }); });
+    expect(screen.getByText(`2 ${label} left`)).toBeTruthy();
   });
 });

@@ -1,12 +1,20 @@
 // Store open/closed logic. Settings shape:
 //   { mode: 'open' | 'closed' | 'auto',
-//     hours: { day: 0-6 (0=Sunday), start: 'HH:MM', end: 'HH:MM', tz: IANA zone } }
+//     hours: { day: 0-6 (0=Sunday), start: 'HH:MM', end: 'HH:MM', tz: IANA zone },
+//     unavailable: ['<item name>', …],
+//     dough: { ny: <balls>, neapolitan: <balls> } }
 // 'open'/'closed' are manual overrides; 'auto' follows the weekly window.
 
 export const DEFAULT_SETTINGS = {
   mode: 'auto',
   hours: { day: 6, start: '19:00', end: '20:30', tz: 'America/New_York' },
   unavailable: [], // 86 list: menu item names that are sold out / off today
+  // Dough balls counted in at the start of the night, per dough type. A type
+  // that is *absent* here is untracked — unlimited — which is why this starts
+  // empty rather than at zero: zero balls means sold out, and a board that
+  // refused every order until someone typed a number would stop service at
+  // the window on the first night nobody remembered to.
+  dough: {},
 };
 
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
