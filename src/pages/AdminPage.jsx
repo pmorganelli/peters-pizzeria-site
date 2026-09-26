@@ -230,10 +230,6 @@ function DoughPanel({ doughInfo, draft, editDough, savingStore, saveDough, stopC
           </button>
         )}
       </div>
-      <div className="dough-note">
-        Each box is the night&rsquo;s total, not what you just added — baked two more? Type the new total.
-        Leave a box empty to sell that dough without a cap. Closing the night clears both.
-      </div>
     </div>
   );
 }
@@ -241,7 +237,7 @@ function DoughPanel({ doughInfo, draft, editDough, savingStore, saveDough, stopC
 function AvailabilityPanel({ unavailableSet, savingStore, toggleItem }) {
   return (
     <div className="avail-panel">
-      <div className="store-panel-label"><UtensilsCrossed size={13} /> Availability — tap to 86 an item</div>
+      <div className="store-panel-label"><UtensilsCrossed size={13} /> Availability — tap to sell out an item</div>
       <div className="avail-groups">
         {MENU_DATA.map((section) => (
           <div key={section.category} className="avail-group">
