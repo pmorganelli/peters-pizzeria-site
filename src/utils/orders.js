@@ -74,6 +74,33 @@ export const itemTotalCents = (it) =>
 export const orderLineKey = (it) =>
   `${it.name}::${(it.addons ?? []).map((a) => a.name).join(',')}`;
 
+// An order's lines regrouped for the kitchen: one entry per slice, in the
+// order it first appears, with the total count up front. An order is stored as
+// one line per slice *and* add-on combination, so "3 Cheese, one with hot
+// honey" arrives as two lines — `2× Cheese` and `1× Cheese + Hot Honey` —
+// which reads as two different things on a busy board. Here it becomes
+// `3× Cheese` with the variations underneath.
+//
+//   { name, qty, addons, variants }
+//   - every unit has the same add-ons → `addons` holds their labels (possibly
+//     empty) and `variants` is empty;
+//   - mixed → `addons` is empty and `variants` lists { qty, addons } per
+//     combination, plain units (addons: []) included, so the counts add up.
+export function groupOrderLines(items) {
+  const groups = new Map();
+  for (const it of items) {
+    const labels = (it.addons ?? []).map((a) => addonLabel(a.name, it.name));
+    const g = groups.get(it.name) ?? { name: it.name, category: it.category, qty: 0, lines: [] };
+    g.qty += it.qty;
+    g.lines.push({ qty: it.qty, addons: labels });
+    groups.set(it.name, g);
+  }
+  return [...groups.values()].map(({ lines, ...g }) => (lines.length === 1
+    ? { ...g, addons: lines[0].addons, variants: [] }
+    // Most of a kind first — "2 plain, 1 + Hot Honey" rather than the reverse.
+    : { ...g, addons: [], variants: [...lines].sort((a, b) => b.qty - a.qty) }));
+}
+
 // One-line summary of an order's items for compact list rows (admin Finished
 // list, the past-nights archive) — "2× Cheese Slice, 1× Pepperoni (+ Hot Honey)"
 export const formatOrderItems = (items) =>

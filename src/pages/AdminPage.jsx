@@ -1,24 +1,27 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Archive, Check, Flame, LogOut, Moon, RotateCcw, Store, UtensilsCrossed, Wheat, X } from 'lucide-react';
+import { Archive, Flame, LogOut, Moon, RotateCcw, Store, UtensilsCrossed, Wheat } from 'lucide-react';
 import { Footer } from '../components/Footer';
 import { ReportsPanel, TakedownAlert } from '../components/ReportsPanel';
+import { BOARD_VIEWS, OrderTable } from '../components/OrderTable';
 import { useTakedownRequests } from '../hooks/useTakedownRequests';
 import { useBoardTitle } from '../hooks/useBoardTitle';
 import { useDoughStock } from '../hooks/useDoughStock';
 import { MENU_DATA } from '../data/menu';
 import { api } from '../utils/api';
-import { DAY_NAMES, addonLabel, displayName, fmtMoney, fmtTime, formatOrderItems, ageLabel, orderLineKey } from '../utils/orders';
-import { DOUGH_LABELS, DOUGH_TYPES, MAX_DOUGH_BALLS, SLICES_PER_BALL } from '../utils/dough';
+import { readStored, writeStored } from '../utils/storage';
+import { DAY_NAMES, displayName, fmtMoney, fmtTime, formatOrderItems, ageLabel } from '../utils/orders';
+import { DOUGH_LABELS, DOUGH_TYPES, MAX_DOUGH_BALLS, SLICES_PER_BALL, soldOutNames } from '../utils/dough';
 
 const POLL_MS = 5000;
 const PIZZA_CATEGORY = MENU_DATA[0].category;
-const ADDON_CATEGORY = MENU_DATA[1].category;
-
-const COLUMNS = [
-  { status: 'new', title: 'New', action: 'Start firing', next: 'firing', Icon: Flame },
-  { status: 'firing', title: 'In the oven', action: 'Mark ready', next: 'ready', Icon: Check },
-  { status: 'ready', title: 'Ready for pickup', action: 'Picked up', next: 'done', Icon: Check },
-];
+// Full or compact rows — a per-device preference (the phone at the window and
+// the laptop by the oven want different densities), so browser storage rather
+// than anything shared.
+const VIEW_KEY = 'pp_board_view:v1';
+const initialView = () => {
+  const saved = readStored(VIEW_KEY);
+  return BOARD_VIEWS.includes(saved) ? saved : 'full';
+};
 
 function Login({ onSuccess }) {
   const [password, setPassword] = useState('');
@@ -60,42 +63,6 @@ function Login({ onSuccess }) {
           {busy ? 'Checking…' : 'Log in'}
         </button>
       </form>
-    </div>
-  );
-}
-
-function OrderCard({ order, column, onAdvance, onCancel }) {
-  return (
-    <div className="oc">
-      <div className="oc-head">
-        <span className="oc-code">#{order.code}</span>
-        <span className="oc-name">{order.name}</span>
-        <span className="oc-age">{ageLabel(order.createdAt)}</span>
-      </div>
-      <div className="oc-items">
-        {order.items.map((it) => (
-          <div key={orderLineKey(it)} className={`oc-item${it.category === PIZZA_CATEGORY ? ' oc-item-pizza' : ''}`}>
-            <span className="oc-qty">{it.qty}×</span> {it.category === ADDON_CATEGORY ? `+ ${displayName(it.name)}` : it.name}
-            {it.addons?.length > 0 && (
-              <span className="oc-item-addons"> · + {it.addons.map((a) => addonLabel(a.name, it.name)).join(', + ')}</span>
-            )}
-          </div>
-        ))}
-      </div>
-      {order.notes && <div className="oc-notes">“{order.notes}”</div>}
-      <div className="oc-meta">
-        <span>{fmtMoney(order.totalCents)}</span>
-      </div>
-      <div className="oc-actions">
-        <button type="button" className="oc-advance" onClick={() => onAdvance(order, column.next)}>
-          <column.Icon size={12} /> {column.action}
-        </button>
-        {column.status === 'new' && (
-          <button type="button" className="oc-cancel" aria-label={`Cancel order ${order.code}`} onClick={() => onCancel(order)}>
-            <X size={12} />
-          </button>
-        )}
-      </div>
     </div>
   );
 }
@@ -267,28 +234,6 @@ function AvailabilityPanel({ unavailableSet, savingStore, toggleItem }) {
   );
 }
 
-function Board({ orders, advance, cancel }) {
-  return (
-    <div className="board">
-      {COLUMNS.map((col) => {
-        // Oldest first — a column reads top-to-bottom as a queue, and the
-        // order nearest to firing/pickup should be at the top, not buried
-        // under whatever just came in.
-        const list = orders.filter((o) => o.status === col.status).sort((a, b) => a.createdAt - b.createdAt);
-        return (
-          <div key={col.status} className="board-col">
-            <div className="board-col-title">{col.title} <span className="board-count">{list.length}</span></div>
-            {list.length === 0 && <div className="board-empty">—</div>}
-            {list.map((o) => (
-              <OrderCard key={o.id} order={o} column={col} onAdvance={advance} onCancel={cancel} />
-            ))}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 // Finished orders, plus a footer line with tonight's running total (picked-up
 // orders only — same rule "close for the night" uses, so this number matches
 // what closing will archive) and the close button itself. Keeping the total
@@ -302,7 +247,6 @@ function FinishedList({ finished, totalCents, canClose, closing, closeNight }) {
         ? <div className="board-empty">—</div>
         : finished.map((o) => (
           <div key={o.id} className="finished-row">
-            <span className="oc-code">#{o.code}</span>
             <span>{o.name}</span>
             <span className="finished-items">{formatOrderItems(o.items)}</span>
             <span>{fmtMoney(o.totalCents)}</span>
@@ -347,6 +291,8 @@ export function AdminPage({ nav, onAuthChange }) {
   const [savingStore, setSavingStore] = useState(false);
   const [storeError, setStoreError] = useState('');
   const [closingNight, setClosingNight] = useState(false);
+  const [view, setViewState] = useState(initialView);
+  const setView = (next) => { setViewState(next); writeStored(VIEW_KEY, next); };
   const draftSeeded = useRef(false);
   // Bumped by every mutation (advance, 86 toggle, hours save). A poll snapshot
   // taken before a mutation is stale — applying it would visually revert the
@@ -529,7 +475,43 @@ export function AdminPage({ nav, onAuthChange }) {
   };
 
   const cancel = (order) => {
-    if (window.confirm(`Cancel order #${order.code} for ${order.name}?`)) advance(order, 'cancelled');
+    if (window.confirm(`Cancel ${order.name}'s order?`)) advance(order, 'cancelled');
+  };
+
+  // A name or note corrected in the table. Optimistic like advance(), but a
+  // refusal is worth saying out loud: the cell snaps back to the old value on
+  // the resync, and without a message that just looks like the edit vanished.
+  const editOrder = async (order, fields) => {
+    epochRef.current += 1;
+    setOrders((list) => list.map((o) => (o.id === order.id ? { ...o, ...fields } : o)));
+    setStoreError('');
+    try {
+      const { order: saved } = await api(`/api/orders?id=${encodeURIComponent(order.id)}`, { method: 'PATCH', body: fields });
+      epochRef.current += 1;
+      setOrders((list) => list.map((o) => (o.id === saved.id ? saved : o)));
+    } catch (err) {
+      if (err.status === 401) { logout('Session expired — log in again.'); return; }
+      setStoreError(err.message || 'Could not save that change — try again.');
+      load();
+    }
+  };
+
+  // A changed order. Not optimistic, unlike the edits above: the server
+  // re-prices it and may refuse it for dough, and the editor stays open with
+  // the reason until the staffer trims it — so it waits for the answer and
+  // hands back { error } instead of a board-wide message.
+  const editItems = async (order, items) => {
+    epochRef.current += 1;
+    try {
+      const { order: saved } = await api(`/api/orders?id=${encodeURIComponent(order.id)}`, { method: 'PATCH', body: { items } });
+      epochRef.current += 1;
+      setOrders((list) => list.map((o) => (o.id === saved.id ? saved : o)));
+      return {};
+    } catch (err) {
+      if (err.status === 401) { logout('Session expired — log in again.'); return {}; }
+      load();
+      return { error: err.message || 'Could not save that change — try again.' };
+    }
   };
 
   const unavailableSet = new Set(storeInfo?.unavailable || []);
@@ -653,10 +635,24 @@ export function AdminPage({ nav, onAuthChange }) {
         )}
       </div>
 
+      <div className="board-toolbar">
+        <div className="board-col-title board-toolbar-title">Live orders</div>
+        <div className="store-modes board-view-toggle" role="group" aria-label="Board view">
+          {BOARD_VIEWS.map((v) => (
+            <button key={v} type="button" className={view === v ? 'active' : ''} aria-pressed={view === v} onClick={() => setView(v)}>
+              {v === 'full' ? 'Full' : 'Compact'}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {orders === null ? (
         <div className="admin-loading">Loading orders…</div>
       ) : (
-        <Board orders={orders} advance={advance} cancel={cancel} />
+        <OrderTable
+          orders={orders} view={view} soldOut={soldOutNames(storeInfo)}
+          onAdvance={advance} onCancel={cancel} onEdit={editOrder} onEditItems={editItems}
+        />
       )}
 
       {orders !== null && (

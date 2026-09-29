@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addonLabel, clampCartQty, formatOrderItems } from './orders.js';
+import { addonLabel, clampCartQty, formatOrderItems, groupOrderLines } from './orders.js';
 import { MENU_DATA } from '../data/menu.js';
 
 // These cases are about a *relationship* — does this slice's description
@@ -101,5 +101,39 @@ describe('clampCartQty', () => {
 
   it('drops an item with an empty unit array rather than keeping a stray key', () => {
     expect(clampCartQty({ [CAPPED.name]: [] })).toEqual({});
+  });
+});
+
+describe('groupOrderLines', () => {
+  const SLICE_CAT = MENU_DATA[0].category;
+  const [A, B] = MENU_DATA[0].items;
+  const [X, Y] = MENU_DATA[1].items;
+  const line = (item, qty, addons = []) => ({
+    name: item.name, category: SLICE_CAT, qty, priceCents: 100, addons: addons.map((a) => ({ name: a.name, priceCents: 50 })),
+  });
+
+  it('has two slices and two add-ons to group with', () => {
+    expect([A, B, X, Y].every(Boolean)).toBe(true);
+  });
+
+  it('folds one slice split across add-on combinations into one entry with its variations', () => {
+    const [cheese, other] = groupOrderLines([line(A, 2), line(B, 1), line(A, 1, [X, Y])]);
+    expect(cheese).toMatchObject({ name: A.name, qty: 3, addons: [] });
+    expect(cheese.variants).toEqual([
+      { qty: 2, addons: [] },
+      { qty: 1, addons: [addonLabel(X.name, A.name), addonLabel(Y.name, A.name)] },
+    ]);
+    // Order of first appearance, not alphabetical — matches how it was rung up.
+    expect(other).toMatchObject({ name: B.name, qty: 1, variants: [] });
+  });
+
+  it('keeps add-ons on the entry itself when every unit shares them', () => {
+    const [only] = groupOrderLines([line(A, 2, [X])]);
+    expect(only).toMatchObject({ qty: 2, addons: [addonLabel(X.name, A.name)], variants: [] });
+  });
+
+  it('lists the biggest variation first', () => {
+    const [g] = groupOrderLines([line(A, 1, [X]), line(A, 3)]);
+    expect(g.variants.map((v) => v.qty)).toEqual([3, 1]);
   });
 });

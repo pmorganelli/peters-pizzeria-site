@@ -3,7 +3,7 @@ import { BodyTooLargeError, readBody, readQuery, send, isAdmin, clientIp, hasRed
 import { catalog, ADDON_CATEGORY, PIZZA_CATEGORY } from './_lib/catalog.js';
 import {
   createOrder, getOrder, getOrderByCode, getOrderByIdempotency,
-  listOrders, setOrderStatus, getSettings, rateLimit,
+  listOrders, setOrderStatus, setOrderFields, setOrderItems, getSettings, rateLimit,
 } from './_lib/store.js';
 import { isOpenNow } from './_lib/hours.js';
 import { DOUGH_LABELS, doughSlicesFor } from '../src/utils/dough.js';
@@ -136,6 +136,21 @@ export default async function handler(req, res) {
   }
 }
 
+// `dough:<type>:<slices left>` from the store → the 409 body intake and order
+// edits both send. Says how many are actually left, since whoever is at the
+// window can usually just sell fewer rather than nothing.
+function doughShortBody(reason) {
+  const [, dough, left] = reason.split(':');
+  const remaining = Number(left) || 0;
+  return {
+    error: remaining === 0
+      ? `We're out of ${DOUGH_LABELS[dough] ?? dough} dough for tonight — that slice is sold out.`
+      : `Only ${remaining} ${DOUGH_LABELS[dough] ?? dough} slice${remaining === 1 ? '' : 's'} left tonight — trim the order and try again.`,
+    doughShort: dough,
+    remaining,
+  };
+}
+
 // POST /api/orders — staff place orders on the customer's behalf (while open)
 //
 // Ordering used to be open to anyone with the page loaded. It isn't: orders
@@ -235,15 +250,7 @@ async function create(req, res) {
     // the count was stale). Say how many are actually left, since whoever is
     // at the window can usually just sell fewer rather than nothing.
     if (typeof stored.reason === 'string' && stored.reason.startsWith('dough:')) {
-      const [, dough, left] = stored.reason.split(':');
-      const remaining = Number(left) || 0;
-      return send(res, 409, {
-        error: remaining === 0
-          ? `We're out of ${DOUGH_LABELS[dough] ?? dough} dough for tonight — that slice is sold out.`
-          : `Only ${remaining} ${DOUGH_LABELS[dough] ?? dough} slice${remaining === 1 ? '' : 's'} left tonight — trim the order and try again.`,
-        doughShort: dough,
-        remaining,
-      });
+      return send(res, 409, doughShortBody(stored.reason));
     }
     if (stored.reason === 'capacity') {
       return send(res, 503, { error: 'The order board is full right now — please order at the window.' });
@@ -352,7 +359,9 @@ async function read(req, res) {
   return send(res, 200, { orders: await listOrders() });
 }
 
-// PATCH /api/orders?id=… {status} — admin advances/cancels an order
+// PATCH /api/orders?id=… {status} — admin advances/cancels an order,
+// {name?, notes?} — admin corrects what was typed at the window, or
+// {items} — the customer changed their order
 async function patch(req, res) {
   if (!isAdmin(req)) return send(res, 401, { error: 'Admin login required' });
   const { id } = readQuery(req);
@@ -360,7 +369,49 @@ async function patch(req, res) {
   try { body = await readBody(req); } catch (err) {
     return send(res, err instanceof BodyTooLargeError ? 413 : 400, { error: err instanceof BodyTooLargeError ? 'Invalid request.' : 'Invalid JSON' });
   }
-  if (!id || !STATUSES.includes(body.status)) return send(res, 400, { error: 'Invalid id or status' });
+  if (!id) return send(res, 400, { error: 'Invalid id or status' });
+
+  // {name, notes} — a correction from the board's editable cells. Kept apart
+  // from status changes (one or the other per request) so each write has one
+  // atomic path and one kind of failure.
+  if (body.status === undefined && (body.name !== undefined || body.notes !== undefined)) {
+    const fields = {};
+    if (body.name !== undefined) {
+      fields.name = clean(body.name, 60);
+      if (fields.name.length < 2) return send(res, 400, { error: 'A name needs at least 2 characters.' });
+    }
+    if (body.notes !== undefined) fields.notes = clean(body.notes, 280);
+    const order = await setOrderFields(id, fields);
+    if (!order) return send(res, 404, { error: 'Order not found' });
+    return send(res, 200, { order });
+  }
+
+  // {items} — the customer changed their order. Validated and priced exactly
+  // like intake (same caps, same catalog), then swapped in by the store along
+  // with the dough difference; see SET_ITEMS_LUA for the refund rule.
+  if (body.status === undefined && body.items !== undefined) {
+    const items = validateItems(body.items);
+    if (!items) return send(res, 400, { error: 'That order has an item we did not recognize, or too many of one slice.' });
+    const existing = await getOrder(id);
+    if (!existing) return send(res, 404, { error: 'Order not found' });
+    // Only something being *added* is refused for being 86'd — a slice the
+    // customer already had, which sold out since, shouldn't block them from
+    // changing the rest of their order.
+    const had = new Set((existing.items ?? []).flatMap((it) => [it.name, ...(it.addons ?? []).map((a) => a.name)]));
+    const eightySixed = new Set((await getSettings()).unavailable ?? []);
+    const soldOut = items.flatMap((it) => [it.name, ...(it.addons ?? []).map((a) => a.name)])
+      .find((name) => eightySixed.has(name) && !had.has(name));
+    if (soldOut) return send(res, 400, { error: `${soldOut} is sold out tonight.`, soldOut });
+
+    const totalCents = items.reduce((sum, it) => sum + lineTotal(it), 0);
+    const stored = await setOrderItems(id, items, totalCents);
+    if (stored.conflict) return send(res, 409, { error: `Order is already ${stored.conflict === 'done' ? 'picked up' : stored.conflict} — it can't be changed.` });
+    if (stored.reason) return send(res, 409, doughShortBody(stored.reason));
+    if (!stored.order) return send(res, 404, { error: 'Order not found' });
+    return send(res, 200, { order: stored.order });
+  }
+
+  if (!STATUSES.includes(body.status)) return send(res, 400, { error: 'Invalid id or status' });
   // Terminal states are final — a stale admin tab must not resurrect a
   // cancelled order or un-complete a picked-up one. The check-and-write is
   // atomic in the store so two racing tabs can't slip past it.

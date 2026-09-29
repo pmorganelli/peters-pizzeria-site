@@ -7,7 +7,7 @@ import {
   openStore, adminCookie, insertOrder, TEST_ITEM_NAME, CAPPED_ITEM,
   DOUGH_ITEM, DOUGH_TYPE, SAME_DOUGH_ITEM,
 } from '../tests/helpers/fixtures.js';
-import { saveSettings } from './_lib/store.js';
+import { getDoughUsed, saveSettings } from './_lib/store.js';
 import { DEFAULT_SETTINGS } from './_lib/hours.js';
 import { DEFAULT_MAX_QTY } from '../src/utils/orders.js';
 import { SLICES_PER_BALL } from '../src/utils/dough.js';
@@ -149,6 +149,132 @@ describe('PATCH /api/orders?id= — status transitions', () => {
     });
     expect(status).toBe(409);
     expect(body.error).toMatch(/already cancelled/i);
+  });
+});
+
+describe('PATCH /api/orders?id= — editing name and notes', () => {
+  const edit = (id, body, headers = { Cookie: cookie }) =>
+    call(base, `/api/orders?id=${id}`, { method: 'PATCH', headers, body });
+
+  it('401s without an admin cookie and leaves the order alone', async () => {
+    const created = await postOrder({ name: 'Sam', items: [{ name: TEST_ITEM_NAME, qty: 1 }] });
+    const { status } = await edit(created.body.order.id, { name: 'Mallory' }, {});
+    expect(status).toBe(401);
+    const { body } = await call(base, '/api/orders', { headers: { Cookie: cookie } });
+    expect(body.orders[0].name).toBe('Sam');
+  });
+
+  it('saves a corrected name and note, cleaned, without touching status, items or total', async () => {
+    const created = (await postOrder({ name: 'Smaa', items: [{ name: TEST_ITEM_NAME, qty: 2 }] })).body.order;
+    await edit(created.id, { status: 'firing' });
+    const { status, body } = await edit(created.id, { name: '  Sam   Jones ', notes: ' no  basil ' });
+    expect(status).toBe(200);
+    expect(body.order).toMatchObject({
+      name: 'Sam Jones', notes: 'no basil', status: 'firing', totalCents: created.totalCents, items: created.items,
+    });
+    // The whole point of fixing a name: the customer can now find it by it.
+    const found = await call(base, '/api/orders?find=sam%20jones');
+    expect(found.body.order?.id).toBe(created.id);
+  });
+
+  it('lets a note be cleared, but refuses a blank name', async () => {
+    const created = (await postOrder({ name: 'Sam', notes: 'extra napkins', items: [{ name: TEST_ITEM_NAME, qty: 1 }] })).body.order;
+    expect((await edit(created.id, { name: ' ' })).status).toBe(400);
+    const cleared = await edit(created.id, { notes: '' });
+    expect(cleared.body.order).toMatchObject({ name: 'Sam', notes: '' });
+  });
+
+  it('404s an unknown order', async () => {
+    expect((await edit('onope', { name: 'Sam' })).status).toBe(404);
+  });
+});
+
+// ── Changing an order ────────────────────────────────────────────────
+describe('PATCH /api/orders?id= — changing the items', () => {
+  const PER_BALL = SLICES_PER_BALL[DOUGH_TYPE];
+  const setItems = (id, items, headers = { Cookie: cookie }) =>
+    call(base, `/api/orders?id=${id}`, { method: 'PATCH', headers, body: { items } });
+  const setStatus = (id, status) =>
+    call(base, `/api/orders?id=${id}`, { method: 'PATCH', headers: { Cookie: cookie }, body: { status } });
+  const place = async (qty, item = DOUGH_ITEM) =>
+    (await postOrder({ name: 'Changer', items: [{ name: item.name, qty }] })).body.order;
+  const used = async () => (await getDoughUsed())[DOUGH_TYPE] ?? 0;
+
+  it('has a dough-bearing slice and an add-on to change orders with', () => {
+    expect(DOUGH_ITEM).toBeDefined();
+    expect(ADDON_NAME).toBeDefined();
+    expect(PER_BALL).toBeGreaterThanOrEqual(4);
+  });
+
+  it('401s without a session', async () => {
+    const o = await place(1);
+    expect((await setItems(o.id, [{ name: DOUGH_ITEM.name, qty: 2 }], {})).status).toBe(401);
+  });
+
+  it('re-prices the order from the menu and keeps its name, notes and status', async () => {
+    const o = await place(1);
+    await setStatus(o.id, 'firing');
+    const { status, body } = await setItems(o.id, [
+      { name: DOUGH_ITEM.name, qty: 2, addons: [ADDON_NAME] },
+      { name: SAME_DOUGH_ITEM.name, qty: 1, priceCents: 1 },
+    ]);
+    expect(status).toBe(200);
+    const addon = body.order.items[0].addons[0];
+    const slice = o.items[0].priceCents;
+    expect(body.order.items).toHaveLength(2);
+    expect(body.order.totalCents).toBe((slice + addon.priceCents) * 2 + body.order.items[1].priceCents);
+    expect(body.order.items[1].priceCents).not.toBe(1); // the client never sets a price
+    expect(body.order).toMatchObject({ name: 'Changer', status: 'firing', code: o.code });
+  });
+
+  it('refuses the same caps intake does', async () => {
+    const o = await place(1, CAPPED_ITEM);
+    expect((await setItems(o.id, [{ name: CAPPED_ITEM.name, qty: CAPPED_ITEM.maxQty + 1 }])).status).toBe(400);
+    expect((await setItems(o.id, [])).status).toBe(400);
+    expect((await setItems(o.id, [{ name: 'Not A Pizza', qty: 1 }])).status).toBe(400);
+  });
+
+  it('refuses a change to a picked-up or cancelled order', async () => {
+    const o = await place(1);
+    await setStatus(o.id, 'cancelled');
+    const { status } = await setItems(o.id, [{ name: DOUGH_ITEM.name, qty: 2 }]);
+    expect(status).toBe(409);
+  });
+
+  it('debits added slices, and refuses the ones the pool cannot cover', async () => {
+    await openStore({ dough: { [DOUGH_TYPE]: 1 } });
+    const o = await place(PER_BALL - 2);
+    expect((await setItems(o.id, [{ name: DOUGH_ITEM.name, qty: PER_BALL - 1 }])).status).toBe(200);
+    expect(await used()).toBe(PER_BALL - 1);
+    // Two over, split across two slices so neither trips its own per-item cap.
+    const { status, body } = await setItems(o.id, [
+      { name: DOUGH_ITEM.name, qty: PER_BALL - 1 }, { name: SAME_DOUGH_ITEM.name, qty: 2 },
+    ]);
+    expect(status).toBe(409);
+    expect(body).toMatchObject({ doughShort: DOUGH_TYPE, remaining: 1 });
+    // A refused change leaves both the order and the counter where they were.
+    expect(await used()).toBe(PER_BALL - 1);
+  });
+
+  it('puts removed slices back while the order is new, but not once it is firing', async () => {
+    await openStore({ dough: { [DOUGH_TYPE]: 1 } });
+    const o = await place(4);
+    await setItems(o.id, [{ name: DOUGH_ITEM.name, qty: 2 }]);
+    expect(await used()).toBe(2);
+    await setStatus(o.id, 'firing');
+    await setItems(o.id, [{ name: DOUGH_ITEM.name, qty: 1 }]);
+    expect(await used()).toBe(2); // that slice's dough is in the oven
+  });
+
+  it('refuses adding something 86\'d tonight, but not keeping something that already was', async () => {
+    const o = await place(1);
+    await openStore({ unavailable: [DOUGH_ITEM.name, SAME_DOUGH_ITEM.name] });
+    expect((await setItems(o.id, [{ name: DOUGH_ITEM.name, qty: 2 }])).status).toBe(200);
+    const { status, body } = await setItems(o.id, [
+      { name: DOUGH_ITEM.name, qty: 1 }, { name: SAME_DOUGH_ITEM.name, qty: 1 },
+    ]);
+    expect(status).toBe(400);
+    expect(body.soldOut).toBe(SAME_DOUGH_ITEM.name);
   });
 });
 
