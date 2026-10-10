@@ -8,9 +8,8 @@ export const MENU_DATA = [
     // add the item, including to the commented-out ones below, or a slice that
     // comes back next week comes back untracked.
     //
-    // Everything on the menu right now is cut from New York rounds (8 slices a
-    // ball); Neapolitan (4 a ball) is wired up end to end and waiting for its
-    // first slice.
+    // Most of the menu is cut from New York rounds (8 slices a ball);
+    // Margherita is the one Neapolitan slice (4 a ball).
     items: [
       // maxQty lives here for now because Margherita — which normally carries
       // it — is commented out below. Move it back when Margherita returns
@@ -20,6 +19,7 @@ export const MENU_DATA = [
       { name: 'Chef\'s Choice',     desc: "Pepperoni slice with hot honey, stracciatella, and fresh basil",         price: '$4', dough: 'ny', maxQty: 4 },
       { name: 'Cheese',             desc: 'House-made sauce, our mozzarella blend, fresh basil, pecorino romano, & parmigiano reggiano',                   price: '$2',    dough: 'ny' },
       { name: 'Pepperoni',          desc: 'Pepperoni, house-made sauce, our mozzarella blend, fresh basil, pecorino romano, & parmigiano reggiano',            price: '$2.50', dough: 'ny' },
+      { name: 'Margherita',          desc: 'Fresh mozzarella, basil, extra virgin olive oil, parmigiano reggiano',            price: '$3', dough: 'neapolitan' },
       // ── Off this week, back in a future one ──────────────────────────
       // Commented out rather than deleted so the descriptions and prices come
       // back verbatim. Nothing else needs touching to restore one: the order
