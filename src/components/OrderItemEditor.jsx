@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Minus, Plus, X } from 'lucide-react';
 import { MENU_DATA } from '../data/menu';
 import { DEFAULT_MAX_QTY, addonLabel, displayName, fmtMoney, givenQty, parsePriceCents } from '../utils/orders';
@@ -13,7 +13,7 @@ const lineKey = (l) => `${l.name}::${[...l.addons].sort().join(',')}`;
 // Lines that ended up identical (same slice, same add-ons) fold into one —
 // the server refuses two lines with the same key, and a staffer toggling
 // add-ons around shouldn't have to notice they've made a duplicate.
-export function mergeLines(lines) {
+function mergeLines(lines) {
   const byKey = new Map();
   for (const l of lines) {
     if (l.qty < 1) continue;
@@ -47,7 +47,12 @@ export function OrderItemEditor({ order, soldOut, onSave, onClose }) {
       .map((it) => ({ name: it.name, qty: givenQty(it), addons: (it.addons ?? []).map((a) => a.name) })));
   const [lines, setLines] = useState(() =>
     order.items.filter((it) => it.qty > givenQty(it))
-      .map((it) => ({ name: it.name, qty: it.qty - givenQty(it), addons: (it.addons ?? []).map((a) => a.name) })));
+      .map((it, i) => ({ id: i, name: it.name, qty: it.qty - givenQty(it), addons: (it.addons ?? []).map((a) => a.name) })));
+  // Each editable line keeps an id for as long as it's on screen. Its name and
+  // add-ons can't serve: two lines briefly share them mid-edit (that is what
+  // mergeLines tidies up on save), and position shifts when a line above is
+  // removed.
+  const nextLineId = useRef(order.items.length);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -67,7 +72,11 @@ export function OrderItemEditor({ order, soldOut, onSave, onClose }) {
   const addSlice = (name) => {
     const plain = lines.findIndex((l) => l.name === name && l.addons.length === 0);
     if (plain >= 0) update(plain, { qty: lines[plain].qty + 1 });
-    else setLines((ls) => [...ls, { name, qty: 1, addons: [] }]);
+    else {
+      const id = nextLineId.current;
+      nextLineId.current += 1;
+      setLines((ls) => [...ls, { id, name, qty: 1, addons: [] }]);
+    }
   };
 
   const merged = mergeLines([...held, ...lines]);
@@ -77,10 +86,17 @@ export function OrderItemEditor({ order, soldOut, onSave, onClose }) {
   const save = async () => {
     setBusy(true);
     setError('');
-    const result = await onSave(merged.map((l) => (l.addons.length ? l : { name: l.name, qty: l.qty })));
-    setBusy(false);
-    if (result?.error) setError(result.error);
-    else onClose();
+    try {
+      const result = await onSave(merged.map((l) => (l.addons.length ? l : { name: l.name, qty: l.qty })));
+      if (result?.error) setError(result.error);
+      else onClose();
+    } catch {
+      // onSave reports refusals as { error }, so reaching here means something
+      // unexpected threw — still leave the editor usable rather than stuck.
+      setError('Could not save that change — try again.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -97,11 +113,7 @@ export function OrderItemEditor({ order, soldOut, onSave, onClose }) {
           </li>
         ))}
         {lines.map((l, i) => (
-          // Lines are reordered only by being appended or removed, and two
-          // lines can briefly share a name+add-on key mid-edit, so position is
-          // the only identity that stays unique here.
-          // eslint-disable-next-line react/no-array-index-key
-          <li key={i} className="oe-line">
+          <li key={l.id} className="oe-line">
             <div className="oe-line-main">
               <div className="oe-stepper">
                 <button type="button" aria-label={`One less ${l.name}`} disabled={l.qty <= 1} onClick={() => update(i, { qty: l.qty - 1 })}>

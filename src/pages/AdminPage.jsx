@@ -2,14 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Archive, Flame, LogOut, Moon, RotateCcw, Store, UtensilsCrossed, Wheat } from 'lucide-react';
 import { Footer } from '../components/Footer';
 import { ReportsPanel, TakedownAlert } from '../components/ReportsPanel';
-import { BOARD_VIEWS, OrderTable } from '../components/OrderTable';
+import { OrderTable } from '../components/OrderTable';
 import { useTakedownRequests } from '../hooks/useTakedownRequests';
 import { useBoardTitle } from '../hooks/useBoardTitle';
 import { useDoughStock } from '../hooks/useDoughStock';
 import { MENU_DATA } from '../data/menu';
 import { api } from '../utils/api';
 import { readStored, writeStored } from '../utils/storage';
-import { DAY_NAMES, displayName, fmtMoney, fmtTime, formatOrderItems, ageLabel, fireNextCounts, orderLineKey, orderProgress } from '../utils/orders';
+import { BOARD_VIEWS, DAY_NAMES, displayName, fmtMoney, fmtTime, formatOrderItems, ageLabel, fireNextCounts, orderLineKey, orderProgress } from '../utils/orders';
 import { DOUGH_LABELS, DOUGH_TYPES, MAX_DOUGH_BALLS, SLICES_PER_BALL, soldOutNames } from '../utils/dough';
 
 const POLL_MS = 5000;
@@ -302,7 +302,7 @@ export function AdminPage({ nav, onAuthChange }) {
   // Hand-overs are sent one at a time (see give()), so several can be waiting
   // behind the one in flight. While any are, the board on screen is ahead of
   // the server and a poll would walk it backwards.
-  const giveQueueRef = useRef(Promise.resolve());
+  const giveQueueRef = useRef(null);
   const givePendingRef = useRef(0);
 
   useEffect(() => { window.scrollTo(0, 0); }, []);
@@ -550,7 +550,7 @@ export function AdminPage({ nav, onAuthChange }) {
     }));
     const body = { given: { name: item.name, addons: (item.addons ?? []).map((a) => a.name), count } };
     givePendingRef.current += 1;
-    giveQueueRef.current = giveQueueRef.current.then(async () => {
+    giveQueueRef.current = (giveQueueRef.current ?? Promise.resolve()).then(async () => {
       try {
         const { order: saved } = await api(`/api/orders?id=${encodeURIComponent(order.id)}`, { method: 'PATCH', body });
         givePendingRef.current -= 1;

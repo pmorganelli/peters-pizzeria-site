@@ -167,6 +167,10 @@ export function fireNextCounts(orders) {
   };
 }
 
+// The admin board's two row densities (see OrderTable). Lives here rather than
+// beside the component so that file exports only components.
+export const BOARD_VIEWS = ['full', 'compact'];
+
 // One-line summary of an order's items for compact list rows (admin Finished
 // list, the past-nights archive) — "2× Cheese Slice, 1× Pepperoni (+ Hot Honey)"
 export const formatOrderItems = (items) =>

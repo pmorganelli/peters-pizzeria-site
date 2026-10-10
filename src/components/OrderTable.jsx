@@ -18,9 +18,6 @@ const STAGES = [
   { status: 'ready', label: 'Ready', short: 'Ready', title: 'Ready for pickup', empty: 'Nothing waiting on the counter.' },
 ];
 
-export const BOARD_VIEWS = ['full', 'compact'];
-
-
 // Looks like plain text until you touch it. `draft` is null except while the
 // field has focus, and that's what keeps the 5-second poll from clobbering a
 // half-typed correction: while editing, the box shows the draft and ignores
