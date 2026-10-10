@@ -9,11 +9,10 @@ import { useDoughStock } from '../hooks/useDoughStock';
 import { MENU_DATA } from '../data/menu';
 import { api } from '../utils/api';
 import { readStored, writeStored } from '../utils/storage';
-import { DAY_NAMES, displayName, fmtMoney, fmtTime, formatOrderItems, ageLabel } from '../utils/orders';
+import { DAY_NAMES, displayName, fmtMoney, fmtTime, formatOrderItems, ageLabel, fireNextCounts, orderLineKey, orderProgress } from '../utils/orders';
 import { DOUGH_LABELS, DOUGH_TYPES, MAX_DOUGH_BALLS, SLICES_PER_BALL, soldOutNames } from '../utils/dough';
 
 const POLL_MS = 5000;
-const PIZZA_CATEGORY = MENU_DATA[0].category;
 // Full or compact rows — a per-device preference (the phone at the window and
 // the laptop by the oven want different densities), so browser storage rather
 // than anything shared.
@@ -300,6 +299,11 @@ export function AdminPage({ nav, onAuthChange }) {
   const epochRef = useRef(0);
   const pollIssuedRef = useRef(0);
   const pollAppliedRef = useRef(0);
+  // Hand-overs are sent one at a time (see give()), so several can be waiting
+  // behind the one in flight. While any are, the board on screen is ahead of
+  // the server and a poll would walk it backwards.
+  const giveQueueRef = useRef(Promise.resolve());
+  const givePendingRef = useRef(0);
 
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
@@ -377,7 +381,7 @@ export function AdminPage({ nav, onAuthChange }) {
       // when requests consistently take longer than POLL_MS, rejecting on that
       // basis would reject every response. Only reject a response when a newer
       // one has already been applied (or a mutation invalidated its snapshot).
-      if (epochRef.current !== snapshot || sequence <= pollAppliedRef.current) return;
+      if (epochRef.current !== snapshot || sequence <= pollAppliedRef.current || givePendingRef.current > 0) return;
       pollAppliedRef.current = sequence;
       setOrders(list);
       setStoreInfo(status);
@@ -469,7 +473,12 @@ export function AdminPage({ nav, onAuthChange }) {
     try {
       await api(`/api/orders?id=${encodeURIComponent(order.id)}`, { method: 'PATCH', body: { status } });
       epochRef.current += 1;
-    } catch {
+    } catch (err) {
+      if (err.status === 401) { logout('Session expired — log in again.'); return; }
+      // A refusal has a reason worth reading — another device already
+      // finished this order, or part of it has gone out and it can no longer
+      // be cancelled. Without it the row just snaps back and looks ignored.
+      if (err.status === 409) setStoreError(err.message);
       load();
     }
   };
@@ -514,31 +523,51 @@ export function AdminPage({ nav, onAuthChange }) {
     }
   };
 
+  // Part of an order going out the window ahead of the rest. Optimistic like
+  // advance() — a tick that waits on the network feels broken at the window —
+  // including the order leaving the board when its last slice goes, which is
+  // what the server does with it.
+  //
+  // Requests go out one at a time, in the order they were tapped: each carries
+  // an absolute count, so two quick taps on a three-slice line send "1" then
+  // "2", and if those landed out of order the line would settle on 1. For the
+  // same reason only the *last* answer is applied — the reply to "1" arriving
+  // while "2" is still queued would knock the tick back for a moment, and a
+  // third tap in that moment would send "2" again.
+  const give = (order, item, count) => {
+    const key = orderLineKey(item);
+    epochRef.current += 1;
+    setStoreError('');
+    setOrders((list) => list.map((o) => {
+      if (o.id !== order.id) return o;
+      const items = o.items.map((it) => {
+        if (orderLineKey(it) !== key) return it;
+        const { given, ...rest } = it;
+        return count > 0 ? { ...rest, given: count } : rest;
+      });
+      const { total, given } = orderProgress(items);
+      return { ...o, items, status: given >= total ? 'done' : o.status };
+    }));
+    const body = { given: { name: item.name, addons: (item.addons ?? []).map((a) => a.name), count } };
+    givePendingRef.current += 1;
+    giveQueueRef.current = giveQueueRef.current.then(async () => {
+      try {
+        const { order: saved } = await api(`/api/orders?id=${encodeURIComponent(order.id)}`, { method: 'PATCH', body });
+        givePendingRef.current -= 1;
+        epochRef.current += 1;
+        if (givePendingRef.current === 0) setOrders((list) => list && list.map((o) => (o.id === saved.id ? saved : o)));
+      } catch (err) {
+        givePendingRef.current -= 1;
+        if (err.status === 401) { logout('Session expired — log in again.'); return; }
+        setStoreError(err.message || 'Could not record that hand-over — try again.');
+        load();
+      }
+    });
+  };
+
   const unavailableSet = new Set(storeInfo?.unavailable || []);
 
-  const fireNext = useMemo(() => {
-    if (!orders) return { pizzas: [], addons: [], waiting: 0, oldest: null };
-    const queued = orders.filter((o) => o.status === 'new');
-    const pizzas = new Map();
-    const addons = new Map();
-    for (const o of queued) {
-      for (const it of o.items) {
-        // Pizzas get the bright chips; everything else (add-ons, desserts,
-        // sides) is dimmed — a dessert-only order must still show up here.
-        if (it.category === PIZZA_CATEGORY) pizzas.set(it.name, (pizzas.get(it.name) || 0) + it.qty);
-        else addons.set(it.name, (addons.get(it.name) || 0) + it.qty);
-        // add-ons attached to slices (each applies once per slice in the line)
-        for (const a of it.addons ?? []) addons.set(a.name, (addons.get(a.name) || 0) + it.qty);
-      }
-    }
-    const sorted = (m) => [...m.entries()].sort((a, b) => b[1] - a[1]);
-    return {
-      pizzas: sorted(pizzas),
-      addons: sorted(addons),
-      waiting: queued.length,
-      oldest: queued.length ? Math.min(...queued.map((o) => o.createdAt)) : null,
-    };
-  }, [orders]);
+  const fireNext = useMemo(() => fireNextCounts(orders), [orders]);
 
   useBoardTitle({
     waiting: orders ? orders.filter((o) => o.status === 'new').length : 0,
@@ -651,7 +680,7 @@ export function AdminPage({ nav, onAuthChange }) {
       ) : (
         <OrderTable
           orders={orders} view={view} soldOut={soldOutNames(storeInfo)}
-          onAdvance={advance} onCancel={cancel} onEdit={editOrder} onEditItems={editItems}
+          onAdvance={advance} onCancel={cancel} onEdit={editOrder} onEditItems={editItems} onGive={give}
         />
       )}
 

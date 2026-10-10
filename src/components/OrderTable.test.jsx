@@ -201,3 +201,130 @@ describe('changing an order', () => {
     expect(onEditItems).not.toHaveBeenCalled();
   });
 });
+
+// ── Partial pickup ────────────────────────────────────────────────────
+describe('handing over part of an order', () => {
+  const SECOND = MENU_DATA[0].items[1];
+  const ADDON = MENU_DATA[1].items[0];
+  const second = { ...line, name: SECOND.name, qty: 1 };
+  const dressed = { ...line, qty: 1, addons: [{ name: ADDON.name, priceCents: 100 }] };
+
+  const renderGive = (items, props = {}) => {
+    const onGive = vi.fn();
+    const utils = renderTable({ orders: [order({ items })], onGive, ...props });
+    return { ...utils, onGive };
+  };
+  const handOver = (what) => screen.getByRole('button', { name: `Hand over one ${what} to Sam` });
+  const takeBack = (what) => screen.queryByRole('button', { name: `Take back one ${what} from Sam` });
+
+  it('has a second slice and an add-on to hand over', () => {
+    expect(SECOND).toBeDefined();
+    expect(ADDON).toBeDefined();
+  });
+
+  it('gives out one slice per tap, as a running count against that line', async () => {
+    const items = [line, second];
+    const { onGive } = renderGive(items);
+    await userEvent.click(handOver(SLICE.name));
+    expect(onGive).toHaveBeenCalledWith(expect.objectContaining({ id: 'o1' }), items[0], 1);
+    await userEvent.click(handOver(SECOND.name));
+    expect(onGive).toHaveBeenLastCalledWith(expect.anything(), items[1], 1);
+  });
+
+  it('counts on from what has already gone, and offers to take one back', async () => {
+    const part = { ...line, qty: 3, given: 1 };
+    const { onGive } = renderGive([part, second]);
+    await userEvent.click(handOver(SLICE.name));
+    expect(onGive).toHaveBeenLastCalledWith(expect.anything(), part, 2);
+    await userEvent.click(takeBack(SLICE.name));
+    expect(onGive).toHaveBeenLastCalledWith(expect.anything(), part, 0);
+    // Nothing to take back on a line nobody has touched.
+    expect(takeBack(SECOND.name)).toBeNull();
+  });
+
+  it('marks the row partial, says how much has gone, and strikes the finished line only', () => {
+    for (const view of ['full', 'compact']) {
+      const { unmount } = renderGive([{ ...line, given: 2 }, second], { view });
+      expect(screen.getByText('Partial · 2 of 3 given')).toBeTruthy();
+      const [done, owed] = screen.getAllByRole('listitem');
+      expect(done.classList.contains('ot-line-done')).toBe(true);
+      expect(owed.classList.contains('ot-line-done')).toBe(false);
+      expect(handOver(SLICE.name).disabled).toBe(true);
+      expect(handOver(SECOND.name).disabled).toBe(false);
+      unmount();
+    }
+  });
+
+  it('shows no partial badge on an order nobody has collected from', () => {
+    renderGive([line, second]);
+    expect(screen.queryByText(/partial/i)).toBeNull();
+    expect(screen.queryByText(/given/i)).toBeNull();
+  });
+
+  it('hands over a slice split by add-ons per variation, not from the folded heading', async () => {
+    const plain = { ...line, qty: 2 };
+    const { onGive } = renderGive([plain, dressed]);
+    // The heading totals its variations and has no tick of its own.
+    expect(screen.queryByRole('button', { name: `Hand over one ${SLICE.name} to Sam` })).toBeNull();
+    await userEvent.click(handOver(`plain ${SLICE.name}`));
+    expect(onGive).toHaveBeenLastCalledWith(expect.anything(), plain, 1);
+    await userEvent.click(screen.getByRole('button', { name: new RegExp(`^Hand over one ${SLICE.name} \\+ .+ to Sam$`) }));
+    expect(onGive).toHaveBeenLastCalledWith(expect.anything(), dressed, 1);
+  });
+
+  it('withdraws cancel once anything has gone out', () => {
+    renderGive([{ ...line, given: 1 }, second]);
+    expect(screen.queryByRole('button', { name: /cancel sam/i })).toBeNull();
+  });
+
+  describe('in the order editor', () => {
+    const openEditor = async (items) => {
+      const onEditItems = vi.fn(async () => ({}));
+      renderTable({ orders: [order({ items })], onEditItems, onGive: vi.fn() });
+      await userEvent.click(screen.getByRole('button', { name: /change sam's order/i }));
+      return onEditItems;
+    };
+    const editorLines = () => screen.getAllByRole('listitem').filter((li) => li.classList.contains('oe-line'));
+
+    it('locks what has gone out and edits only what is still owed', async () => {
+      const onEditItems = await openEditor([{ ...line, qty: 3, given: 2 }, second]);
+      const [held, owed] = editorLines();
+      expect(held.classList.contains('oe-line-held')).toBe(true);
+      expect(held.textContent).toMatch(/^2×.*Handed over$/);
+      expect(held.querySelector('button')).toBeNull();
+      expect(owed.querySelector('.oe-qty').textContent).toBe('1');
+      // An add-on on the slice still owed must not re-describe the two eaten.
+      await userEvent.click(owed.querySelector('.oe-chip'));
+      await userEvent.click(screen.getByRole('button', { name: /save changes/i }));
+      expect(onEditItems.mock.calls[0][1]).toEqual([
+        { name: SLICE.name, qty: 2 },
+        { name: SLICE.name, qty: 1, addons: [ADDON.name] },
+        { name: SECOND.name, qty: 1 },
+      ]);
+    });
+
+    it('sends the order back whole when nothing is changed', async () => {
+      const onEditItems = await openEditor([{ ...line, qty: 3, given: 2 }, second]);
+      await userEvent.click(screen.getByRole('button', { name: /save changes/i }));
+      expect(onEditItems.mock.calls[0][1]).toEqual([{ name: SLICE.name, qty: 3 }, { name: SECOND.name, qty: 1 }]);
+    });
+
+    it('lets the rest be dropped, and says that closes the order', async () => {
+      const onEditItems = await openEditor([{ ...line, qty: 1, given: 1 }, second]);
+      expect(screen.queryByText(/marks this order picked up/i)).toBeNull();
+      await userEvent.click(screen.getByRole('button', { name: `Remove ${SECOND.name}` }));
+      expect(screen.getByText(/marks this order picked up/i)).toBeTruthy();
+      await userEvent.click(screen.getByRole('button', { name: /save changes/i }));
+      expect(onEditItems.mock.calls[0][1]).toEqual([{ name: SLICE.name, qty: 1 }]);
+    });
+
+    it('counts slices already handed over toward the per-slice cap', async () => {
+      const capped = MENU_DATA[0].items.find((it) => it.maxQty !== undefined);
+      expect(capped).toBeDefined();
+      const other = MENU_DATA[0].items.find((it) => it.name !== capped.name);
+      const cap = capped.maxQty;
+      await openEditor([{ ...line, name: capped.name, qty: cap, given: cap - 1 }, { ...line, name: other.name, qty: 1 }]);
+      expect(screen.getByRole('button', { name: `One more ${capped.name}` }).disabled).toBe(true);
+    });
+  });
+});

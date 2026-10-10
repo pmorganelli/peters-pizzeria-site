@@ -278,6 +278,210 @@ describe('PATCH /api/orders?id= — changing the items', () => {
   });
 });
 
+// ── Partial pickup ──────────────────────────────────────────────────
+// Slices leave the oven a pie at a time, so part of an order is often ready
+// before the rest and the window hands it over. These cover the count that
+// records that, and everything else on an order that has to respect it.
+describe('PATCH /api/orders?id= — handing over part of an order', () => {
+  const PER_BALL = SLICES_PER_BALL[DOUGH_TYPE];
+  const patchOrder = (id, body, headers = { Cookie: cookie }) =>
+    call(base, `/api/orders?id=${id}`, { method: 'PATCH', headers, body });
+  const give = (id, name, count, addons) =>
+    patchOrder(id, { given: { name, count, ...(addons ? { addons } : {}) } });
+  const setStatus = (id, status) => patchOrder(id, { status });
+  const setItems = (id, items) => patchOrder(id, { items });
+  // One of each of two slices — the cheese-and-pepperoni case the feature is for.
+  const placeTwo = async (first = 1, second = 1) => (await postOrder({
+    name: 'Partial',
+    items: [{ name: DOUGH_ITEM.name, qty: first }, { name: SAME_DOUGH_ITEM.name, qty: second }],
+  })).body.order;
+  const givenOf = (order, name) => order.items.find((it) => it.name === name && !it.addons)?.given;
+  const used = async () => (await getDoughUsed())[DOUGH_TYPE] ?? 0;
+
+  it('has two different slices and an add-on to hand over', () => {
+    expect(DOUGH_ITEM).toBeDefined();
+    expect(SAME_DOUGH_ITEM).toBeDefined();
+    expect(ADDON_NAME).toBeDefined();
+  });
+
+  it('401s without a session', async () => {
+    const o = await placeTwo();
+    expect((await patchOrder(o.id, { given: { name: DOUGH_ITEM.name, count: 1 } }, {})).status).toBe(401);
+  });
+
+  it('records the slice that went out and leaves the order live, in the stage it was in', async () => {
+    const o = await placeTwo();
+    await setStatus(o.id, 'firing');
+    const { status, body } = await give(o.id, DOUGH_ITEM.name, 1);
+    expect(status).toBe(200);
+    expect(givenOf(body.order, DOUGH_ITEM.name)).toBe(1);
+    expect(givenOf(body.order, SAME_DOUGH_ITEM.name)).toBeUndefined();
+    expect(body.order.status).toBe('firing');
+  });
+
+  it('works on an order that has not been fired yet', async () => {
+    const o = await placeTwo();
+    const { status, body } = await give(o.id, DOUGH_ITEM.name, 1);
+    expect(status).toBe(200);
+    expect(body.order.status).toBe('new');
+  });
+
+  it('completes the order when its last slice goes out', async () => {
+    const o = await placeTwo(2, 1);
+    expect((await give(o.id, DOUGH_ITEM.name, 2)).body.order.status).toBe('new');
+    const { body } = await give(o.id, SAME_DOUGH_ITEM.name, 1);
+    expect(body.order.status).toBe('done');
+    // …and it is final, like any other picked-up order.
+    expect((await give(o.id, SAME_DOUGH_ITEM.name, 0)).status).toBe(409);
+    expect((await setStatus(o.id, 'ready')).status).toBe(409);
+  });
+
+  it('takes a count, not a tap — sending the same hand-over twice gives one slice', async () => {
+    const o = await placeTwo(3, 1);
+    await give(o.id, DOUGH_ITEM.name, 1);
+    const { body } = await give(o.id, DOUGH_ITEM.name, 1);
+    expect(givenOf(body.order, DOUGH_ITEM.name)).toBe(1);
+  });
+
+  it('lets a mis-tap be taken back, all the way to nothing', async () => {
+    const o = await placeTwo(2, 1);
+    await give(o.id, DOUGH_ITEM.name, 2);
+    expect(givenOf((await give(o.id, DOUGH_ITEM.name, 1)).body.order, DOUGH_ITEM.name)).toBe(1);
+    const { body } = await give(o.id, DOUGH_ITEM.name, 0);
+    // Removed rather than stored as 0 or null — see the cjson note in store.js.
+    expect(body.order.items.find((it) => it.name === DOUGH_ITEM.name)).not.toHaveProperty('given');
+  });
+
+  it('refuses more slices than the line has, a line the order does not have, and junk', async () => {
+    const o = await placeTwo(2, 1);
+    expect((await give(o.id, DOUGH_ITEM.name, 3)).status).toBe(400);
+    expect((await give(o.id, 'Not A Pizza', 1)).status).toBe(409);
+    for (const bad of [{ name: DOUGH_ITEM.name, count: -1 }, { name: DOUGH_ITEM.name, count: 1.5 },
+      { name: DOUGH_ITEM.name }, { count: 1 }, { name: DOUGH_ITEM.name, count: 1, addons: 'x' }, 'nope', null]) {
+      expect((await patchOrder(o.id, { given: bad })).status).toBe(400);
+    }
+    // Nothing above left a mark.
+    const { body } = await call(base, `/api/orders?id=${o.id}`);
+    expect(body.order.items.every((it) => it.given === undefined)).toBe(true);
+  });
+
+  it('404s an order that is not there', async () => {
+    expect((await give('onope', DOUGH_ITEM.name, 1)).status).toBe(404);
+  });
+
+  it('tells a slice with an add-on from the plain one beside it', async () => {
+    const { body: placed } = await postOrder({
+      name: 'Split',
+      items: [{ name: DOUGH_ITEM.name, qty: 2 }, { name: DOUGH_ITEM.name, qty: 1, addons: [ADDON_NAME] }],
+    });
+    const { body } = await give(placed.order.id, DOUGH_ITEM.name, 1, [ADDON_NAME]);
+    const [plain, dressed] = body.order.items;
+    expect(plain.given).toBeUndefined();
+    expect(dressed.given).toBe(1);
+    // The add-on line named without its add-on is the plain line, not a guess.
+    const again = await give(placed.order.id, DOUGH_ITEM.name, 2);
+    expect(again.body.order.items[0].given).toBe(2);
+    expect(again.body.order.status).toBe('done');
+  });
+
+  it('shows the customer what has gone out, on both public reads', async () => {
+    const o = await placeTwo();
+    await give(o.id, DOUGH_ITEM.name, 1);
+    for (const path of [`/api/orders?id=${o.id}`, `/api/orders?find=${o.code}`]) {
+      const { body } = await call(base, path);
+      expect(givenOf(body.order, DOUGH_ITEM.name)).toBe(1);
+      expect(body.order.status).toBe('new');
+    }
+  });
+
+  it('marks every slice handed over when the whole order is picked up at once', async () => {
+    const o = await placeTwo(2, 1);
+    await give(o.id, DOUGH_ITEM.name, 1);
+    const { body } = await setStatus(o.id, 'done');
+    expect(body.order.items.map((it) => it.given)).toEqual([2, 1]);
+  });
+
+  it('will not cancel an order once part of it has gone out', async () => {
+    await openStore({ dough: { [DOUGH_TYPE]: 1 } });
+    const o = await placeTwo();
+    await give(o.id, DOUGH_ITEM.name, 1);
+    const { status, body } = await setStatus(o.id, 'cancelled');
+    expect(status).toBe(409);
+    expect(body.handedOver).toBe(1);
+    // Still live, and nothing was refunded for a slice that left the building.
+    expect((await call(base, `/api/orders?id=${o.id}`)).body.order.status).toBe('new');
+    expect(await used()).toBe(2);
+    // Taken back, it is an ordinary new order again and cancels normally.
+    await give(o.id, DOUGH_ITEM.name, 0);
+    expect((await setStatus(o.id, 'cancelled')).status).toBe(200);
+    expect(await used()).toBe(0);
+  });
+
+  it('does not touch the dough count — the slice was spent when it was ordered', async () => {
+    expect(PER_BALL).toBeGreaterThan(3); // or the order below would not fit in one ball
+    await openStore({ dough: { [DOUGH_TYPE]: 1 } });
+    const o = await placeTwo(2, 1);
+    await give(o.id, DOUGH_ITEM.name, 2);
+    await give(o.id, SAME_DOUGH_ITEM.name, 1);
+    expect(await used()).toBe(3);
+  });
+
+  describe('changing an order that is partly handed over', () => {
+    it('keeps the count through a change to the rest of the order', async () => {
+      const o = await placeTwo(3, 1);
+      await give(o.id, DOUGH_ITEM.name, 2);
+      const { status, body } = await setItems(o.id, [
+        { name: SAME_DOUGH_ITEM.name, qty: 2, addons: [ADDON_NAME] },
+        { name: DOUGH_ITEM.name, qty: 3 },
+      ]);
+      expect(status).toBe(200);
+      expect(givenOf(body.order, DOUGH_ITEM.name)).toBe(2);
+      expect(body.order.items.find((it) => it.name === SAME_DOUGH_ITEM.name).given).toBeUndefined();
+    });
+
+    it('refuses to take off, shrink or re-describe slices that already went out', async () => {
+      const o = await placeTwo(3, 1);
+      await give(o.id, DOUGH_ITEM.name, 2);
+      const refused = [
+        [{ name: SAME_DOUGH_ITEM.name, qty: 1 }],                                   // line removed
+        [{ name: DOUGH_ITEM.name, qty: 1 }, { name: SAME_DOUGH_ITEM.name, qty: 1 }], // below what went out
+        [{ name: DOUGH_ITEM.name, qty: 3, addons: [ADDON_NAME] }, { name: SAME_DOUGH_ITEM.name, qty: 1 }], // add-on added after the fact
+      ];
+      for (const items of refused) {
+        const { status, body } = await setItems(o.id, items);
+        expect(status).toBe(409);
+        expect(body.handedOver).toBe(DOUGH_ITEM.name);
+      }
+      // Refused whole: the order is exactly as it was.
+      const { body } = await call(base, `/api/orders?id=${o.id}`);
+      expect(body.order.items.map((it) => [it.name, it.qty, it.given])).toEqual([
+        [DOUGH_ITEM.name, 3, 2], [SAME_DOUGH_ITEM.name, 1, undefined],
+      ]);
+    });
+
+    it('allows shrinking a line down to exactly what went out', async () => {
+      const o = await placeTwo(3, 1);
+      await give(o.id, DOUGH_ITEM.name, 2);
+      const { status, body } = await setItems(o.id, [{ name: DOUGH_ITEM.name, qty: 2 }, { name: SAME_DOUGH_ITEM.name, qty: 1 }]);
+      expect(status).toBe(200);
+      expect(body.order.status).toBe('new'); // the other slice is still owed
+    });
+
+    it('completes the order when the customer drops everything still owed', async () => {
+      await openStore({ dough: { [DOUGH_TYPE]: 1 } });
+      const o = await placeTwo(1, 1);
+      await give(o.id, DOUGH_ITEM.name, 1);
+      const { status, body } = await setItems(o.id, [{ name: DOUGH_ITEM.name, qty: 1 }]);
+      expect(status).toBe(200);
+      expect(body.order.status).toBe('done');
+      expect(body.order.totalCents).toBe(o.items[0].priceCents);
+      // The dropped slice was never fired (the order was still new), so its
+      // dough goes back; the one that went out stays spent.
+      expect(await used()).toBe(1);
+    });
+  });
+});
+
 describe('PII in public order reads', () => {
   it('never returns contact or notes on a public lookup', async () => {
     // `contact` is no longer collected, but an order written before it was

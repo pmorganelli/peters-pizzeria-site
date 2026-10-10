@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Minus, Plus, X } from 'lucide-react';
 import { MENU_DATA } from '../data/menu';
-import { DEFAULT_MAX_QTY, addonLabel, displayName, fmtMoney, parsePriceCents } from '../utils/orders';
+import { DEFAULT_MAX_QTY, addonLabel, displayName, fmtMoney, givenQty, parsePriceCents } from '../utils/orders';
 
 const SLICES = MENU_DATA[0].items;
 const ADDONS = MENU_DATA[1].items;
@@ -33,9 +33,21 @@ const previewCents = (lines) =>
 // Changing what a customer ordered, in place under their row. Edits are local
 // until Save, so the 5-second poll can't reset them, and nothing is sent until
 // the staffer means it — a half-edited order must never reach the kitchen.
+//
+// Slices already handed over are split off into their own locked rows and only
+// what's still owed is editable. That keeps the two from being edited as one:
+// with "2 of 3 given" on a single stepper, toggling an add-on would re-describe
+// slices the customer has already eaten, and the server would refuse the save
+// for taking them off the order. Both halves are snapshotted when the editor
+// opens — a hand-over on another device mid-edit can't shift the rows under
+// the staffer's fingers, and the server has the final say on save either way.
 export function OrderItemEditor({ order, soldOut, onSave, onClose }) {
+  const [held] = useState(() =>
+    order.items.filter((it) => givenQty(it) > 0)
+      .map((it) => ({ name: it.name, qty: givenQty(it), addons: (it.addons ?? []).map((a) => a.name) })));
   const [lines, setLines] = useState(() =>
-    order.items.map((it) => ({ name: it.name, qty: it.qty, addons: (it.addons ?? []).map((a) => a.name) })));
+    order.items.filter((it) => it.qty > givenQty(it))
+      .map((it) => ({ name: it.name, qty: it.qty - givenQty(it), addons: (it.addons ?? []).map((a) => a.name) })));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -43,7 +55,7 @@ export function OrderItemEditor({ order, soldOut, onSave, onClose }) {
   // adding something sold out is refused (same rule as the server).
   const had = new Set(order.items.flatMap((it) => [it.name, ...(it.addons ?? []).map((a) => a.name)]));
   const blocked = (name) => soldOut.has(name) && !had.has(name);
-  const totalOf = (name) => lines.filter((l) => l.name === name).reduce((sum, l) => sum + l.qty, 0);
+  const totalOf = (name) => [...held, ...lines].filter((l) => l.name === name).reduce((sum, l) => sum + l.qty, 0);
   const atCap = (name) => totalOf(name) >= (MAX_QTY.get(name) ?? DEFAULT_MAX_QTY);
 
   const update = (i, patch) => setLines((ls) => ls.map((l, j) => (j === i ? { ...l, ...patch } : l)));
@@ -58,7 +70,9 @@ export function OrderItemEditor({ order, soldOut, onSave, onClose }) {
     else setLines((ls) => [...ls, { name, qty: 1, addons: [] }]);
   };
 
-  const merged = mergeLines(lines);
+  const merged = mergeLines([...held, ...lines]);
+  // Nothing left to make: the customer is leaving with what they already have.
+  const closesOrder = held.length > 0 && lines.length === 0;
 
   const save = async () => {
     setBusy(true);
@@ -72,6 +86,16 @@ export function OrderItemEditor({ order, soldOut, onSave, onClose }) {
   return (
     <div className="oe" role="group" aria-label={`Change ${order.name}'s order`}>
       <ul className="oe-lines">
+        {held.map((l) => (
+          <li key={`held:${lineKey(l)}`} className="oe-line oe-line-held">
+            <span className="oe-held-qty">{l.qty}×</span>
+            <span className="oe-name">
+              {l.name}
+              {l.addons.length > 0 && <span className="oe-held-addons"> + {l.addons.map((a) => addonLabel(a, l.name)).join(', ')}</span>}
+            </span>
+            <span className="oe-held-tag">Handed over</span>
+          </li>
+        ))}
         {lines.map((l, i) => (
           // Lines are reordered only by being appended or removed, and two
           // lines can briefly share a name+add-on key mid-edit, so position is
@@ -89,7 +113,7 @@ export function OrderItemEditor({ order, soldOut, onSave, onClose }) {
                 </button>
               </div>
               <span className="oe-name">{l.name}</span>
-              <button type="button" className="oe-remove" aria-label={`Remove ${l.name}`} disabled={lines.length === 1} onClick={() => remove(i)}>
+              <button type="button" className="oe-remove" aria-label={`Remove ${l.name}`} disabled={lines.length === 1 && held.length === 0} onClick={() => remove(i)}>
                 <X size={13} />
               </button>
             </div>
@@ -120,6 +144,9 @@ export function OrderItemEditor({ order, soldOut, onSave, onClose }) {
           </button>
         ))}
       </div>
+      {closesOrder && (
+        <div className="oe-note" role="status">Nothing left to make — saving marks this order picked up.</div>
+      )}
       {error && <div className="order-error oe-error" role="alert">{error}</div>}
       <div className="oe-foot">
         <span className="oe-total">

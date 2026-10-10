@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addonLabel, clampCartQty, formatOrderItems, groupOrderLines } from './orders.js';
+import { addonLabel, clampCartQty, fireNextCounts, formatOrderItems, givenQty, groupOrderLines, orderProgress } from './orders.js';
 import { MENU_DATA } from '../data/menu.js';
 
 // These cases are about a *relationship* — does this slice's description
@@ -119,10 +119,11 @@ describe('groupOrderLines', () => {
   it('folds one slice split across add-on combinations into one entry with its variations', () => {
     const [cheese, other] = groupOrderLines([line(A, 2), line(B, 1), line(A, 1, [X, Y])]);
     expect(cheese).toMatchObject({ name: A.name, qty: 3, addons: [] });
-    expect(cheese.variants).toEqual([
+    expect(cheese.variants).toMatchObject([
       { qty: 2, addons: [] },
       { qty: 1, addons: [addonLabel(X.name, A.name), addonLabel(Y.name, A.name)] },
     ]);
+    expect(cheese.variants).toHaveLength(2);
     // Order of first appearance, not alphabetical — matches how it was rung up.
     expect(other).toMatchObject({ name: B.name, qty: 1, variants: [] });
   });
@@ -135,5 +136,77 @@ describe('groupOrderLines', () => {
   it('lists the biggest variation first', () => {
     const [g] = groupOrderLines([line(A, 1, [X]), line(A, 3)]);
     expect(g.variants.map((v) => v.qty)).toEqual([3, 1]);
+  });
+
+  it('carries the stored line with each entry, since that is what a hand-over is recorded against', () => {
+    const plain = line(A, 2);
+    const dressed = line(A, 1, [X]);
+    const solo = line(B, 1);
+    const [split, single] = groupOrderLines([plain, dressed, solo]);
+    expect(split.item).toBeUndefined(); // a heading over its variations, not a line
+    expect(split.variants.map((v) => v.item)).toEqual([plain, dressed]);
+    expect(single.item).toBe(solo);
+  });
+
+  it('totals what has been handed over per slice and per variation', () => {
+    const [g] = groupOrderLines([{ ...line(A, 2), given: 1 }, { ...line(A, 1, [X]), given: 1 }]);
+    expect(g).toMatchObject({ qty: 3, given: 2 });
+    expect(g.variants.map((v) => v.given)).toEqual([1, 1]);
+  });
+});
+
+describe('partial pickup', () => {
+  const SLICE_CAT = MENU_DATA[0].category;
+  const [A, B] = MENU_DATA[0].items;
+  const [X] = MENU_DATA[1].items;
+  const line = (item, qty, given, addons = []) => ({
+    name: item.name, category: SLICE_CAT, qty, priceCents: 100,
+    ...(given === undefined ? {} : { given }),
+    ...(addons.length ? { addons: addons.map((a) => ({ name: a.name, priceCents: 50 })) } : {}),
+  });
+
+  it('reads a missing, malformed or negative count as nothing handed over', () => {
+    for (const given of [undefined, null, 'two', -1, 1.5, NaN]) {
+      expect(givenQty({ qty: 3, given })).toBe(0);
+    }
+    expect(givenQty({ qty: 3, given: 2 })).toBe(2);
+  });
+
+  it('never reads more handed over than the line has', () => {
+    expect(givenQty({ qty: 2, given: 9 })).toBe(2);
+  });
+
+  it('is partial only between none and all', () => {
+    expect(orderProgress([line(A, 2), line(B, 1)])).toEqual({ total: 3, given: 0, partial: false });
+    expect(orderProgress([line(A, 2, 1), line(B, 1)])).toEqual({ total: 3, given: 1, partial: true });
+    expect(orderProgress([line(A, 2, 2), line(B, 1, 1)])).toEqual({ total: 3, given: 3, partial: false });
+    expect(orderProgress(undefined)).toEqual({ total: 0, given: 0, partial: false });
+  });
+
+  describe('fireNextCounts', () => {
+    const order = (items, over = {}) => ({ id: 'o', status: 'new', createdAt: 1000, items, ...over });
+
+    it('counts only waiting orders, and their add-ons once per slice', () => {
+      const out = fireNextCounts([
+        order([line(A, 2, undefined, [X]), line(B, 1)]),
+        order([line(A, 3)], { status: 'firing' }),
+      ]);
+      expect(out.pizzas).toEqual([[A.name, 2], [B.name, 1]]);
+      expect(out.addons).toEqual([[X.name, 2]]);
+      expect(out.waiting).toBe(1);
+    });
+
+    it('leaves out slices already handed over, add-ons and all', () => {
+      const out = fireNextCounts([order([line(A, 3, 2, [X]), line(B, 1, 1)])]);
+      expect(out.pizzas).toEqual([[A.name, 1]]);
+      expect(out.addons).toEqual([[X.name, 1]]);
+      // Still one order waiting — it has a slice to make.
+      expect(out.waiting).toBe(1);
+    });
+
+    it('reports an empty oven queue for no orders or none loaded yet', () => {
+      expect(fireNextCounts(null)).toEqual({ pizzas: [], addons: [], waiting: 0, oldest: null });
+      expect(fireNextCounts([order([line(A, 1)], { status: 'ready' })]).waiting).toBe(0);
+    });
   });
 });

@@ -1131,6 +1131,12 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 44px 60p
 .order-empty { font-family: var(--serif); font-size: 15px; color: var(--ink2); padding: 8px 0 4px; }
 .order-line { display: flex; align-items: baseline; gap: 10px; font-family: var(--serif); font-size: 15px; color: var(--ink2); padding: 5px 0; }
 .order-line-name { flex: 1; }
+/* "picked up" beside a line on the status card, while the rest is still coming */
+.order-line-given {
+  display: inline-flex; align-items: center; gap: 4px; margin-left: 10px; white-space: nowrap;
+  font-family: var(--ui); font-size: 10px; font-weight: 600; letter-spacing: var(--track-label);
+  text-transform: uppercase; color: var(--green);
+}
 .order-line > span:last-child { font-family: var(--ui); font-size: 13px; color: var(--ink); }
 .order-line-x { color: rgba(26,18,8,0.3); display: flex; align-items: center; transition: color 0.15s; align-self: center; }
 .order-line-x:hover { color: var(--red); }
@@ -1516,13 +1522,44 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 44px 60p
 .ot-item-pizza { color: var(--cream); }
 .ot-slice { display: flex; align-items: baseline; gap: 6px; line-height: 1.3; }
 .ot-qty { flex: none; min-width: 22px; font-family: var(--ui); font-size: 12px; font-weight: 600; color: var(--gold); }
-.ot-details { display: flex; flex-direction: column; padding-left: 28px; margin-top: 1px; }
+.ot-details { display: flex; flex-direction: column; padding-left: 60px; margin-top: 1px; }
 .ot-detail { font-size: 13px; line-height: 1.35; color: rgba(254,245,239,0.55); }
 .ot-detail-qty { font-family: var(--ui); font-size: 11px; color: rgba(254,245,239,0.75); }
 .ot-items-compact { gap: 2px; }
 .ot-items-compact li { flex-direction: row; flex-wrap: wrap; align-items: baseline; column-gap: 10px; }
 .ot-items-compact .ot-details { flex-direction: row; flex-wrap: wrap; column-gap: 10px; padding-left: 0; margin-top: 0; }
-.ot-items-compact .ot-detail + .ot-detail::before { content: '·'; margin-right: 10px; color: rgba(254,245,239,0.3); }
+.ot-items-compact .ot-detail-line + .ot-detail-line::before { content: '·'; color: rgba(254,245,239,0.3); }
+/* ── Partial pickup ──
+   A tick leads every line that can be handed over, in its own fixed gutter so
+   the counts and names beside it still line up down the cell. Lines that are
+   only a heading over their variations get an empty gutter the same width. */
+.ot-line, .ot-detail-line { display: flex; align-items: center; gap: 8px; }
+.ot-give, .ot-give-gap { flex: none; width: 24px; height: 24px; }
+.ot-give {
+  display: flex; align-items: center; justify-content: center; border-radius: 50%;
+  border: 1px solid rgba(254,245,239,0.24); color: rgba(254,245,239,0.3);
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+@media (hover: hover) { .ot-give:not(:disabled):hover { color: var(--green-light); border-color: var(--green-light); } }
+.ot-give-all { background: var(--green-light); border-color: var(--green-light); color: var(--ink); cursor: default; }
+/* The variations carry their own ticks, so they sit one gutter in; a plain
+   add-on line has none and hangs under the slice name instead (60px above). */
+.ot-details-ticks { padding-left: 32px; gap: 3px; margin-top: 3px; }
+.ot-line-done .ot-slice, .ot-line-done .ot-detail { text-decoration: line-through; opacity: 0.45; }
+.ot-given { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.ot-given-count, .ot-partial {
+  font-family: var(--ui); font-size: 10px; font-weight: 600; letter-spacing: var(--track-label);
+  text-transform: uppercase; color: var(--green-light);
+}
+.ot-take-back {
+  width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+  border-radius: 50%; color: rgba(254,245,239,0.45); transition: color 0.15s, background 0.15s;
+}
+@media (hover: hover) { .ot-take-back:hover { color: var(--cream); background: rgba(254,245,239,0.1); } }
+.ot-partial { margin-top: 7px; }
+.ot-compact .ot-partial { margin-top: 2px; }
+.ot-items-compact .ot-details, .ot-items-compact .ot-details-ticks { padding-left: 0; margin-top: 0; }
+.ot-items-compact .ot-give, .ot-items-compact .ot-give-gap { width: 22px; height: 22px; }
 .ot-total, .ot-age { font-family: var(--ui); font-size: 12px; color: rgba(254,245,239,0.55); }
 .ot-age { color: rgba(254,245,239,0.45); }
 /* Editable cells read as plain text; the box only appears on hover/focus. */
@@ -1580,6 +1617,17 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 44px 60p
 .oe-chip-on { background: rgba(200,147,58,0.2); border-color: var(--gold); color: var(--cream); }
 .oe-chip:disabled { opacity: 0.35; cursor: not-allowed; }
 .oe-error { margin: 0; }
+/* Slices already handed over: shown so the order still reads whole, but not
+   editable — see OrderItemEditor. */
+.oe-line-held { flex-direction: row; align-items: center; gap: 12px; }
+.oe-line-held .oe-name { color: rgba(254,245,239,0.5); text-decoration: line-through; }
+.oe-held-qty { min-width: 24px; text-align: center; font-family: var(--ui); font-size: 13px; color: rgba(254,245,239,0.5); }
+.oe-held-addons { font-size: 13px; }
+.oe-held-tag {
+  font-family: var(--ui); font-size: 10px; font-weight: 600; letter-spacing: var(--track-label);
+  text-transform: uppercase; color: var(--green-light); white-space: nowrap;
+}
+.oe-note { font-family: var(--serif); font-style: italic; font-size: 14px; color: rgba(254,245,239,0.7); }
 .oe-foot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .oe-total { flex: 1; font-family: var(--ui); font-size: 11px; letter-spacing: var(--track-label); text-transform: uppercase; color: rgba(254,245,239,0.55); }
 .oe-total strong { color: var(--gold); font-size: 14px; margin-left: 4px; }
@@ -1893,6 +1941,13 @@ body, .story-section, .home-latest, .menu-page, .blog-page, .article-page {
   .ot-row .ot-col-stage { grid-column: 1; padding-top: 8px; }
   .ot-row .ot-col-actions { grid-column: 2; padding-top: 8px; align-self: end; }
   .ot-editor-row td { padding: 0 8px 14px 11px; }
+  /* Ticked with a thumb at the window, so they get a real touch target here. */
+  .ot-give, .ot-give-gap, .ot-items-compact .ot-give { width: 30px; height: 30px; }
+  .ot-take-back { width: 30px; height: 30px; }
+  .ot-items { gap: 7px; }
+  .ot-details { padding-left: 66px; }
+  .ot-details-ticks { padding-left: 38px; }
+  .ot-row .ot-partial { margin-top: 4px; }
   .oe { padding: 12px; }
   /* .store-modes goes full-width on phones for the storefront panel; the
      view toggle shares its look but not that layout. */

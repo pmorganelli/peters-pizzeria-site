@@ -1,8 +1,8 @@
 import { Fragment, useState } from 'react';
-import { Check, Pencil, X } from 'lucide-react';
+import { Check, Pencil, Undo2, X } from 'lucide-react';
 import { OrderItemEditor } from './OrderItemEditor';
 import { MENU_DATA } from '../data/menu';
-import { ageLabel, displayName, fmtMoney, groupOrderLines } from '../utils/orders';
+import { ageLabel, displayName, fmtMoney, givenQty, groupOrderLines, orderProgress } from '../utils/orders';
 
 const PIZZA_CATEGORY = MENU_DATA[0].category;
 const ADDON_CATEGORY = MENU_DATA[1].category;
@@ -62,23 +62,78 @@ function EditableText({ value, onSave, label, placeholder, maxLength, required =
 // compact trails them on the same line so each slice stays one row tall.
 const addonText = (labels) => `+ ${labels.join(', ')}`;
 
-function Items({ items, compact }) {
+// Handing over part of an order. The tick gives out one more slice of this
+// line; once any have gone, the count and a take-back appear beside it. One
+// slice per tap rather than a whole line at once, because that is how they
+// leave the window — and a line's last slice is no different from its first,
+// so there is no separate "all of these" control to mis-hit.
+//
+// The tick leads the line, in a fixed gutter, so it reads as a checklist and
+// the slice names still line up down the cell.
+function Give({ order, item, what, onGive }) {
+  const given = givenQty(item);
+  return (
+    <button
+      type="button" className={`ot-give${given >= item.qty ? ' ot-give-all' : ''}`}
+      disabled={given >= item.qty}
+      aria-label={`Hand over one ${what} to ${order.name}`}
+      onClick={() => onGive(order, item, given + 1)}
+    >
+      <Check size={12} />
+    </button>
+  );
+}
+
+function Given({ order, item, what, onGive }) {
+  const given = givenQty(item);
+  if (given === 0) return null;
+  return (
+    <span className="ot-given">
+      <span className="ot-given-count">{item.qty === 1 ? 'given' : `${given} of ${item.qty} given`}</span>
+      <button
+        type="button" className="ot-take-back"
+        aria-label={`Take back one ${what} from ${order.name}`}
+        onClick={() => onGive(order, item, given - 1)}
+      >
+        <Undo2 size={11} />
+      </button>
+    </span>
+  );
+}
+
+function Items({ order, compact, onGive }) {
   return (
     <ul className={`ot-items${compact ? ' ot-items-compact' : ''}`}>
-      {groupOrderLines(items).map((g) => {
+      {groupOrderLines(order.items).map((g) => {
+        const label = g.category === ADDON_CATEGORY ? `+ ${displayName(g.name)}` : g.name;
+        // A slice split across add-on combinations is handed over per
+        // combination — the one with hot honey is a particular slice — so the
+        // ticks move down onto the variations and the heading only totals them.
         const details = g.variants.length > 0
-          ? g.variants.map((v) => ({ qty: v.qty, text: v.addons.length ? addonText(v.addons) : 'plain' }))
+          ? g.variants.map((v) => ({
+            qty: v.qty, item: v.item, done: v.given >= v.qty,
+            text: v.addons.length ? addonText(v.addons) : 'plain',
+            what: v.addons.length ? `${g.name} ${addonText(v.addons)}` : `plain ${g.name}`,
+          }))
           : g.addons.length > 0 ? [{ qty: null, text: addonText(g.addons) }] : [];
         return (
-          <li key={g.name} className={g.category === PIZZA_CATEGORY ? 'ot-item-pizza' : undefined}>
-            <span className="ot-slice">
-              <span className="ot-qty">{g.qty}×</span> {g.category === ADDON_CATEGORY ? `+ ${displayName(g.name)}` : g.name}
+          <li key={g.name} className={`${g.category === PIZZA_CATEGORY ? 'ot-item-pizza' : ''}${g.given >= g.qty ? ' ot-line-done' : ''}`}>
+            <span className="ot-line">
+              {g.item ? <Give order={order} item={g.item} what={g.name} onGive={onGive} /> : <span className="ot-give-gap" aria-hidden="true" />}
+              <span className="ot-slice">
+                <span className="ot-qty">{g.qty}×</span> {label}
+              </span>
+              {g.item && <Given order={order} item={g.item} what={g.name} onGive={onGive} />}
             </span>
             {details.length > 0 && (
-              <span className="ot-details">
+              <span className={`ot-details${g.variants.length > 0 ? ' ot-details-ticks' : ''}`}>
                 {details.map((d) => (
-                  <span key={d.text} className="ot-detail">
-                    {d.qty !== null && <span className="ot-detail-qty">{d.qty}</span>} {d.text}
+                  <span key={d.text} className={`ot-detail-line${d.done ? ' ot-line-done' : ''}`}>
+                    {d.item && <Give order={order} item={d.item} what={d.what} onGive={onGive} />}
+                    <span className="ot-detail">
+                      {d.qty !== null && <span className="ot-detail-qty">{d.qty}</span>} {d.text}
+                    </span>
+                    {d.item && <Given order={order} item={d.item} what={d.what} onGive={onGive} />}
                   </span>
                 ))}
               </span>
@@ -115,7 +170,7 @@ function StageSwitch({ order, onMove }) {
   );
 }
 
-export function OrderTable({ orders, view, soldOut = new Set(), onAdvance, onCancel, onEdit, onEditItems }) {
+export function OrderTable({ orders, view, soldOut = new Set(), onAdvance, onCancel, onEdit, onEditItems, onGive }) {
   const compact = view === 'compact';
   const [editingId, setEditingId] = useState(null);
   const cols = compact ? DATA_COLS_COMPACT : DATA_COLS_FULL;
@@ -148,17 +203,24 @@ export function OrderTable({ orders, view, soldOut = new Set(), onAdvance, onCan
           )}
           {rows.map((o) => {
             const editing = editingId === o.id;
+            const progress = orderProgress(o.items);
             return (
               <Fragment key={o.id}>
-                <tr className={`ot-row${editing ? ' ot-row-editing' : ''}`}>
+                <tr className={`ot-row${editing ? ' ot-row-editing' : ''}${progress.partial ? ' ot-row-partial' : ''}`}>
                   <td className="ot-col-name">
                     <EditableText
                       value={o.name} label={`Name on this order (${stage.label})`}
                       maxLength={60} required onSave={(name) => onEdit(o, { name })}
                     />
+                    {/* The row stays in its band — the band says where the
+                        slices still owed are up to — so this is the only thing
+                        that tells a part-collected order from a whole one. */}
+                    {progress.partial && (
+                      <div className="ot-partial">Partial · {progress.given} of {progress.total} given</div>
+                    )}
                   </td>
                   <td className="ot-col-items">
-                    <Items items={o.items} compact={compact} />
+                    <Items order={o} compact={compact} onGive={onGive} />
                     {/* Under the order rather than its own column: a note is
                         read with the order, and a column for it squeezed the
                         names down to a few letters. */}
@@ -188,7 +250,10 @@ export function OrderTable({ orders, view, soldOut = new Set(), onAdvance, onCan
                       >
                         <Pencil size={12} />
                       </button>
-                      {o.status === 'new' && (
+                      {/* Not once anything has gone out: those slices can't
+                          be un-sold, and the server refuses it too. Dropping
+                          the rest is an edit, which completes the order. */}
+                      {o.status === 'new' && progress.given === 0 && (
                         <button type="button" className="ot-icon-btn ot-cancel" aria-label={`Cancel ${o.name}'s order`} onClick={() => onCancel(o)}>
                           <X size={12} />
                         </button>

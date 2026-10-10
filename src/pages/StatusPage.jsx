@@ -4,7 +4,7 @@ import { Footer } from '../components/Footer';
 import { LineReveal } from '../components/LineReveal';
 import { OrderStatusCard } from '../components/OrderStatusCard';
 import { api } from '../utils/api';
-import { STATUS_LABELS, agoLabel, fmtMoney, formatOrderItems } from '../utils/orders';
+import { STATUS_LABELS, agoLabel, fmtMoney, formatOrderItems, orderProgress } from '../utils/orders';
 import { readStored, writeStored, removeStored } from '../utils/storage';
 
 const SAVED_KEY = 'pp_order_id';
@@ -171,7 +171,7 @@ export function StatusPage({ nav, isAdmin }) {
             <button type="button" key={m.id} className="status-match" onClick={() => pickMatch(m.id)}>
               <span className="status-match-items">{formatOrderItems(m.items)}</span>
               <span className="status-match-meta">
-                {STATUS_LABELS[m.status]} · {agoLabel(m.createdAt)} · {fmtMoney(m.totalCents)}
+                {STATUS_LABELS[m.status]}{orderProgress(m.items).partial ? ', partly picked up' : ''} · {agoLabel(m.createdAt)} · {fmtMoney(m.totalCents)}
               </span>
             </button>
           ))}
