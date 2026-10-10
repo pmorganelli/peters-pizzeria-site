@@ -1,5 +1,5 @@
 import { ArrowRight, Camera, Check, Clock, Flame } from 'lucide-react';
-import { addonLabel, displayName, fmtMoney, itemTotalCents, orderLineKey, STATUS_LABELS } from '../utils/orders';
+import { addonLabel, displayName, fmtMoney, givenQty, itemTotalCents, orderLineKey, orderProgress, STATUS_LABELS } from '../utils/orders';
 import { writeStoredJSON } from '../utils/storage';
 
 const VENMO_URL = 'https://venmo.com/u/Peter-Morganelli24';
@@ -22,6 +22,19 @@ const STATUS_META = {
   cancelled: { label: 'Cancelled',         text: 'This order was cancelled.' },
 };
 
+// Part of the order has been collected and the rest is still coming. The
+// status alone would mislead here — "Ready for pickup" on an order whose ready
+// slice is already in the customer's hand — so the banner says how much has
+// gone and where what's left is up to. Slices are named while that stays
+// short; past two it is just "the rest".
+const REST_IS = { new: 'still in line', firing: 'still in the oven', ready: 'ready at the window' };
+
+function partialText(order, progress) {
+  const owed = [...new Set(order.items.filter((it) => it.qty > givenQty(it)).map((it) => displayName(it.name)))];
+  const what = owed.length > 2 ? 'the rest' : owed.join(' and ');
+  return `${progress.given} of ${progress.total} picked up — ${what} ${owed.length === 2 ? 'are' : 'is'} ${REST_IS[order.status]}.`;
+}
+
 // Live order card shared by the order confirmation and the Slice Status page.
 export function OrderStatusCard({ order, onNewOrder, nav }) {
   const doneIdx = TIMELINE.findIndex((s) => s.status === order.status);
@@ -30,6 +43,9 @@ export function OrderStatusCard({ order, onNewOrder, nav }) {
   const cancelled = order.status === 'cancelled';
   const pickedUp = order.status === 'done';
   const firstName = order.name.split(' ')[0];
+  const progress = orderProgress(order.items);
+  // Only while the order is live: a finished one is whole by definition.
+  const partial = progress.partial && Boolean(REST_IS[order.status]);
 
   return (
     <div className="confirm-wrap">
@@ -40,12 +56,14 @@ export function OrderStatusCard({ order, onNewOrder, nav }) {
         <h2 className="confirm-title">
           {cancelled ? <>Sorry, {firstName} — <em>this one was cancelled.</em></>
             : pickedUp ? <>Thanks, {firstName} — <em>enjoy your slices!</em></>
+            : partial ? <>Thanks, {firstName} — <em>the rest is on its way.</em></>
             : <>Thanks, {firstName} — <em>you&apos;re in the queue.</em></>}
         </h2>
 
-        {/* keyed by status so the banner re-animates when the kitchen advances the order */}
+        {/* keyed by status, and by how much has been collected, so the banner
+            re-animates whenever the kitchen moves the order along */}
         <div
-          key={order.status}
+          key={`${order.status}:${progress.given}`}
           className={`status-banner${order.status === 'ready' ? ' status-banner-ready' : ''}${order.status === 'cancelled' ? ' status-banner-cancelled' : ''}`}
           role="status"
         >
@@ -53,7 +71,7 @@ export function OrderStatusCard({ order, onNewOrder, nav }) {
             <span className="status-banner-dot" aria-hidden="true" />
             {STATUS_META[order.status]?.label ?? order.status}
           </span>
-          <span className="status-banner-text">{STATUS_META[order.status]?.text}</span>
+          <span className="status-banner-text">{partial ? partialText(order, progress) : STATUS_META[order.status]?.text}</span>
         </div>
 
         <div className="confirm-code-row">
@@ -88,7 +106,14 @@ export function OrderStatusCard({ order, onNewOrder, nav }) {
           {order.items.map((it) => (
             <div key={orderLineKey(it)}>
               <div className="order-line">
-                <span className="order-line-name">{it.qty} × {displayName(it.name)}</span>
+                <span className="order-line-name">
+                  {it.qty} × {displayName(it.name)}
+                  {partial && givenQty(it) > 0 && (
+                    <span className="order-line-given">
+                      <Check size={11} aria-hidden="true" /> {givenQty(it) === it.qty ? 'picked up' : `${givenQty(it)} of ${it.qty} picked up`}
+                    </span>
+                  )}
+                </span>
                 <span>{fmtMoney(itemTotalCents(it))}</span>
               </div>
               {it.addons?.length > 0 && (
@@ -104,7 +129,7 @@ export function OrderStatusCard({ order, onNewOrder, nav }) {
 
         {/* Only once there's actually a slice in hand — no point asking someone
             to photograph a pizza that's still in the oven. */}
-        {(pickedUp || order.status === 'ready') && nav && (
+        {(pickedUp || order.status === 'ready' || partial) && nav && (
           <button
             type="button"
             className="slices-cta"
@@ -134,7 +159,7 @@ export function OrderStatusCard({ order, onNewOrder, nav }) {
         </div>
         <div className="confirm-fineprint">
           {!cancelled && <>Venmo @Peter-Morganelli24 or Zelle — pay now or at the window.{' '}</>}
-          Current status: {STATUS_LABELS[order.status]}.
+          Current status: {STATUS_LABELS[order.status]}{partial ? ` (${progress.given} of ${progress.total} picked up)` : ''}.
         </div>
       </div>
     </div>

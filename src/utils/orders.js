@@ -74,6 +74,103 @@ export const itemTotalCents = (it) =>
 export const orderLineKey = (it) =>
   `${it.name}::${(it.addons ?? []).map((a) => a.name).join(',')}`;
 
+// ── Partial pickup ────────────────────────────────────────────────────
+// Slices come out of the oven a pie at a time, so an order for a cheese and a
+// pepperoni often has one ready before the other — and the window hands that
+// one over rather than making the customer wait. Each stored line carries how
+// many of its slices have gone out (`given`, absent meaning none), and
+// "partial" is *derived* from those counts rather than being a status of its
+// own: the order's status keeps describing the slices still owed, which is the
+// thing the kitchen needs to read off the board.
+//
+// Clamped on read, because the count is only as trustworthy as the line it
+// sits on — a `given` larger than `qty` would make an order read as more than
+// finished.
+export const givenQty = (it) => {
+  const n = Number(it?.given);
+  return Number.isInteger(n) && n > 0 ? Math.min(n, it.qty) : 0;
+};
+
+// { total, given, partial } across every line of an order.
+export function orderProgress(items) {
+  let total = 0;
+  let given = 0;
+  for (const it of items ?? []) {
+    total += it.qty;
+    given += givenQty(it);
+  }
+  return { total, given, partial: given > 0 && given < total };
+}
+
+// An order's lines regrouped for the kitchen: one entry per slice, in the
+// order it first appears, with the total count up front. An order is stored as
+// one line per slice *and* add-on combination, so "3 Cheese, one with hot
+// honey" arrives as two lines — `2× Cheese` and `1× Cheese + Hot Honey` —
+// which reads as two different things on a busy board. Here it becomes
+// `3× Cheese` with the variations underneath.
+//
+//   { name, qty, given, addons, variants, item }
+//   - every unit has the same add-ons → `addons` holds their labels (possibly
+//     empty), `variants` is empty, and `item` is the stored line itself;
+//   - mixed → `addons` is empty and `variants` lists { qty, given, addons,
+//     item } per combination, plain units (addons: []) included, so the counts
+//     add up.
+// `item` is what a hand-over is recorded against: a slice is given out per
+// stored line, not per folded entry, because the one with hot honey is a
+// different physical slice from the plain ones beside it.
+export function groupOrderLines(items) {
+  const groups = new Map();
+  for (const it of items) {
+    const labels = (it.addons ?? []).map((a) => addonLabel(a.name, it.name));
+    const g = groups.get(it.name) ?? { name: it.name, category: it.category, qty: 0, given: 0, lines: [] };
+    g.qty += it.qty;
+    g.given += givenQty(it);
+    g.lines.push({ qty: it.qty, given: givenQty(it), addons: labels, item: it });
+    groups.set(it.name, g);
+  }
+  return [...groups.values()].map(({ lines, ...g }) => (lines.length === 1
+    ? { ...g, addons: lines[0].addons, variants: [], item: lines[0].item }
+    // Most of a kind first — "2 plain, 1 + Hot Honey" rather than the reverse.
+    : { ...g, addons: [], variants: [...lines].sort((a, b) => b.qty - a.qty) }));
+}
+
+// What the kitchen has to make next: slice counts (and the add-ons going on
+// them) across every order still waiting to be fired.
+//
+// Only what's still owed counts. A slice handed over early came off a pie
+// that was already out — the reason partial pickups exist — so it needs no
+// firing, and leaving it in the tally would have the kitchen make it twice.
+const PIZZA_CATEGORY = MENU_DATA[0].category;
+
+export function fireNextCounts(orders) {
+  const queued = (orders ?? []).filter((o) => o.status === 'new');
+  const pizzas = new Map();
+  const addons = new Map();
+  for (const o of queued) {
+    for (const it of o.items) {
+      const owed = it.qty - givenQty(it);
+      if (owed === 0) continue;
+      // Pizzas get the bright chips; everything else (add-ons, desserts,
+      // sides) is dimmed — a dessert-only order must still show up here.
+      if (it.category === PIZZA_CATEGORY) pizzas.set(it.name, (pizzas.get(it.name) || 0) + owed);
+      else addons.set(it.name, (addons.get(it.name) || 0) + owed);
+      // add-ons attached to slices (each applies once per slice in the line)
+      for (const a of it.addons ?? []) addons.set(a.name, (addons.get(a.name) || 0) + owed);
+    }
+  }
+  const sorted = (m) => [...m.entries()].sort((a, b) => b[1] - a[1]);
+  return {
+    pizzas: sorted(pizzas),
+    addons: sorted(addons),
+    waiting: queued.length,
+    oldest: queued.length ? Math.min(...queued.map((o) => o.createdAt)) : null,
+  };
+}
+
+// The admin board's two row densities (see OrderTable). Lives here rather than
+// beside the component so that file exports only components.
+export const BOARD_VIEWS = ['full', 'compact'];
+
 // One-line summary of an order's items for compact list rows (admin Finished
 // list, the past-nights archive) — "2× Cheese Slice, 1× Pepperoni (+ Hot Honey)"
 export const formatOrderItems = (items) =>

@@ -458,3 +458,38 @@ isn't is the panel as a thing two people use mid-service on a phone.
       show a negative number or resurrect capacity.
 - [ ] **Close and reopen.** Closing the night empties both boxes; the next
       night starts untracked (unlimited) until someone counts in again.
+
+## Partial pickup (`OrderTable.jsx`, `OrderStatusCard.jsx`, `api/orders.js`)
+
+The rules are covered by the suite — what a hand-over records, what cancel and
+the editor refuse afterwards, the order completing on its last slice. What
+isn't is the Redis path those rules actually run on in production, and the
+feel of it at the window.
+
+- [ ] **The Lua, against real Redis.** `SET_GIVEN_LUA` and the `given` blocks
+      added to `SET_STATUS_LUA` / `SET_ITEMS_LUA` have in-memory twins that the
+      tests exercise; the scripts themselves have never been run by the suite.
+      On a preview deployment with Upstash connected: hand over one slice of a
+      two-slice order, take it back, hand over a slice that has an add-on while
+      a plain one of the same kind sits beside it, try to cancel a part-given
+      order (409), edit one down to what was given (it should complete), and
+      hand over the last slice (it should move to Finished).
+- [ ] **Two devices, one order.** Hand over different slices of the same order
+      from two phones a second apart — both ticks should survive. Then hand one
+      over on phone A while phone B has the editor open on that order and
+      saves: B should get the "already been handed over" refusal, not silently
+      drop A's tick.
+- [ ] **Fast thumbs.** On a real phone, tap the tick on a 4-slice line four
+      times quickly. The count should climb 1-2-3-4 without ever stepping back,
+      and the line should finish struck through.
+- [ ] **Touch targets.** The tick and the take-back are 30px below 768px. Check
+      they can be hit reliably without catching the stage switcher under them,
+      in both Full and Compact.
+- [ ] **The customer's phone.** With Slice Status open on a second device, hand
+      over part of that order: within one poll (8s) the banner should change to
+      "1 of 2 picked up — …", the collected line should gain its tick, and the
+      photo-wall button should appear.
+- [ ] **A mis-tap on the last slice.** It completes the order and can't be
+      undone from the board (same as Picked up). Confirm that is livable in
+      practice; if it isn't, the fix is an arming tap on a line's final slice.
+

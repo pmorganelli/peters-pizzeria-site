@@ -1,24 +1,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Archive, Check, Flame, LogOut, Moon, RotateCcw, Store, UtensilsCrossed, Wheat, X } from 'lucide-react';
+import { Archive, Flame, LogOut, Moon, RotateCcw, Store, UtensilsCrossed, Wheat } from 'lucide-react';
 import { Footer } from '../components/Footer';
 import { ReportsPanel, TakedownAlert } from '../components/ReportsPanel';
+import { OrderTable } from '../components/OrderTable';
 import { useTakedownRequests } from '../hooks/useTakedownRequests';
 import { useBoardTitle } from '../hooks/useBoardTitle';
 import { useDoughStock } from '../hooks/useDoughStock';
 import { MENU_DATA } from '../data/menu';
 import { api } from '../utils/api';
-import { DAY_NAMES, addonLabel, displayName, fmtMoney, fmtTime, formatOrderItems, ageLabel, orderLineKey } from '../utils/orders';
-import { DOUGH_LABELS, DOUGH_TYPES, MAX_DOUGH_BALLS, SLICES_PER_BALL } from '../utils/dough';
+import { readStored, writeStored } from '../utils/storage';
+import { BOARD_VIEWS, DAY_NAMES, displayName, fmtMoney, fmtTime, formatOrderItems, ageLabel, fireNextCounts, orderLineKey, orderProgress } from '../utils/orders';
+import { DOUGH_LABELS, DOUGH_TYPES, MAX_DOUGH_BALLS, SLICES_PER_BALL, soldOutNames } from '../utils/dough';
 
 const POLL_MS = 5000;
-const PIZZA_CATEGORY = MENU_DATA[0].category;
-const ADDON_CATEGORY = MENU_DATA[1].category;
-
-const COLUMNS = [
-  { status: 'new', title: 'New', action: 'Start firing', next: 'firing', Icon: Flame },
-  { status: 'firing', title: 'In the oven', action: 'Mark ready', next: 'ready', Icon: Check },
-  { status: 'ready', title: 'Ready for pickup', action: 'Picked up', next: 'done', Icon: Check },
-];
+// Full or compact rows — a per-device preference (the phone at the window and
+// the laptop by the oven want different densities), so browser storage rather
+// than anything shared.
+const VIEW_KEY = 'pp_board_view:v1';
+const initialView = () => {
+  const saved = readStored(VIEW_KEY);
+  return BOARD_VIEWS.includes(saved) ? saved : 'full';
+};
 
 function Login({ onSuccess }) {
   const [password, setPassword] = useState('');
@@ -60,42 +62,6 @@ function Login({ onSuccess }) {
           {busy ? 'Checking…' : 'Log in'}
         </button>
       </form>
-    </div>
-  );
-}
-
-function OrderCard({ order, column, onAdvance, onCancel }) {
-  return (
-    <div className="oc">
-      <div className="oc-head">
-        <span className="oc-code">#{order.code}</span>
-        <span className="oc-name">{order.name}</span>
-        <span className="oc-age">{ageLabel(order.createdAt)}</span>
-      </div>
-      <div className="oc-items">
-        {order.items.map((it) => (
-          <div key={orderLineKey(it)} className={`oc-item${it.category === PIZZA_CATEGORY ? ' oc-item-pizza' : ''}`}>
-            <span className="oc-qty">{it.qty}×</span> {it.category === ADDON_CATEGORY ? `+ ${displayName(it.name)}` : it.name}
-            {it.addons?.length > 0 && (
-              <span className="oc-item-addons"> · + {it.addons.map((a) => addonLabel(a.name, it.name)).join(', + ')}</span>
-            )}
-          </div>
-        ))}
-      </div>
-      {order.notes && <div className="oc-notes">“{order.notes}”</div>}
-      <div className="oc-meta">
-        <span>{fmtMoney(order.totalCents)}</span>
-      </div>
-      <div className="oc-actions">
-        <button type="button" className="oc-advance" onClick={() => onAdvance(order, column.next)}>
-          <column.Icon size={12} /> {column.action}
-        </button>
-        {column.status === 'new' && (
-          <button type="button" className="oc-cancel" aria-label={`Cancel order ${order.code}`} onClick={() => onCancel(order)}>
-            <X size={12} />
-          </button>
-        )}
-      </div>
     </div>
   );
 }
@@ -267,28 +233,6 @@ function AvailabilityPanel({ unavailableSet, savingStore, toggleItem }) {
   );
 }
 
-function Board({ orders, advance, cancel }) {
-  return (
-    <div className="board">
-      {COLUMNS.map((col) => {
-        // Oldest first — a column reads top-to-bottom as a queue, and the
-        // order nearest to firing/pickup should be at the top, not buried
-        // under whatever just came in.
-        const list = orders.filter((o) => o.status === col.status).sort((a, b) => a.createdAt - b.createdAt);
-        return (
-          <div key={col.status} className="board-col">
-            <div className="board-col-title">{col.title} <span className="board-count">{list.length}</span></div>
-            {list.length === 0 && <div className="board-empty">—</div>}
-            {list.map((o) => (
-              <OrderCard key={o.id} order={o} column={col} onAdvance={advance} onCancel={cancel} />
-            ))}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 // Finished orders, plus a footer line with tonight's running total (picked-up
 // orders only — same rule "close for the night" uses, so this number matches
 // what closing will archive) and the close button itself. Keeping the total
@@ -302,7 +246,6 @@ function FinishedList({ finished, totalCents, canClose, closing, closeNight }) {
         ? <div className="board-empty">—</div>
         : finished.map((o) => (
           <div key={o.id} className="finished-row">
-            <span className="oc-code">#{o.code}</span>
             <span>{o.name}</span>
             <span className="finished-items">{formatOrderItems(o.items)}</span>
             <span>{fmtMoney(o.totalCents)}</span>
@@ -347,6 +290,8 @@ export function AdminPage({ nav, onAuthChange }) {
   const [savingStore, setSavingStore] = useState(false);
   const [storeError, setStoreError] = useState('');
   const [closingNight, setClosingNight] = useState(false);
+  const [view, setViewState] = useState(initialView);
+  const setView = (next) => { setViewState(next); writeStored(VIEW_KEY, next); };
   const draftSeeded = useRef(false);
   // Bumped by every mutation (advance, 86 toggle, hours save). A poll snapshot
   // taken before a mutation is stale — applying it would visually revert the
@@ -354,6 +299,11 @@ export function AdminPage({ nav, onAuthChange }) {
   const epochRef = useRef(0);
   const pollIssuedRef = useRef(0);
   const pollAppliedRef = useRef(0);
+  // Hand-overs are sent one at a time (see give()), so several can be waiting
+  // behind the one in flight. While any are, the board on screen is ahead of
+  // the server and a poll would walk it backwards.
+  const giveQueueRef = useRef(null);
+  const givePendingRef = useRef(0);
 
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
@@ -431,7 +381,7 @@ export function AdminPage({ nav, onAuthChange }) {
       // when requests consistently take longer than POLL_MS, rejecting on that
       // basis would reject every response. Only reject a response when a newer
       // one has already been applied (or a mutation invalidated its snapshot).
-      if (epochRef.current !== snapshot || sequence <= pollAppliedRef.current) return;
+      if (epochRef.current !== snapshot || sequence <= pollAppliedRef.current || givePendingRef.current > 0) return;
       pollAppliedRef.current = sequence;
       setOrders(list);
       setStoreInfo(status);
@@ -523,40 +473,101 @@ export function AdminPage({ nav, onAuthChange }) {
     try {
       await api(`/api/orders?id=${encodeURIComponent(order.id)}`, { method: 'PATCH', body: { status } });
       epochRef.current += 1;
-    } catch {
+    } catch (err) {
+      if (err.status === 401) { logout('Session expired — log in again.'); return; }
+      // A refusal has a reason worth reading — another device already
+      // finished this order, or part of it has gone out and it can no longer
+      // be cancelled. Without it the row just snaps back and looks ignored.
+      if (err.status === 409) setStoreError(err.message);
       load();
     }
   };
 
   const cancel = (order) => {
-    if (window.confirm(`Cancel order #${order.code} for ${order.name}?`)) advance(order, 'cancelled');
+    if (window.confirm(`Cancel ${order.name}'s order?`)) advance(order, 'cancelled');
+  };
+
+  // A name or note corrected in the table. Optimistic like advance(), but a
+  // refusal is worth saying out loud: the cell snaps back to the old value on
+  // the resync, and without a message that just looks like the edit vanished.
+  const editOrder = async (order, fields) => {
+    epochRef.current += 1;
+    setOrders((list) => list.map((o) => (o.id === order.id ? { ...o, ...fields } : o)));
+    setStoreError('');
+    try {
+      const { order: saved } = await api(`/api/orders?id=${encodeURIComponent(order.id)}`, { method: 'PATCH', body: fields });
+      epochRef.current += 1;
+      setOrders((list) => list.map((o) => (o.id === saved.id ? saved : o)));
+    } catch (err) {
+      if (err.status === 401) { logout('Session expired — log in again.'); return; }
+      setStoreError(err.message || 'Could not save that change — try again.');
+      load();
+    }
+  };
+
+  // A changed order. Not optimistic, unlike the edits above: the server
+  // re-prices it and may refuse it for dough, and the editor stays open with
+  // the reason until the staffer trims it — so it waits for the answer and
+  // hands back { error } instead of a board-wide message.
+  const editItems = async (order, items) => {
+    epochRef.current += 1;
+    try {
+      const { order: saved } = await api(`/api/orders?id=${encodeURIComponent(order.id)}`, { method: 'PATCH', body: { items } });
+      epochRef.current += 1;
+      setOrders((list) => list.map((o) => (o.id === saved.id ? saved : o)));
+      return {};
+    } catch (err) {
+      if (err.status === 401) { logout('Session expired — log in again.'); return {}; }
+      load();
+      return { error: err.message || 'Could not save that change — try again.' };
+    }
+  };
+
+  // Part of an order going out the window ahead of the rest. Optimistic like
+  // advance() — a tick that waits on the network feels broken at the window —
+  // including the order leaving the board when its last slice goes, which is
+  // what the server does with it.
+  //
+  // Requests go out one at a time, in the order they were tapped: each carries
+  // an absolute count, so two quick taps on a three-slice line send "1" then
+  // "2", and if those landed out of order the line would settle on 1. For the
+  // same reason only the *last* answer is applied — the reply to "1" arriving
+  // while "2" is still queued would knock the tick back for a moment, and a
+  // third tap in that moment would send "2" again.
+  const give = (order, item, count) => {
+    const key = orderLineKey(item);
+    epochRef.current += 1;
+    setStoreError('');
+    setOrders((list) => list.map((o) => {
+      if (o.id !== order.id) return o;
+      const items = o.items.map((it) => {
+        if (orderLineKey(it) !== key) return it;
+        const { given, ...rest } = it;
+        return count > 0 ? { ...rest, given: count } : rest;
+      });
+      const { total, given } = orderProgress(items);
+      return { ...o, items, status: given >= total ? 'done' : o.status };
+    }));
+    const body = { given: { name: item.name, addons: (item.addons ?? []).map((a) => a.name), count } };
+    givePendingRef.current += 1;
+    giveQueueRef.current = (giveQueueRef.current ?? Promise.resolve()).then(async () => {
+      try {
+        const { order: saved } = await api(`/api/orders?id=${encodeURIComponent(order.id)}`, { method: 'PATCH', body });
+        givePendingRef.current -= 1;
+        epochRef.current += 1;
+        if (givePendingRef.current === 0) setOrders((list) => list && list.map((o) => (o.id === saved.id ? saved : o)));
+      } catch (err) {
+        givePendingRef.current -= 1;
+        if (err.status === 401) { logout('Session expired — log in again.'); return; }
+        setStoreError(err.message || 'Could not record that hand-over — try again.');
+        load();
+      }
+    });
   };
 
   const unavailableSet = new Set(storeInfo?.unavailable || []);
 
-  const fireNext = useMemo(() => {
-    if (!orders) return { pizzas: [], addons: [], waiting: 0, oldest: null };
-    const queued = orders.filter((o) => o.status === 'new');
-    const pizzas = new Map();
-    const addons = new Map();
-    for (const o of queued) {
-      for (const it of o.items) {
-        // Pizzas get the bright chips; everything else (add-ons, desserts,
-        // sides) is dimmed — a dessert-only order must still show up here.
-        if (it.category === PIZZA_CATEGORY) pizzas.set(it.name, (pizzas.get(it.name) || 0) + it.qty);
-        else addons.set(it.name, (addons.get(it.name) || 0) + it.qty);
-        // add-ons attached to slices (each applies once per slice in the line)
-        for (const a of it.addons ?? []) addons.set(a.name, (addons.get(a.name) || 0) + it.qty);
-      }
-    }
-    const sorted = (m) => [...m.entries()].sort((a, b) => b[1] - a[1]);
-    return {
-      pizzas: sorted(pizzas),
-      addons: sorted(addons),
-      waiting: queued.length,
-      oldest: queued.length ? Math.min(...queued.map((o) => o.createdAt)) : null,
-    };
-  }, [orders]);
+  const fireNext = useMemo(() => fireNextCounts(orders), [orders]);
 
   useBoardTitle({
     waiting: orders ? orders.filter((o) => o.status === 'new').length : 0,
@@ -653,10 +664,24 @@ export function AdminPage({ nav, onAuthChange }) {
         )}
       </div>
 
+      <div className="board-toolbar">
+        <div className="board-col-title board-toolbar-title">Live orders</div>
+        <div className="store-modes board-view-toggle" role="group" aria-label="Board view">
+          {BOARD_VIEWS.map((v) => (
+            <button key={v} type="button" className={view === v ? 'active' : ''} aria-pressed={view === v} onClick={() => setView(v)}>
+              {v === 'full' ? 'Full' : 'Compact'}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {orders === null ? (
         <div className="admin-loading">Loading orders…</div>
       ) : (
-        <Board orders={orders} advance={advance} cancel={cancel} />
+        <OrderTable
+          orders={orders} view={view} soldOut={soldOutNames(storeInfo)}
+          onAdvance={advance} onCancel={cancel} onEdit={editOrder} onEditItems={editItems} onGive={give}
+        />
       )}
 
       {orders !== null && (

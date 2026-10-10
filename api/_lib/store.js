@@ -2,6 +2,7 @@ import { Redis } from '@upstash/redis';
 import { hasRedisEnv } from './util.js';
 import { DEFAULT_SETTINGS } from './hours.js';
 import { SLICES_PER_BALL, doughSlicesFor, doughStatus, isDoughType } from '../../src/utils/dough.js';
+import { givenQty, orderProgress } from '../../src/utils/orders.js';
 
 // Orders live in Upstash Redis in production (provisioned via the Vercel
 // Marketplace). When no Redis env vars are present — local dev, or a deploy
@@ -571,17 +572,85 @@ export async function rateLimit(key, limit, windowSeconds) {
   return count <= limit;
 }
 
+// ── Partial pickup (slices handed over before the rest is ready) ─────
+// Each stored line carries `given`: how many of its slices have already gone
+// out the window. The helpers below are the in-memory twins of LINE_LUA, which
+// every script that reads or moves a `given` count is prefixed with.
+//
+// A line is identified by its slice plus its *set* of add-ons — the same
+// identity validateItems() enforces uniqueness on. The Lua side compares the
+// two sets by membership rather than sorting and joining names: Redis hands
+// table.sort a comparator that follows the server's collation locale, which
+// need not order strings the way JavaScript does, and a key that sorted
+// differently on each side would silently stop matching.
+const addonKey = (item) => (item.addons ?? []).map((a) => a.name).sort().join(',');
+const sameLine = (a, b) => a.name === b.name && addonKey(a) === addonKey(b);
+const allGiven = (items) => {
+  const { total, given } = orderProgress(items);
+  return total > 0 && given >= total;
+};
+
+// `given` is only ever written as a positive number or removed outright —
+// never null, which cjson would decode as a truthy sentinel (see the note on
+// `dough` in validateItems).
+const LINE_LUA = `
+local function addonSet(item)
+  local names = {}
+  if type(item.addons) == 'table' then
+    for _, addon in ipairs(item.addons) do
+      if type(addon) == 'table' and type(addon.name) == 'string' then names[addon.name] = true end
+    end
+  end
+  return names
+end
+local function sameLine(a, b)
+  if a.name ~= b.name then return false end
+  local x, y = addonSet(a), addonSet(b)
+  for name in pairs(x) do if not y[name] then return false end end
+  for name in pairs(y) do if not x[name] then return false end end
+  return true
+end
+local function givenOf(item)
+  if type(item.given) ~= 'number' or type(item.qty) ~= 'number' or item.given <= 0 then return 0 end
+  if item.given > item.qty then return item.qty end
+  return item.given
+end
+local function allGiven(items)
+  local total, given = 0, 0
+  for _, item in ipairs(items or {}) do
+    if type(item.qty) == 'number' then
+      total = total + item.qty
+      given = given + givenOf(item)
+    end
+  end
+  return total > 0 and given >= total
+end
+`;
+
 // Status changes are read-check-write, so they run as one Lua script: two
 // admin tabs racing (one marking done, a stale one still on firing) must not
 // let the stale write resurrect a terminal order. KEEPTTL preserves the
 // original 3-day expiry instead of restarting it on every touch.
-// Returns { order }, { conflict: currentStatus }, or { order: null } (missing).
-const SET_STATUS_LUA = `
+// Returns { order }, { conflict: currentStatus }, { handed: slices } when a
+// cancel is refused because part of the order has already gone out, or
+// { order: null } (missing).
+const SET_STATUS_LUA = `${LINE_LUA}
 local cur = redis.call('GET', KEYS[1])
 if not cur then return nil end
 local order = cjson.decode(cur)
 if (order.status == 'done' or order.status == 'cancelled') and order.status ~= ARGV[1] then
   return 'terminal:' .. order.status
+end
+-- An order with slices already handed over can't be cancelled: those slices
+-- were eaten (and usually paid for), and a cancelled order counts for nothing
+-- in the night's total while a 'new' one would also refund dough that left
+-- the building. The way to drop the rest is to edit the order down to what
+-- went out, which completes it instead. The board hides cancel in this state;
+-- this is for the stale tab that still shows it.
+if ARGV[1] == 'cancelled' and order.status ~= 'cancelled' then
+  local handed = 0
+  for _, item in ipairs(order.items or {}) do handed = handed + givenOf(item) end
+  if handed > 0 then return 'handed:' .. handed end
 end
 -- Cancelling a *new* order hands its slices back to tonight's pool: nothing
 -- has been fired, so the dough is really still there. Guarded on the previous
@@ -612,11 +681,269 @@ if ARGV[1] == 'cancelled' and order.status == 'new' then
   -- forever. Re-arm the same sliding expiry the create path sets.
   if credited then redis.call('EXPIRE', KEYS[2], ARGV[3]) end
 end
+-- Picked up means all of it: stamp every line as handed over, so a finished
+-- order never reads as still owing slices wherever its lines are shown.
+if ARGV[1] == 'done' then
+  for _, item in ipairs(order.items or {}) do
+    if type(item.qty) == 'number' then item.given = item.qty end
+  end
+end
 order.status = ARGV[1]
 order.updatedAt = tonumber(ARGV[2])
 local encoded = cjson.encode(order)
 redis.call('SET', KEYS[1], encoded, 'KEEPTTL')
 return encoded`;
+
+// Staff correcting what they typed at the window: a misspelled name (which is
+// what the customer searches on, so a typo hides their order from them) or a
+// note. Only these two fields — items and prices stay as intake validated and
+// debited them, since changing a line would also have to move dough. One
+// script for the same reason as the status write: a read-modify-write from the
+// handler could silently undo a status change another device made in between.
+const SET_FIELDS_LUA = `
+local cur = redis.call('GET', KEYS[1])
+if not cur then return nil end
+local order = cjson.decode(cur)
+local fields = cjson.decode(ARGV[1])
+for k, v in pairs(fields) do order[k] = v end
+order.updatedAt = tonumber(ARGV[2])
+local encoded = cjson.encode(order)
+redis.call('SET', KEYS[1], encoded, 'KEEPTTL')
+return encoded`;
+
+export async function setOrderFields(id, fields) {
+  if (!hasRedisEnv()) {
+    const existing = memory.get(id);
+    if (!existing) return null;
+    const updated = { ...existing, ...fields, updatedAt: Date.now() };
+    memory.set(id, updated);
+    return updated;
+  }
+  const res = await redisClient().eval(SET_FIELDS_LUA, [`pp:order:${id}`], [JSON.stringify(fields), Date.now()]);
+  if (res === null) return null;
+  return typeof res === 'string' ? JSON.parse(res) : res;
+}
+
+// A customer changing their order at the window. The items are swapped and the
+// dough counter moves by the *difference*, all in one script — the same reason
+// intake's check and commit are one operation (two devices both reading "1
+// left" and both adding a slice).
+//
+// Per pool:
+//  - more slices than before → debited, and refused if the pool can't cover
+//    them, exactly as a new order would be;
+//  - fewer → credited back **only while the order is still `new`**. That's the
+//    cancel rule: once it's firing, the removed slice's dough is already
+//    stretched and in the oven, so handing it back would sell dough that isn't
+//    there.
+// Old slices are read from the stamped `dough` on each stored line, never the
+// live menu, for the same reason doughOnOrder() does.
+//
+// Slices already handed over are not the editor's to take back. Each line's
+// `given` count is carried onto the matching new line, and a change that would
+// remove such a line or shrink it below what went out is refused whole —
+// decided here rather than in the handler, since a hand-over landing between
+// the handler's read and this write would otherwise be silently dropped. If
+// the change leaves nothing owed (the customer gave up on the rest), the order
+// completes, exactly as handing over the last slice would.
+// Returns { order }, { conflict: status }, { reason: 'dough:<type>:<left>' },
+// { handed: { name, given } }, or { order: null } when missing.
+const SET_ITEMS_LUA = `${LINE_LUA}
+local cur = redis.call('GET', KEYS[1])
+if not cur then return nil end
+local order = cjson.decode(cur)
+if order.status == 'done' or order.status == 'cancelled' then return 'terminal:' .. order.status end
+local items = cjson.decode(ARGV[1])
+for _, old in ipairs(order.items or {}) do
+  local given = givenOf(old)
+  if given > 0 then
+    local kept = false
+    for _, item in ipairs(items) do
+      if sameLine(item, old) then
+        if type(item.qty) == 'number' and item.qty >= given then
+          item.given = given
+          kept = true
+        end
+        break
+      end
+    end
+    if not kept then return 'handed:' .. given .. ':' .. old.name end
+  end
+end
+local function slices(list)
+  local out = {}
+  for _, item in ipairs(list or {}) do
+    if type(item.dough) == 'string' and type(item.qty) == 'number' then
+      out[item.dough] = (out[item.dough] or 0) + item.qty
+    end
+  end
+  return out
+end
+local before = slices(order.items)
+local after = slices(items)
+local delta = {}
+for dough, qty in pairs(after) do delta[dough] = qty - (before[dough] or 0) end
+for dough, qty in pairs(before) do if after[dough] == nil then delta[dough] = -qty end end
+
+local perBall = cjson.decode(ARGV[4])
+local settingsRaw = redis.call('GET', KEYS[2])
+local stock = nil
+if settingsRaw then
+  local ok, decoded = pcall(cjson.decode, settingsRaw)
+  if ok and type(decoded) == 'table' and type(decoded.dough) == 'table' then
+    local setAt = tonumber(decoded.doughSetAt)
+    if setAt and tonumber(ARGV[3]) - setAt <= tonumber(ARGV[5]) then stock = decoded.dough end
+  end
+end
+if stock then
+  for dough, qty in pairs(delta) do
+    local balls = stock[dough]
+    if qty > 0 and type(balls) == 'number' then
+      local capacity = balls * (perBall[dough] or 0)
+      local spent = tonumber(redis.call('HGET', KEYS[3], dough)) or 0
+      if spent + qty > capacity then
+        local left = capacity - spent
+        if left < 0 then left = 0 end
+        return 'dough:' .. dough .. ':' .. left
+      end
+    end
+  end
+end
+local touched = false
+for dough, qty in pairs(delta) do
+  if qty > 0 or (qty < 0 and order.status == 'new') then
+    if redis.call('HINCRBY', KEYS[3], dough, qty) < 0 then redis.call('HSET', KEYS[3], dough, 0) end
+    touched = true
+  end
+end
+if touched then redis.call('EXPIRE', KEYS[3], ARGV[6]) end
+-- Below the dough block on purpose: the refund rule above has to read the
+-- status the order had *before* this change.
+if allGiven(items) then order.status = 'done' end
+order.items = items
+order.totalCents = tonumber(ARGV[2])
+order.updatedAt = tonumber(ARGV[3])
+local encoded = cjson.encode(order)
+redis.call('SET', KEYS[1], encoded, 'KEEPTTL')
+return encoded`;
+
+export async function setOrderItems(id, items, totalCents) {
+  if (!hasRedisEnv()) {
+    const existing = memory.get(id);
+    if (!existing) return { order: null };
+    if (existing.status === 'done' || existing.status === 'cancelled') return { conflict: existing.status };
+    const carried = carryGiven(existing.items, items);
+    if (carried.handed) return { handed: carried.handed };
+    items = carried.items;
+    const before = doughOnOrder(existing);
+    const after = doughOnOrder({ items });
+    const delta = {};
+    for (const dough of new Set([...Object.keys(before), ...Object.keys(after)])) {
+      delta[dough] = (after[dough] ?? 0) - (before[dough] ?? 0);
+    }
+    const more = Object.fromEntries(Object.entries(delta).filter(([, qty]) => qty > 0));
+    const short = doughShortfall(
+      normalizeSettings(globalThis.__ppSettings).dough, Object.fromEntries(doughMemory), more);
+    if (short) return { reason: short };
+    for (const [dough, qty] of Object.entries(delta)) {
+      if (qty > 0 || (qty < 0 && existing.status === 'new')) {
+        doughMemory.set(dough, Math.max(0, (doughMemory.get(dough) ?? 0) + qty));
+      }
+    }
+    const status = allGiven(items) ? 'done' : existing.status;
+    const updated = { ...existing, items, totalCents, status, updatedAt: Date.now() };
+    memory.set(id, updated);
+    return { order: updated };
+  }
+  const res = await redisClient().eval(
+    SET_ITEMS_LUA, [`pp:order:${id}`, SETTINGS_KEY, DOUGH_USED_KEY],
+    [JSON.stringify(items), totalCents, Date.now(), SLICES_PER_BALL_JSON, ORDER_TTL_MS, ORDER_TTL_SECONDS]);
+  if (res === null) return { order: null };
+  if (typeof res === 'string' && res.startsWith('terminal:')) return { conflict: res.slice('terminal:'.length) };
+  if (typeof res === 'string' && res.startsWith('dough:')) return { reason: res };
+  if (typeof res === 'string' && res.startsWith('handed:')) {
+    // `handed:<slices>:<slice name>` — the name goes last because it is the
+    // only part that could ever contain the separator.
+    const [, given, ...name] = res.split(':');
+    return { handed: { name: name.join(':'), given: Number(given) } };
+  }
+  return { order: typeof res === 'string' ? JSON.parse(res) : res };
+}
+
+// The in-memory twin of the carry-over loop at the top of SET_ITEMS_LUA:
+// copies each handed-over count onto the matching new line, or reports the
+// first line the change would take slices back from.
+function carryGiven(before, after) {
+  const items = after.map((item) => ({ ...item }));
+  for (const old of before ?? []) {
+    const given = givenQty(old);
+    if (given === 0) continue;
+    const kept = items.find((item) => sameLine(item, old));
+    if (!kept || kept.qty < given) return { handed: { name: old.name, given } };
+    kept.given = given;
+  }
+  return { items };
+}
+
+// Recording a hand-over: `count` slices of one line have now gone out (an
+// absolute count, not "one more" — a retried request must not hand over twice,
+// and it lets a mis-tap be taken back). One script, like every other order
+// write, so it can't undo a status or item change another device made in
+// between; and because the last slice going out *is* the order being picked
+// up, the status moves to `done` in the same write rather than leaving a
+// window where an order with nothing owed still sits on the live board.
+//
+// Dough is untouched: a slice was debited when it was ordered, and handing it
+// over neither spends nor frees anything.
+// Returns { order }, { conflict: status }, { reason: 'noline' | 'range' }, or
+// { order: null } when missing.
+const SET_GIVEN_LUA = `${LINE_LUA}
+local cur = redis.call('GET', KEYS[1])
+if not cur then return nil end
+local order = cjson.decode(cur)
+if order.status == 'done' or order.status == 'cancelled' then return 'terminal:' .. order.status end
+local target = cjson.decode(ARGV[1])
+local count = tonumber(ARGV[2])
+local found = false
+for _, item in ipairs(order.items or {}) do
+  if not found and sameLine(item, target) then
+    if type(item.qty) ~= 'number' or count > item.qty then return 'range' end
+    found = true
+    if count > 0 then item.given = count else item.given = nil end
+  end
+end
+if not found then return 'noline' end
+if allGiven(order.items) then order.status = 'done' end
+order.updatedAt = tonumber(ARGV[3])
+local encoded = cjson.encode(order)
+redis.call('SET', KEYS[1], encoded, 'KEEPTTL')
+return encoded`;
+
+export async function setOrderGiven(id, line, count) {
+  if (!hasRedisEnv()) {
+    const existing = memory.get(id);
+    if (!existing) return { order: null };
+    if (existing.status === 'done' || existing.status === 'cancelled') return { conflict: existing.status };
+    const index = (existing.items ?? []).findIndex((item) => sameLine(item, line));
+    if (index === -1) return { reason: 'noline' };
+    if (count > existing.items[index].qty) return { reason: 'range' };
+    const items = existing.items.map((item, i) => {
+      if (i !== index) return item;
+      const { given, ...rest } = item;
+      return count > 0 ? { ...rest, given: count } : rest;
+    });
+    const status = allGiven(items) ? 'done' : existing.status;
+    const updated = { ...existing, items, status, updatedAt: Date.now() };
+    memory.set(id, updated);
+    return { order: updated };
+  }
+  const res = await redisClient().eval(
+    SET_GIVEN_LUA, [`pp:order:${id}`], [JSON.stringify(line), count, Date.now()]);
+  if (res === null) return { order: null };
+  if (typeof res === 'string' && res.startsWith('terminal:')) return { conflict: res.slice('terminal:'.length) };
+  if (res === 'noline' || res === 'range') return { reason: res };
+  return { order: typeof res === 'string' ? JSON.parse(res) : res };
+}
 
 export async function setOrderStatus(id, status) {
   if (!hasRedisEnv()) {
@@ -626,12 +953,19 @@ export async function setOrderStatus(id, status) {
     if ((existing.status === 'done' || existing.status === 'cancelled') && existing.status !== status) {
       return { conflict: existing.status };
     }
+    if (status === 'cancelled' && existing.status !== 'cancelled') {
+      const { given } = orderProgress(existing.items);
+      if (given > 0) return { handed: given };
+    }
     if (status === 'cancelled' && existing.status === 'new') {
       for (const [dough, qty] of Object.entries(doughOnOrder(existing))) {
         doughMemory.set(dough, Math.max(0, (doughMemory.get(dough) ?? 0) - qty));
       }
     }
-    const updated = { ...existing, status, updatedAt: Date.now() };
+    const items = status === 'done'
+      ? (existing.items ?? []).map((item) => ({ ...item, given: item.qty }))
+      : existing.items;
+    const updated = { ...existing, items, status, updatedAt: Date.now() };
     memory.set(id, updated);
     return { order: updated };
   }
@@ -639,6 +973,7 @@ export async function setOrderStatus(id, status) {
     SET_STATUS_LUA, [`pp:order:${id}`, DOUGH_USED_KEY], [status, Date.now(), ORDER_TTL_SECONDS]);
   if (res === null) return { order: null };
   if (typeof res === 'string' && res.startsWith('terminal:')) return { conflict: res.slice('terminal:'.length) };
+  if (typeof res === 'string' && res.startsWith('handed:')) return { handed: Number(res.slice('handed:'.length)) };
   // The SDK auto-parses JSON results; a raw string means parsing was disabled
   return { order: typeof res === 'string' ? JSON.parse(res) : res };
 }
