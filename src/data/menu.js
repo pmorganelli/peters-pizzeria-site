@@ -11,15 +11,17 @@ export const MENU_DATA = [
     // Most of the menu is cut from New York rounds (8 slices a ball);
     // Margherita is the one Neapolitan slice (4 a ball).
     items: [
-      // maxQty lives here for now because Margherita — which normally carries
-      // it — is commented out below. Move it back when Margherita returns
-      // rather than leaving two capped slices: `CAPPED_ITEM` in
-      // tests/helpers/fixtures.js is "whichever slice has its own maxQty", and
-      // the per-item cap tests go quiet if no slice has one at all.
-      { name: 'Chef\'s Choice',     desc: "Pepperoni slice with hot honey, stracciatella, and fresh basil",         price: '$4', dough: 'ny', maxQty: 4 },
-      { name: 'Cheese',             desc: 'House-made sauce, our mozzarella blend, fresh basil, pecorino romano, & parmigiano reggiano',                   price: '$2',    dough: 'ny' },
-      { name: 'Pepperoni',          desc: 'Pepperoni, house-made sauce, our mozzarella blend, fresh basil, pecorino romano, & parmigiano reggiano',            price: '$2.50', dough: 'ny' },
-      { name: 'Margherita',          desc: 'Fresh mozzarella, basil, extra virgin olive oil, parmigiano reggiano',            price: '$3', dough: 'neapolitan' },
+      // Tonight only (Neapolitan-only night): the Raka special and Margherita.
+      // The New York slices are commented out just below this block — restore
+      // them (and move maxQty back to Chef's Choice if Margherita goes off
+      // again) next week. `CAPPED_ITEM` in tests/helpers/fixtures.js is
+      // "whichever slice has its own maxQty", so exactly one slice keeps one.
+      { name: 'Raka',               desc: 'Prosciutto, arugula, and balsamic glaze',                         price: '$4', dough: 'neapolitan', special: 'Special' },
+      { name: 'Margherita',         desc: 'Fresh mozzarella, basil, extra virgin olive oil, parmigiano reggiano', price: '$3', dough: 'neapolitan', maxQty: 4 },
+      // ── Off tonight (New York dough) ─────────────────────────────────
+      // { name: 'Chef\'s Choice',     desc: "Pepperoni slice with hot honey, stracciatella, and fresh basil",         price: '$4', dough: 'ny' },
+      // { name: 'Cheese',             desc: 'House-made sauce, our mozzarella blend, fresh basil, pecorino romano, & parmigiano reggiano',                   price: '$2',    dough: 'ny' },
+      // { name: 'Pepperoni',          desc: 'Pepperoni, house-made sauce, our mozzarella blend, fresh basil, pecorino romano, & parmigiano reggiano',            price: '$2.50', dough: 'ny' },
       // ── Off this week, back in a future one ──────────────────────────
       // Commented out rather than deleted so the descriptions and prices come
       // back verbatim. Nothing else needs touching to restore one: the order
