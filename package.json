@@ -18,13 +18,13 @@
   "dependencies": {
     "@chenglou/pretext": "^0.0.8",
     "@gsap/react": "^2.1.2",
-    "@upstash/redis": "^1.38.3",
+    "@upstash/redis": "^1.39.0",
     "@vercel/analytics": "^2.0.1",
-    "@vercel/blob": "^2.8.0",
+    "@vercel/blob": "^2.8.2",
     "gsap": "^3.15.0",
-    "lucide-react": "^1.38.0",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "lucide-react": "^1.59.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
