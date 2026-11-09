@@ -17,18 +17,6 @@ function redisClient() {
 
 const memory = globalThis.__ppNightStore ?? (globalThis.__ppNightStore = new Map());
 
-export async function createNight(night) {
-  if (!hasRedisEnv()) {
-    memory.set(night.id, night);
-    return night;
-  }
-  const redis = redisClient();
-  await redis.set(`pp:night:${night.id}`, night);
-  await redis.lrem(INDEX_KEY, 0, night.id);
-  await redis.lpush(INDEX_KEY, night.id);
-  return night;
-}
-
 export async function listNights() {
   if (!hasRedisEnv()) {
     return [...memory.values()].sort((a, b) => b.closedAt - a.closedAt);

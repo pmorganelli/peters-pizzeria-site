@@ -64,7 +64,7 @@ src/
 │   └── GalleryPage.jsx  # Masonry photo gallery
 ├── data/
 │   ├── menu.js          # Menu categories and items
-│   └── posts.js         # Blog posts + ALL_PHOTOS list
+│   └── posts.js         # Blog posts + GALLERY_PHOTOS list
 ├── hooks/
 │   ├── useScrolled.js       # Returns true when page is scrolled > threshold
 │   └── useScrollReveal.js   # IntersectionObserver-based reveal animation
@@ -89,7 +89,7 @@ Photos live in `photos/` at the repo root and are served from `public/photos/` v
 
 1. Drop the new image files into `photos/` (or `photos/bambinoPictures/`).
 2. Run `bash scripts/gen-photo-derivatives.sh` — it generates `thumbs/` (max 640px) and `web/` (max 1600px) derivatives and regenerates `src/data/photoDims.js` (the aspect ratios the gallery uses to reserve layout space). It skips files that already have derivatives, so it's safe to re-run.
-3. Add each new file's `/photos/<filename>` path to the `ALL_PHOTOS` array in `src/data/posts.js` — that's what makes it show up in the gallery.
+3. Add a `['/photos/<filename>', '<alt text>']` entry for each new file to the `GALLERY_PHOTOS` array in `src/data/posts.js` — that's what makes it show up in the gallery.
 
 ## Ordering system
 

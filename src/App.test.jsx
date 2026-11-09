@@ -176,3 +176,19 @@ describe('App landmarks', () => {
     expect(document.getElementById('main').contains(nav)).toBe(false);
   });
 });
+
+describe('Lightbox and history', () => {
+  // The lightbox is App state rather than page state, so nothing about a page
+  // change closes it on its own: pressing Back with a photo open used to swap
+  // the page underneath and leave the overlay sitting on top of it.
+  it('closes when the visitor presses Back', async () => {
+    visit('/gallery');
+    await waitForPage('.gallery-item');
+    fireEvent.click(document.querySelector('.gallery-item'));
+    await waitFor(() => expect(document.querySelector('.lb-overlay')).toBeTruthy());
+
+    window.history.replaceState(null, '', '/');
+    fireEvent.popState(window);
+    await waitFor(() => expect(document.querySelector('.lb-overlay')).toBeNull());
+  });
+});

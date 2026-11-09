@@ -18,8 +18,7 @@ export const MAX_LIVE_ORDERS = 300;
 // with no index entry. Two code paths scan the whole board to find those —
 // getOrderByCode's fallback and the collision check inside CREATE_ORDER_LUA —
 // and both are expensive enough that they must not run forever: the fallback
-// fires on every *wrong* pickup code (reachable unauthenticated via ?find= and
-// slice posting), and the collision check costs up to MAX_LIVE_ORDERS GETs and
+// fires on every *wrong* pickup code (reachable unauthenticated via ?find=), and the collision check costs up to MAX_LIVE_ORDERS GETs and
 // cjson decodes inside a single blocking EVAL on every order placed.
 //
 // This key records when the index went live. It is written once, never
@@ -297,37 +296,6 @@ export async function listOrders() {
   if (!ids.length) return [];
   const rows = await redis.mget(...ids.map((id) => `pp:order:${id}`));
   return rows.filter(Boolean); // expired keys read back as null
-}
-
-// Removes exactly the given orders — used by "close for the night"
-// (api/nights.js) once they've been archived. Takes explicit ids (the same
-// ones just archived) rather than re-reading the current index: an order
-// placed in the gap between the archive snapshot and this call must survive
-// on the live board, not be silently destroyed alongside the ones that were
-// actually captured. Orders are operational data (3-day TTL) with no history
-// requirement of their own; the archive is what's meant to survive past this.
-export async function clearOrders(entries) {
-  const ids = entries.map((entry) => (typeof entry === 'string' ? entry : entry.id));
-  if (!hasRedisEnv()) {
-    for (const id of ids) {
-      const order = memory.get(id);
-      if (order?.code) codeMemory.delete(order.code);
-      memory.delete(id);
-    }
-    return;
-  }
-  if (!ids.length) return;
-  const redis = redisClient();
-  const supplied = entries.every((entry) => typeof entry !== 'string') ? entries : null;
-  const orders = supplied ?? (await redis.mget(...ids.map((id) => `pp:order:${id}`))).filter(Boolean);
-  await redis.del(
-    ...ids.map((id) => `pp:order:${id}`),
-    ...orders.flatMap((order) => (order.code ? [`pp:order-code:${order.code}`] : [])),
-  );
-  // LREM each id individually rather than dropping INDEX_KEY wholesale —
-  // dropping it would also erase any id pushed onto the list after this
-  // function's caller took its snapshot.
-  await Promise.all(ids.map((id) => redis.lrem(INDEX_KEY, 0, id)));
 }
 
 // ── Store settings (open/closed switch) ───────────────────────────────

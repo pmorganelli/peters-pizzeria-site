@@ -13,7 +13,19 @@ function authorized(req) {
   return Boolean(process.env.CRON_SECRET) && req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
 }
 
+// Every other handler catches its own failures; this one let a Redis error
+// escape as an unhandled rejection, which the cron log shows as a bare 500 with
+// no hint of which step died.
 export default async function handler(req, res) {
+  try {
+    return await cleanup(req, res);
+  } catch (err) {
+    console.error('cleanup api error:', err);
+    return send(res, 500, { error: 'Cleanup failed before it could finish.' });
+  }
+}
+
+async function cleanup(req, res) {
   if (req.method !== 'GET') return send(res, 405, { error: 'Method not allowed' });
   if (!authorized(req)) return send(res, 401, { error: 'Unauthorized' });
 

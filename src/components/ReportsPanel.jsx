@@ -1,5 +1,5 @@
 import { Flag } from 'lucide-react';
-import { ageLabel } from '../utils/orders';
+import { agoLabel } from '../utils/orders';
 
 // Takedown requests from the community wall, resolved from the order board.
 //
@@ -56,7 +56,7 @@ export function ReportsPanel({ reports, busySliceId, takeDown, dismiss, error })
                 {r.count > 1 && <span className="reports-multi">{r.count} people asked</span>}
               </div>
               {r.slice.caption && <div className="reports-caption">{r.slice.caption}</div>}
-              <div className="reports-age">Requested {ageLabel(r.lastAt)}</div>
+              <div className="reports-age">Requested {agoLabel(r.lastAt)}</div>
             </div>
             <div className="reports-actions">
               <button type="button" className="reports-take-down" disabled={busySliceId === r.sliceId} onClick={() => takeDown(r)}>

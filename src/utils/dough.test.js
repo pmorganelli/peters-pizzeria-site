@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { MENU_DATA } from '../data/menu.js';
 import {
   DOUGH_BY_ITEM, DOUGH_TYPES, SLICES_PER_BALL,
-  doughSlicesFor, doughStatus, doughRemaining, isDoughType, soldOutNames,
+  doughSlicesFor, doughStatus, isDoughType, soldOutNames,
 } from './dough.js';
 
 // Derived, never typed — a renamed slice must not quietly send these cases
@@ -74,12 +74,6 @@ describe('doughStatus', () => {
 
   it('never reports a negative remainder', () => {
     expect(doughStatus({ [type]: 1 }, { [type]: perBall + 5 })[type].remaining).toBe(0);
-  });
-
-  it('reports untracked as null rather than a number', () => {
-    const status = doughStatus({ [type]: 1 }, {});
-    expect(doughRemaining(status, type)).toBe(perBall);
-    expect(doughRemaining(status, 'sourdough')).toBeNull();
   });
 });
 

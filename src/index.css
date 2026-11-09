@@ -1353,7 +1353,6 @@ footer { background: var(--ink); color: rgba(254,245,239,0.5); padding: 44px 60p
 }
 .dough-stop:hover { color: var(--cream); }
 .dough-stop:disabled { opacity: 0.6; cursor: wait; }
-.dough-note { font-family: var(--serif); font-size: 13px; color: rgba(254,245,239,0.4); margin-top: 10px; }
 /* iOS zooms the board on focus below 16px */
 @media (pointer: coarse) {
   .dough-field input { font-size: 16px; }

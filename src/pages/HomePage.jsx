@@ -37,6 +37,15 @@ const SPECIAL_CARDS = SHOW_UPCOMING
 
 const LATEST_POSTS = POSTS_BY_DATE.slice(0, 3);
 
+// Scroll-reveal slots. Each revealed element needs its own index — two
+// elements sharing one overwrite each other in the hook and the loser stays
+// at the hidden `.reveal` state forever. The specials strip is as long as the
+// menu makes it, so everything after it is offset by its length rather than
+// by a hardcoded 3.
+const REVEAL_SPECIALS = 3;
+const REVEAL_LATEST_HEAD = REVEAL_SPECIALS + SPECIAL_CARDS.length;
+const REVEAL_LATEST_POSTS = REVEAL_LATEST_HEAD + 1;
+
 const TICKER_TEXT = 'Saturday Slices · 7pm til sellout · Somerville, MA · ';
 
 export function HomePage({ nav, openArticle, openLightbox }) {
@@ -187,14 +196,14 @@ export function HomePage({ nav, openArticle, openLightbox }) {
             // go, so it's a plain div — a button that navigates to a page not
             // listing the item is worse than no button at all.
             return SHOW_UPCOMING ? (
-              <div key={s.name} className={`${className} special-card-soon`} ref={ref(3 + i)}>
+              <div key={s.name} className={`${className} special-card-soon`} ref={ref(REVEAL_SPECIALS + i)}>
                 {body}
               </div>
             ) : (
               <button type="button"
                 key={s.name}
                 className={className}
-                ref={ref(3 + i)}
+                ref={ref(REVEAL_SPECIALS + i)}
                 onClick={() => nav('menu')}
                 aria-label={`${s.tag}: ${s.name} — ${soldOut ? 'sold out' : s.price}`}
               >
@@ -207,7 +216,7 @@ export function HomePage({ nav, openArticle, openLightbox }) {
 
       {/* ── LATEST BLOG POSTS ── */}
       <section className="home-latest">
-        <div ref={ref(6)} className="reveal home-latest-header">
+        <div ref={ref(REVEAL_LATEST_HEAD)} className="reveal home-latest-header">
           <div>
             <div className="section-label">From the Blog</div>
             <h2 className="section-title">Latest from<br /><em>the kitchen.</em></h2>
@@ -223,7 +232,7 @@ export function HomePage({ nav, openArticle, openLightbox }) {
           {LATEST_POSTS.map((post, i) => (
             <button type="button"
               key={post.id}
-              ref={ref(7 + i)}
+              ref={ref(REVEAL_LATEST_POSTS + i)}
               className={`blog-card reveal reveal-delay-${i + 1}`}
               onClick={() => openArticle(post)}
               aria-label={`Read: ${post.title}`}

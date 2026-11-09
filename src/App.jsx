@@ -336,6 +336,9 @@ export default function App() {
   // transition with the history write suppressed.
   useEffect(() => {
     const onPopState = () => {
+      // The lightbox is App state, not page state, so it would otherwise stay
+      // open over whatever page Back lands on.
+      setLbOpen(false);
       const { page: p, article: a } = readRoute();
       nav(p, a, { history: 'none' });
     };

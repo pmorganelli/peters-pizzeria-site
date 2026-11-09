@@ -78,12 +78,6 @@ export function doughStatus(stock, used) {
   return status;
 }
 
-// How many more slices of `dough` can be sold. `null` = untracked, i.e. no
-// limit — deliberately not `Infinity`, so a caller that forgets to handle it
-// fails visibly rather than silently allowing everything.
-export const doughRemaining = (status, dough) =>
-  (status?.[dough] ? status[dough].remaining : null);
-
 // Every menu item name that can't be ordered right now: the manual 86 list,
 // plus every slice whose dough pool has run dry.
 //

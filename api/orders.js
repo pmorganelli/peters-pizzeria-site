@@ -283,7 +283,7 @@ const publicOrder = ({ contact, notes, ...rest }) => rest;
 //
 // What that leaves is: someone who knows a real customer's exact name, on a
 // night that customer has a live order, can find it and see its pickup code.
-// The bound on that is the 30-per-IP-per-10-minutes limiter above, the fact
+// The bound on that is the per-IP lookup limiter above (FIND_PER_IP), the fact
 // that only exact full names match (no prefixes, no partials), and orders
 // living three days. It is a real trade, made knowingly — see CLAUDE.md.
 //

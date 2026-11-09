@@ -29,7 +29,7 @@ async function read(req, res) {
   return send(res, 200, { nights });
 }
 
-// Orders are gone the moment this closes (clearOrders() below), so this
+// Orders are gone the moment this closes (archiveNightAndClear() below), so this
 // per-order snapshot is the only place "who ordered, what they ordered, how
 // much" survives past tonight. contact/notes are dropped, same PII rule
 // orders.js's publicOrder() already follows for anything that outlives the

@@ -24,6 +24,17 @@ function replaceMeta(html, selector, value) {
   return html.replace(pattern, `$1${escaped}$2`);
 }
 
+// index.html preloads the home hero, which is the LCP image on `/` and on
+// nothing else. Every other route's HTML used to carry the same tag, so a
+// visitor landing on /menu or a blog post downloaded a 200 KB photo that page
+// never shows. Only home keeps the tag. The menu and blog heroes have photos
+// too, but at 12-15% opacity behind the headline — the text is the LCP there,
+// and preloading a faint backdrop would compete with the fonts for it.
+const PRELOAD_TAG = /[ \t]*<link\s+rel="preload"\s+as="image"\s+href="[^"]*"\s*\/?>\n?/;
+if (!PRELOAD_TAG.test(shell)) {
+  throw new Error('gen-route-html: the hero preload tag in index.html changed shape — update PRELOAD_TAG');
+}
+
 for (const { page, article } of routes) {
   const meta = metadataForRoute(page, article);
   let html = shell.replace(/<title>[^<]*<\/title>/, `<title>${escape(meta.title)}</title>`);
@@ -37,6 +48,8 @@ for (const { page, article } of routes) {
   html = replaceMeta(html, 'name=twitter:description', meta.description);
   html = replaceMeta(html, 'name=twitter:image', meta.image);
   html = html.replace(/(<link\s+rel="canonical"\s+href=")[^"]*("\s*\/?>)/, `$1${escape(meta.canonical)}$2`);
+
+  if (page !== 'home') html = html.replace(PRELOAD_TAG, '');
 
   const url = new URL(meta.canonical);
   if (url.pathname === '/') {

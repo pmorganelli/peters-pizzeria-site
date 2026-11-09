@@ -284,5 +284,3 @@ export const GALLERY_PHOTOS = [
   ['/photos/image6834.jpg', 'A finished cheese pizza beside burrata, parmesan, and olive oil'],
   ['/photos/image9375.jpg', 'The crew preparing pizzas across a busy home kitchen'],
 ].map(([src, alt]) => ({ src, alt }));
-
-export const ALL_PHOTOS = GALLERY_PHOTOS.map(({ src }) => src);

@@ -12,8 +12,8 @@ import { BLOG_POSTS } from '../src/data/posts.js';
 
 const SITE = 'https://peters-pizzeria-site.vercel.app';
 
-// Staff-only or single-use pages. /order and /status are left in: both are
-// things a customer might reasonably search for or be linked to.
+// Staff-only or single-use pages. /status is left in: it is how a customer
+// follows their order.
 // `order` joined this list when ordering moved behind the admin login. The
 // page still renders publicly (a card explaining that orders are taken at the
 // window), but nothing links to it any more and its old description promised

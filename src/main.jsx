@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import { Analytics } from '@vercel/analytics/react';
 import App from './App';
 import './index.css';
 
@@ -20,5 +21,12 @@ if (import.meta.env.DEV && import.meta.env.VITE_REACT_SCAN === '1') {
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <App />
+    {/* Vercel Web Analytics. The package sat in package.json unused, so no
+        page view was ever recorded. In production this loads
+        /_vercel/insights/script.js from our own origin, which the CSP's
+        `script-src 'self'` / `connect-src 'self'` already allow; it only
+        reports once Web Analytics is enabled for the project in the Vercel
+        dashboard. Route changes are picked up from the History API. */}
+    <Analytics />
   </React.StrictMode>
 );

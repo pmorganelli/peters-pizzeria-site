@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { resetEnv } from '../../tests/helpers/env.js';
 import {
-  MAX_LIVE_ORDERS, clearOrders, createOrder, getOrder, getOrderByCode,
+  MAX_LIVE_ORDERS, createOrder, getOrderByCode,
   getSettings, listOrders, patchSettings, saveSettings,
 } from './store.js';
 
@@ -59,32 +59,6 @@ describe('patchSettings', () => {
     const settings = await getSettings();
     expect(settings.mode).toBe('closed');
     expect(settings.unavailable).toContain('Test Item');
-  });
-});
-
-describe('clearOrders', () => {
-  it('removes only the given ids, leaving everything else on the board', async () => {
-    // The scenario this guards: "close for the night" archives a snapshot,
-    // then must clear exactly that snapshot — not whatever's live by the time
-    // the clear actually runs, or an order placed in between gets destroyed
-    // without ever being archived.
-    await createOrder(order('archived-1'));
-    await createOrder(order('archived-2'));
-    await createOrder(order('placed-during-close'));
-
-    await clearOrders(['archived-1', 'archived-2']);
-
-    expect(await getOrder('archived-1')).toBeNull();
-    expect(await getOrder('archived-2')).toBeNull();
-    const survivor = await getOrder('placed-during-close');
-    expect(survivor).not.toBeNull();
-    expect(survivor.id).toBe('placed-during-close');
-  });
-
-  it('is a no-op given an empty id list', async () => {
-    await createOrder(order('a'));
-    await clearOrders([]);
-    expect(await getOrder('a')).not.toBeNull();
   });
 });
 
